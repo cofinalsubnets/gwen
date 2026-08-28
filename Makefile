@@ -1,6 +1,10 @@
 # project root makefile
-R := .
-include mk/common.mk
+# R is the project root every path here hangs off. CONDITIONAL, so a makefile outside the
+# tree -- a port's -- can set it and include this file to reach these recipes; mk/common.mk
+# spells it the same way for the same reason. ⚠ that also means an R in the ENVIRONMENT is
+# read, where a plain := would have shadowed it. A command line R already won either way.
+R ?= .
+include $(R)/mk/common.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
@@ -839,7 +843,7 @@ $(ho)/syntax.vim: $(huefiles) $(m)
 	    || { rm -f $$t; echo "FAIL: $@ empty (hue2vim.l failed)"; exit 1; }
 .PHONY: syntax
 syntax: $(ho)/syntax.vim
-include mk/distro.mk
+include $(R)/mk/distro.mk
 
 # ==== the freestanding kernel ====
 # ./Makefile from the project root, so paths resolve from there; shared vars are mk/common.mk.
@@ -1475,8 +1479,8 @@ $(dl)/edk2-ovmf/ovmf-code-%.fd:
 	@case "$a" in \
 		aarch64) dd if=/dev/zero of=$@ bs=1 count=0 seek=67108864 2>/dev/null;; \
 	esac
-include test/test.mk
-include mk/install.mk
+include $(R)/test/test.mk
+include $(R)/mk/install.mk
 
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
