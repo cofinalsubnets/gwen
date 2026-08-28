@@ -240,6 +240,49 @@ until rung 6.
   tick-agreement law between alive and the regen — all delete. This is the
   structural payoff, and compile time should IMPROVE here (no per-fn rebuild),
   paying back the analysis cost of rungs 0–5.
+  **BUILT 2026-08-27, NOT YET DEFAULT — MOON_ABLATE=uni opts in.** The
+  machinery exists end to end and is the leaner equivalent of the letter
+  above: not virtualized emission but TODAY'S REGEN BUILD run as the only
+  build, fed by alive instead of ir1 (alive already carries liveness, spans,
+  crossings, a hard/soft call split, per-name touch counts, and a predicted
+  decl sequence — the interval leg grew a rank leg). ubuild/ulloc/upar in
+  gen.l: one build per fn, seats from the AST, the bare rebuild only for a
+  'bad or a drifted tick/decl guard (measured ZERO fallbacks over ev.c), and
+  the knobs keep every old world byte-identical (pdef, alloc, pcell, obuild
+  all verified against their instruments). It SELF-HOSTS — the artifact
+  builds itself and bakes through the one build — and passes make test and
+  the full gcc battery. The measured regen incidence it removes: 90 of 117
+  fn compilations on love.c run the dance today (52 of 65 leaf regens have
+  AST calls that splice away — pure AST leaf-prediction was refuted first).
+  WHAT THE FLIP STILL NEEDS: the AST-side seat calibration does not yet hold
+  rung 5's line — best configuration so far reads +5.4% loop-weighted census
+  and about +6% corpus instructions (cycles inside the floor), and the misses
+  concentrate in fns where the ir1-derived outcome came from a mechanism the
+  AST cannot yet see. The paid lessons, each with its fix landed:
+  (1) the VLA prep's pointer/size slots live in cgfn's entry frame state — a
+  reset before the one build re-deals them (the first self-host segfaulted in
+  bake_tail); the one build must NOT reset, and empty grants take the bare ()
+  policy so no policy bar fires. (2) a TAIL call never crosses its own args —
+  without the carve-out the VM's tail-forward fleet (lvm_ap and kin, the
+  corpus's hottest code) lost every ride and the corpus read +27% insns.
+  (3) softness is candidacy (inlok? already gates size and shape); the
+  branch-splice-shape tightening broke lvm_cur while fixing gcp — the real
+  split is FN-LEVEL (leaf-shaped: no hard call anywhere), and one cold hard
+  call in an error arm still blunts it (lvm_cur's residual). (4) a fn-wide
+  cs grant can STARVE repack's chain lane (inf_run: the param chain lost r14
+  and paid 200 slot reloads); hard-crossing params now enter the scan as
+  BLOCKERS whose won seats stay unwritten for the chains, and csprd lets
+  chains ride already-paired cs regs over dead ranges. (5) the armed shadow
+  is the soundness workhorse: every uni pool home wears a reserved,
+  untouched-until-wrapped shadow slot, so a spliced call costs nothing and a
+  surprise emission wraps correctly — classification is economics, never
+  soundness. STILL OPEN: the rank residual (inf_run's deep-loop copy temps,
+  lvm_sort, the leaf-shaped bluntness) — the honest instrument for the next
+  session is per-symbol dynamic diffing (lvm_cur carried 36% of one gap in a
+  single symbol; the static census and the corpus disagree systematically).
+  Landed on parity + laws + make test + the gcc battery; test_slow is owed on
+  the next quiet tree (a concurrent holo/link refactor rode the shared tree
+  at land time and owns the fixpoint until it settles).
 - **rung 7 — the other ISAs.** a64 next (its pool and sweeps differ; the a64
   sweep chain reads the chosen ir). Then the pure upside: rv64 and t32 have
   nhome=0 TODAY — locals in registers for the first time on riscv's t0..t3
