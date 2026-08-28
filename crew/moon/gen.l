@@ -5955,7 +5955,7 @@
               (? (gvarr? ty)
                   (? (two? init)
                       (nolane g "a variable-length array cannot take an initializer")
-                     !(member? (peep g 'tgt 'amd64) '(amd64 arm64))
+                     !(member? (peep g 'tgt 'amd64) '(amd64 arm64 rv64))
                       (nolane g ("no lane for a variable-length array" + ontgt g))
                      (vone ps env2 acc p ty))
                  (: span (& (tsz g ty + 7) -8)

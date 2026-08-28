@@ -69,10 +69,6 @@ if [ "$arch" != x64 ]; then
 00140 no lane for a by-value composite argument on $arch (x64 carries it, named and anonymous)
 "
 fi
-[ "$arch" = riscv64 ] && roster_refuses="$roster_refuses
-00207 no lane for a variable-length array on riscv64
-"
-
 fail() { echo "FAIL $name: $*" >&2; exit 1; }
 moonrun() { LOVE_NO_IMAGE= "$m" mooncc "$@"; }
 # the roster read two ways: which kind a number is on, and what its cause says
