@@ -6217,11 +6217,27 @@
        ; registration, so membership means the site will very likely splice);
        ; the armed shadow covers the rare decline soundly
        (soft? nm) (two? (g 'inl nm))
+       ; the one build homes int locals like the dance's slot walk did, so its
+       ; universe widens to lhomable -- the dance's own reading stays homable
+       ; (its lalloc free?-gate keys on this set, byte-held under the knobs)
+       wide9 ((abl? g 'uni) &&
+              !(abl? g 'obuild || abl? g 'pcell || abl? g 'alloc ||
+                abl? g 'pdefcs || abl? g 'pdef))
        (nhc e) (? !(two? e) 0
                   (e @ ('call ('var nm) as) ((? (soft? nm) 0 1) + nhcl as)
                        ('call fh as) (1 + (nhc fh) + nhcl as)
                        ('szof >< _) 0
                        (nhcl e)))
+       ; a return's TAIL position: the sibcall pass turns a ret-tail call into a
+       ; jump, and a home is dead at its own return either way -- so the last
+       ; call of a comma spine, each ternary arm, and a cast's operand harden
+       ; nothing; only calls evaluated BEFORE them do
+       (nhcr e) (? !(two? e) 0
+                   (e @ ('call fh as) ((nhc fh) + nhcl as)
+                        ('comma a b) ((nhc a) + nhcr b)
+                        ('cond c a b) ((nhc c) + nhcr a + nhcr b)
+                        ((k _ x) && member? k '(un cast)) (nhcr x)
+                        (nhc e)))
        ; the touch counters (rank food): every universe mention is a touch --
        ; read or write, as ir1's slot counter saw them -- raw and loop-weighted
        (bump9 nm w) (: _ (pin rdc nm (1 + peep rdc nm 0))
@@ -6262,7 +6278,8 @@
                   (: (go ps) (? !(two? ps) ()
                                 (: p <ps
                                    _ (pin dcl <p (1 + peep dcl <p 0))
-                                   _ (? ((k = 'decl) && homable? <>p)
+                                   _ (? ((k = 'decl) &&
+                                         (? wide9 (lhomable? <>p) (homable? <>p)))
                                         (pin n9 'loc (<p >< peep n9 'loc ())) ())
                                    _ (? ((k = 'decl) && gvarr? <>p) (pin n9 'vla 1) ())
                                    ; the decl SEQUENCE, predicted: cgdecl's dseq
@@ -6401,9 +6418,7 @@
                   ; head or the args harden this statement (the VM's tail-forward
                   ; dispatch fleet rides this: return (*fp)(a, b) crosses nothing)
                   sq (tick ()) _ (rec sq <r (* <>r w9) (? (1 < w9) (* <>r w9) 0)
-                                      (* (? !(two? rv) 0
-                                            (id? <rv 'call) ((nhc <>rv) + nhcl (nthr rv 2))
-                                            (nhc rv)) w9))
+                                      (* (nhcr rv) w9))
                   <r)
               ('decl ps)
                (: pr (dpairs (rev ps) out 0)
@@ -7722,10 +7737,18 @@
            ; a refused fn-wide seat leaves, at range grain)
            nx9 (? (0 < nthr av9 10) (nthr av9 10) 1)
            nsq (nthr av9 13)
-           navl (#hp9 - 2)
+           navl (? (3 < #hp9) (#hp9 - 2) (1 < #hp9) 1 0)   ; the file already lost the param homes: keep one grantable seat while two remain
            (firstn l n) (? (atom? l || n < 1) () (<l >< firstn >l (n - 1)))
            pfile (firstn hp9 navl)
            kp (cspool g)
+           ; touch counts key by NAME: a shadowed name's sites conflate, and a
+           ; conflated total would buy every site its own seat -- average it out
+           sitec (: t {}
+                    (go2 i) (? (nsq < i) t
+                               (: e2 (peep sqm9 i ())
+                                  _ (? (two? e2) (pin t <e2 (1 + peep t <e2 0)) 0)
+                                  (go2 (i + 1))))
+                    (go2 1))
            cands (: (go i acc)
                     (? (nsq < i) acc
                        (: e2 (peep sqm9 i ())
@@ -7733,7 +7756,9 @@
                              (: nm <e2 ty <>e2
                                 u9 (member? nm uv)
                                 (? (tak9 nm) (go (i + 1) acc)   ; an &-taken name stays a cell
-                                   (: tc (peep rdc9 nm 0)
+                                   (: ns9 (peep sitec nm 1)
+                                      tc (? (1 < ns9) ((peep rdc9 nm 0) // ns9)
+                                            (peep rdc9 nm 0))
                                       d1 (d128? ty)
                                       ; a shadowed name conflates its sites: no span to
                                       ; trust (exclusive seat), no pool (crh conflated
@@ -7748,7 +7773,8 @@
                                              ((peep crs9 nm 0 = 0) && 2 <= tc))
                                       cok (2 < tc && (1 + nx9) < tc)
                                       (? !(pok || cok) (go (i + 1) acc)
-                                         (go (i + 1) ([tc (peep rdt9 nm 0) i
+                                         (go (i + 1) ([tc (? (1 < ns9) ((peep rdt9 nm 0) // ns9)
+                                                             (peep rdt9 nm 0)) i
                                                        (? u9 (peep spa9 nm ()) ())
                                                        (? d1 2 1) pok cok] >< acc)))))))))
                     ; the BLOCKERS: a hard-crossing param whose weight clears the
