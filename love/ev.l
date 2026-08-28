@@ -109,9 +109,9 @@
   ; heavyweight polymorphic nif (type-dispatch + hash + eql) where a few fixnum compares
   ; short-circuit on the common small values (a hash made boot +13% vs +5% for this chain).
   ; ⚠ the charm? guard keeps spq from ever hashing a heap value.
-  (spa i) (? (i = 0) lvm_arg0 (i = 1) lvm_arg1 (i = 2) lvm_arg2 (i = 3) lvm_arg3 0)
-  (spq v) (? (charm? v) (? (v = 0) lvm_quo0 (v = 1) lvm_quo1 (v = 2) lvm_quo2
-                           (v = 3) lvm_quo3 (v = -1) lvm_quom1 (v = -2) lvm_quom2 0) 0)
+  (spa i) (i @ 0 lvm_arg0 1 lvm_arg1 2 lvm_arg2 3 lvm_arg3 0)
+  (spq v) (charm? v ? (v @ 0 lvm_quo0 1 lvm_quo1 2 lvm_quo2
+                           3 lvm_quo3 -1 lvm_quom1 -2 lvm_quom2 0) 0)
   ; --- run fusion: the peephole's SECOND axis --------------------------------------
   ; spa/spq specialize on an operand's VALUE; these specialize on the SHAPE of a RUN --
   ; one op for two consecutive loads (lvm_aa/aq/qa/qq, and aap/aqp/qap/qqp when the
@@ -190,8 +190,7 @@
        (c2 !== ())         (poke 1 x tail, poke 0 c2 tail)
        (cf !== ())         (p2 cf x (seek 1 tail))
        (: c (rsh h)
-        (? c (p2 (gop c gs) x (rimm h @ '() (seek 1 tail)
-                                        i (poke -1 i (seek 1 tail))))
+        (? c (p2 (gop c gs) x (rimm h @ () (seek 1 tail) i (poke -1 i (seek 1 tail))))
            (: s (sp x) (? s (poke -1 s tail)
                             (p2 t x tail)))))))
   ; arg fuses both ap and tap; quote only ap. ⚠ quote;tap (a constant arg to a tail call) is left
@@ -202,10 +201,10 @@
   ; k0s: like k0 but reserves one extra LEADING cell for ala to stash the lambda's source \-expr at
   ; value[-1], where the printer (gzput_fn) finds it. entry = cell 1, src = cell 0.
   (k0s c n) (poke -1 lvm_ret (poke (2 + n) (ary c) (spin (3 + n))))
-  (ary c) (tally (c 'arg) + tally (c 'imp))
-  (pro f) (? (charm? f) f (: a (peek 0 f) (?- f
+  (ary c) (#(c 'arg) + #(c 'imp))
+  (pro f) (charm? f ? f (: a (peek 0 f) (?- f
    (a == lvm_unc) (pro (seek -2 (peek 2 f)))
-   (a == lvm_cur) (?- f (id? lvm_unc (peek 2 f))
+   (a == lvm_cur) (?- f (lvm_unc == peek 2 f)
                           (pro (seek -2 (peek 4 f)))))))
   ; feel: source->source pre-pass before `ana` -- expands macros, constant-folds, and marks applies
   ; with their n-ary-vs-l2r strategy. tail position is NOT tracked here -- kap detects tail by
@@ -228,8 +227,10 @@
    ; inner name is read by an outer def -- merging widens every outer def's scope over the inner
    ; names, and either would rebind or capture where the nesting shadowed. it re-runs on its own
    ; answer, so a chain of any depth lands in one frame.
-   (lend bs) (? (atom? bs) 0 (atom? >bs) bs (lend >>bs))             ; the body's one-cell tail, 0 = body-less
-   (lsub? b) (two? b && <b == ': && two? (lend >b))                 ; a spliceable inner let?
+   (lend bs) (? (atom? bs) ()
+                (atom? >bs) bs
+                (lend >>bs))             ; the body's one-cell tail, 0 = body-less
+   (lsub? (': . u)) (two? (lend u))                 ; a spliceable inner let?
    (lup bs) (atom? >bs ? ><bs (<bs . lup >bs))               ; the body's list, in its place
    ; lrd/lrdl: does x read any name in ms? the whole ROW in one walk, where wl asks per name --
    ; and no macro lane, cprop's output having none (the same reading wx's own fold takes).
@@ -282,8 +283,8 @@
    ; truth is exactly nil? of its value, so a folded test prunes its dead branch. one recognizer
    ; across scopes that can't otherwise share.
    (cst t) (: c (kconst t)
-              (? <c (1 >< !>c)       ; kconst knows it (atom / quote literal)
-                 (atom? >t && atom? <t && !(nom? <t)) (1 >< !<t)  ; PLUS (c) == c: a folded monadic (opfix wraps (! e) -> ((nil? e)), so a folded test lands wrapped)
+              (? <c (1 . !>c)       ; kconst knows it (atom / quote literal)
+                 (atom? >t && atom? <t && !(nom? <t)) (1 . !<t)  ; PLUS (c) == c: a folded monadic (opfix wraps (! e) -> ((nil? e)), so a folded test lands wrapped)
                  0))
    (wxc bs bnd) (: fb (? (member? 'nil? bnd) bs (cflip bs))
     (? (atom? fb) [()]                           ; clauses ran out: implicit () else (nil-ontology)
@@ -297,7 +298,7 @@
    ; frame in place of one closure per arg. 0 = no n-ary lane.
    ; `id?`-safe peeps (a non-fn value never matches lvm_cur).
    (napof v args) (charm? v || !(id? lvm_cur (peek 0 v)) ? 0
-    (: ar (peek 1 v) (1 < ar && ar <= tally args ? ar 0)))
+    (: ar (peek 1 v) (1 < ar && ar <= #args ? ar 0)))
    ; fold: un-shadowed global head -> ap (fold/iop/apx); else mark the call as an apx node
    ; (apx n head . args) carrying the apply strategy: n > 1 = the leading n-ary apply's width,
    ; 0 = the l2r chain.
@@ -320,10 +321,10 @@
    ; before wx (pre-boxfix, pre-expansion); only an already-constant RHS propagates (a forward ref /
    ; cell read never is -- letrec-safe), and a non-constant rebind or a lambda param KILLS the name.
    (propk? v) <(kconst v)   ; a constant FORM? -- the const? bit of the shared kconst recognizer (prel; cf. cst, the falsy projection)
-   (rmq k se) (? (atom? se) () (k == <<se) (rmq k >se) (<se >< rmq k >se))
-   (cbake v) (charm? v ? v ['\ v])                                                ; folded value -> source
+   (rmq k (a . u)) (<a @ ^k (rmq k u) (a . rmq k u))
+   (cbake v) (v == () || !(nom? v || two? v) ? v ['\ v])                       ; folded value -> source
    (kval v) (atom? v ? v <>v)                                                  ; a const FORM -> its value
-   (allk as) (all propk? as)                                                       ; all args constant?
+   allk (all propk?)                                                       ; all args constant?
    ; apply the fn to the consts. pure-head?'s licence covers the WHOLE saturated call -- a partial
    ; of a pure fn is pure at every arity -- so this keeps applying without re-asking.
    ; ⚠ it still owes cpgrew?. OVER-application turns the answer into a CHURCH numeral, the one
@@ -370,7 +371,7 @@
    ; ⚠ TWO operands, and THE ARITY IS THE PROTOCOL: under-applied this answers a closure, which
    ; is truthy, and every purity gate below silently opens. `as` is the ARG FORMS, not values --
    ; kconst declines a non-constant, so a site that cannot know its operand denies readset.
-   (pure-head? h as) (pure-fn? (gv h ()) (: k (? (two? as) (kconst <as) ()) (? <k >k ())))
+   (pure-head? h as) (pure-fn? (gv h ()) (: k (two? as ? (kconst <as)) (? <k >k)))
    ; pure-ap?: the same question for cpap's walk, widened by the DATA lanes -- which never RUN
    ; what they are handed: a sequence indexes or joins (text by byte, a chain by element), a point
    ; answers const-1, a numeric or array COMPOSES (it builds the composition, it does not call it).
@@ -380,9 +381,8 @@
    ; ⚠ the zero point is named SEPARATELY: it applies through the very same sentinel a mint
    ; does, but `nom?` is false of it by design -- name? and mint? partition nom?, and () is in
    ; neither, so that absence never wears a real point's face. here it is just a point.
-   (pure-ap? v k) ((string? v) || (two? v) || (nom? v) || (id? v ())
-                   || (constellation? v) || (pure-fn? v k))
-   (allp as se) (all (\ a (purep a se)) as)                                  ; all args effect-free?
+   (pure-ap? v k) (string? v || two? v || nom? v || v == () || constellation? v || pure-fn? v k)
+   (allp as se) (all (a \ purep a se) as)                                  ; all args effect-free?
    (purep a se) (: h <a (?                                                                     ; effect-free -> duplicable/droppable
     (h = '\ || h = a) 1                                                                         ; nom / number / string
     (h = '?) (allp >a se)                                                  ; cond: pure iff every limb is
@@ -391,15 +391,15 @@
    (smpl? x) (?                                                                        ; bsub-safe body: no : / macro head
     (atom? x) 1
     (<x == ':) 0
-    (<x == '\) (atom? >>x || smpl? (last x))
+    (<x == '\) (atom? >>x || smpl? <>x)
     (nom? <x) (!(macros <x) && all smpl? x)
     (all smpl? x))
    (fvs x bs) (?                                                                       ; free vars of a simple term
     (nom? x) (x == () || member? x bs ? () [x])
     (atom? x) ()
     (id? <x '\) (two? >>x ? (: r (lp x) (fvs (last x) (<r + bs))))
-    (foldl (\ a e (a + fvs e bs)) () x))
-   (closedl? lam) (all (\ v (! (! (gv v ())))) (fvs lam ()))                            ; every free var a global (means the same elsewhere)
+    (foldl (a \ e \ a + fvs e bs) () x))
+   (closedl? lam) (all (v \ gv v ()) (fvs lam ()))                            ; every free var a global (means the same elsewhere)
    (pbody? x bnd) (?                                                                   ; body is PURE: every call head a pure fn or a param
     (atom? x) 1
     (<x == '?) (all (e \ pbody? e bnd) >x)
@@ -407,25 +407,25 @@
     (nom? <x) ((pure-head? <x >x || member? <x bnd) && all (e \ pbody? e bnd) >x)
     (all (e \ pbody? e bnd) x))
    (inlinable? nm lam) (lambp lam && smpl? lam && closedl? lam && pbody? lam () && !(w nm lam 0 0 0))
-   (rmkeys ps env) (filter (\ p (! (member? <p ps))) env)                         ; drop shadowed substitutions
+   (rmkeys ps env) (filter (\ p !(member? <p ps)) env)                         ; drop shadowed substitutions
    (colnms bs) (atom? >bs ? ()                                                  ; the : letrec's binder NOMS (sugar already lowered to \ by cpbinds)
                 (: n <bs (nom? n ? (n . colnms >>bs) (colnms >>bs))))
    (bsub env x) (?                                                                     ; capture-avoiding substitution
     (nom? x) (assq x env @ (_ . x) x x)
     (atom? x) x
     (id? <x '\) (atom? >>x ? x
-       (: r (lp x) ps <r ren (map (\ p (p . nom 0)) ps)                      ; rename binders to fresh -> no capture
+       (: r (lp x) ps <r ren (map (p \ p . nom 0) ps)                      ; rename binders to fresh -> no capture
           ('\ . (map cup ren + [(bsub (ren + rmkeys ps env) (last x))]))))
-    (id? <x ':) (: nms (colnms >x) ren (map (\ p (p . nom 0)) nms)       ; rename the :'s binders fresh so a subst can't be captured -- whole-form, which is
+    (id? <x ':) (: nms (colnms >x) ren (map (p \ p . nom 0) nms)       ; rename the :'s binders fresh so a subst can't be captured -- whole-form, which is
                                                                              ;   why an ENTANGLED : (a bare pre-pin sibling read) never reaches bsub (entg?)
        (map (\ e (bsub (ren + rmkeys nms env) e)) x))
     (map (\ e (bsub env e)) x))
    (beta lam as) (: r (lp lam) ps <r np #ps                               ; apply a lambda to args (curried)
     (? (#as < np)                                                             ; under-saturated -> substitute the given,
-       (bsub (zip ps as) ('\ . (drop #as ps) + [(last lam)]))             ;   answer a \ of the REST (bsub's \ case
+       (bsub (zip ps as) ('\ . drop #as ps + [(last lam)]))             ;   answer a \ of the REST (bsub's \ case
                                                                                    ;   renames the rest fresh -> capture-free)
        (: bd2 (bsub (zip ps (take np as)) (last lam)) rest (drop np as)
-          (? (two? rest) (bd2 . rest) bd2))))
+          (two? rest ? (bd2 . rest) bd2))))
    ; --- the BINDING SPLICE (the license's other half; laws: test/uuspllaw.l) --------------
    ; a saturated known-lambda call with an IMPURE arg no longer declines whole. pure args
    ; substitute as before (sl-sub). the LAST effectful arg substitutes too when its param is
@@ -442,32 +442,32 @@
    (rdn v x) (?
     (nom? x) (x == v)
     (atom? x) 0
-    (<x == '\) (? (atom? >>x) 0 (: r (lp x) (? (member? v <r) 0 (2 * (rdn v (last x))))))
-    (<x == '?) (2 * (foldl (\ a e (a + (rdn v e))) 0 >x))
-    (<x == ':) (? (member? v (colnms >x)) 0 (foldl (\ a e (a + (rdn v e))) 0 >x))
-    (foldl (\ a e (a + (rdn v e))) 0 x))
-   (lasti ps as se) (? (atom? ps) -1                                             ; index of the LAST effectful arg, -1 = none
+    (<x == '\) (atom? >>x ? 0 (: r (lp x) (member? v <r ? 0 (2 * (rdn v (last x))))))
+    (<x == '?) (2 * foldl (a \ e \ a + rdn v e) 0 >x)
+    (<x == ':) (member? v (colnms >x) ? 0 (foldl (a \ e \ a + rdn v e) 0 >x))
+    (foldl (a \ e \ a + rdn v e) 0 x))
+   (lasti ps as se) (atom? ps ? -1                                             ; index of the LAST effectful arg, -1 = none
     (: k (lasti >ps >as se)
      (0 <= k ? (1 + k) (purep <as se) -1 0)))
-   (spl ps as se i si bd) (? (atom? ps) '(())                               ; (binds . env), call order; si = the substitutable index
+   (spl ps as se i si bd) (atom? ps ? '(())                               ; (binds . env), call order; si = the substitutable index
     (: r (spl >ps >as se (i + 1) si bd) p <ps a <as
      (? (purep a se) (<r . ((p . a) . >r))
         (i = si && 1 = rdn p bd) (<r . ((p . a) . >r))                  ; the licensed effectful substitution
         (: n (nom 0) ((n . a . <r) . ((p . n) . >r))))))
-   (bspl x h h2 hr as se fl op bnd) (: r (lp hr) np (tally <r)
-    (? (tally as < np) (keep2 x h2 as)                                           ; under-saturated -> decline (a partial's effects fire at build time; the pure lane's curry bet is not licensed here)
+   (bspl x h h2 hr as se fl op bnd) (: r (lp hr) np #<r
+    (#as < np ? (keep2 x h2 as)                                           ; under-saturated -> decline (a partial's effects fire at build time; the pure lane's curry bet is not licensed here)
      (: bd0 (last hr)
         ; a nom head resolved through se already passed pbody? at admission -- only a
         ; literal lambda head pays the walk here.
-        bok (? (nom? h) 1 (pbody? hr ()))
+        bok (nom? h || pbody? hr ())
         sp (spl <r (take np as) se 0 (? bok (lasti <r (take np as) se) -1) bd0)
         bd (bsub >sp bd0)
         rest (drop np as)
-      (? (op || two? rest || !(lambp bd))
-         (: f2 (? (atom? <sp) bd (': . (<sp + [bd])))                          ; no binding left -> no let: the call is gone
-            (cprop (? (two? rest) (f2 . rest) f2) se (fl - 1) op bnd))
+      (op || two? rest || !(lambp bd) ?
+         (: f2 (atom? <sp ? bd (': . (<sp + [bd])))                          ; no binding left -> no let: the call is gone
+            (cprop (two? rest ? (f2 . rest) f2) se (fl - 1) op bnd))
          (keep2 x h2 as)))))                                                     ; a lambda body escaping at a value position -> decline (the escape law)
-   (cplam x se fl op bnd) (? (atom? >>x) x                                       ; (\ v) quote -> leave
+   (cplam x se fl op bnd) (atom? >>x ? x                                       ; (\ v) quote -> leave
     (: r (lp x) (relam x r (cprop >r (rmkeys <r se) fl 0 (<r + bnd)))))          ; the body is a value -> op 0
    ; the new-law guard (eager reads see let*, closures see letrec*): bsub renames a :'s
    ; binders over the WHOLE form -- letrec-wise -- but a bare read BEFORE its name's pin
@@ -492,49 +492,48 @@
     (atom? bs) bs
     (atom? >bs) (keep1 bs (cprop <bs se fl op bnd))                              ; the let's BODY inherits the let's op
     (: nd (dsug <bs <>bs) nm <nd v1 (cprop >nd se fl 0 bnd)       ; a binding value is a value -> op 0
-       se2 (? (propk? v1 || inlinable? nm v1)                                      ; a const OR a known pure lambda enters se
+       se2 (propk? v1 || inlinable? nm v1 ?                                      ; a const OR a known pure lambda enters se
               ([nm v1] . rmq nm se) (rmq nm se))
        (keep3 bs nm v1 (cpbinds >>bs se2 fl op bnd))))
    ; bnd: the lexical binder set (\ params + : names), one-scope. its ONE reader is the macro lane:
    ; a locally-bound name is an ordinary variable, never a macro head (the shadow law; se can't
    ; stand in -- absence from se doesn't distinguish local from global).
-   (cprop x se fl op bnd) (: h <x (?
-    (h = x) (nom? x ? (assq x se @ (_ . e . _) e x) x)               ; const/known-lambda var -> value
-    (h = '\) (cplam x se fl op bnd)
-    ; a let's names leave `se` at entry, exactly as cplam drops its params. under the split
-    ; law a bare PRE-PIN read does see the outer binding, so the entry-kill is CONSERVATIVE
-    ; there -- it misses a fold, and the runtime read still answers the outer value -- but it
-    ; cannot be lifted wholesale: an under-\ read inside a pre-pin def is the letrec cell,
-    ; and a propagated outer constant would answer for it. a rebind WITHIN one chain still
-    ; folds: the name re-enters se as each binding pins, so (: x 1 x (x + 1) x) is 2.
-    (h = ':) (: ns (ln >x) (keep x (cpbinds >x (rmkeys ns se) fl op (ns + bnd)) ':))
-    (h = '?) (keep x (mapi (e \ cprop e se fl op bnd) >x) '?)              ; no prune here -- wxc does it
-    (: m (? (nom? h) (macros h) 0)                                          ; macro head, not shadowed? expand on RAW args -- a
+   ; ⚠ the atom test stays OUT of the @ chain: as a pattern it would be the pin ^x,
+   ; and a pin compiles to `=` -- a deep structural walk where this is one cheap
+   ; test per node. in cprop, which runs on every node, that cost the bake 7 minutes.
+   (cprop x se fl op bnd) (<x = x ?
+    (nom? x ? (assq x se @ (_ . e . _) e x) x)               ; const/known-lambda var -> value
+    (<x @
+    '\ (cplam x se fl op bnd)
+    ': (ln >x @ ns (keep x (cpbinds >x (rmkeys ns se) fl op (ns + bnd)) ':))
+    '? (keep x (mapi (e \ cprop e se fl op bnd) >x) '?)              ; no prune here -- wxc does it
+    h (: m (? (nom? h) (macros h) 0)                                          ; macro head, not shadowed? expand on RAW args -- a
        (? (m && !(member? h bnd)) (cprop (m >x) se fl op bnd)                  ; structural macro (a two?/cap probe) must see them
-          (: as (mapi (\ e (cprop e se fl 0 bnd)) >x)                              ; ARGS are values -> op 0 (escape mode)
-             hr (? (nom? h) (: e (assq h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd)) ; HEAD is consumed -> op 1
-             h2 (? (nom? h) h hr)                                                 ; the emitted head: a nom stays a nom (ana resolves it);
-                                                                                  ; a COMPOUND head goes out WALKED, which is what keeps
-                                                                                  ; cprop's output macro-free and wx's macro lane gone
+          (: as (mapi (e \ cprop e se fl 0 bnd) >x)
+             hr (nom? h ? (: e (assq h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd)) ; HEAD is consumed -> op 1
+             h2 (nom? h ? h hr)                                                 ; the emitted head: a nom stays a nom (ana resolves it);
              hk (kconst hr)                                                       ; the head's own value, when it has one
-             (? (0 < fl && lambp hr && two? as && entg? (last hr))                   ; an entangled : in the body -> no bsub lane is sound;
-                  (keep2 x h2 as)                                                     ;   keep the call (boxfix's runtime law answers it)
-                (0 < fl && lambp hr && two? as && allp as se)                        ; two? as: (f) is f -- nothing to substitute
-                  (: red (cprop (beta hr as) se (fl - 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
-                     (op || !(lambp red) ? red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
-                (0 < fl && lambp hr && two? as)                                     ; ... with an IMPURE arg -> the BINDING SPLICE (bspl;
-                  (bspl x h h2 hr as se fl op bnd)                                     ;    foldc/cpap are dead for a lambda head, so its decline keeps the call)
+             (? (0 < fl && lambp hr && two? as)
+                 (? (entg? (last hr))                   ; an entangled : in the body -> no bsub lane is sound;
+                     (keep2 x h2 as)                                                     ;   keep the call (boxfix's runtime law answers it)
+                    (allp as se)                        ; two? as: (f) is f -- nothing to substitute
+                     (: red (cprop (beta hr as) se (fl - 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
+                      (op || !(lambp red) ? red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
+                    (bspl x h h2 hr as se fl op bnd))                                     ;    foldc/cpap are dead for a lambda head, so its decline keeps the call)
                 (nom? h && allk as && !(member? h bnd) && pure-head? h as)            ; pure-fn on consts -> fold. bnd-guarded: a binder
                   (foldc (gv h ()) as)                                                ;   spelled like an op still SHADOWS (the alpha law)
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; a PURE-APPLYING head with a KNOWN operand: fold the whole
                   (cpap >hk as)                                                       ;   known prefix, an unknown tail keeps the value as its head
-                (keep2 x h2 as)))))))                                                 ; nothing rewrote -> the ORIGINAL call
+                (keep2 x h2 as)))))))                                                ; nothing rewrote -> the ORIGINAL call
    (wx (cprop x () 64 0 ()) ()))   ; bnd seeds (): a 0 seed rode `list + 0` into every binder set
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a nom? literal.
   ; ⚠ routing it to ava captures it as a SPURIOUS import: it inflates a closure's arity by one with
   ; no matching value applied at the ref site -> an under-saturated partial (silently wrong). the
   ; test is id?-the-zero-point, NOT nil?: boxfix's cell names are fresh nameless mints (also nil?)
   ; bound and referenced as real variables, so they must still reach ava.
+  ; ⚠ iop/apx stay `=` tests in the cond, NOT ^-pins in an @ chain: a pin reads the
+  ; name to match against, and these two are letrec siblings this form is compiled
+  ; BEFORE -- the pattern's read finds the cell empty and the whole lane goes missing.
   (ana c x) (? (nom? x && x != ())  (ava c x)
                (atom? x) (kim x)
                (: a <x b >x (?
@@ -548,17 +547,17 @@
                                   ; to its captured imports. never a macro (feel expands every
                                   ; nom-headed call), so no (macros a) consult here.
   (push c k x) (pin c k (x . c k), x)
-  (pop c k) (: x (c k) (pin c k >x, <x))
+  (pop c k) (c k @ (a . u) (pin c k u, a))
   (iap c b) (: op <b as >b                       ; (iop op . args) -> inline the vm op
-   (? (atom? >as) (ana c <as * em1 op)      ; one arg
-      (: s (c 'stk) k (apr2l c as) _ (pin c 'stk s) (k * em1 op)))) ; n-ary, r2l args
+   (atom? >as ? (ana c <as * em1 op)      ; one arg
+      (: s (c 'stk) k (apr2l c as) (pin c 'stk s, k * em1 op)))) ; n-ary, r2l args
   ; falook: walk the scope chain for head's fixed arity, recorded by ale in each enclosing let's
   ; 'far map. > 0 = a multi-arg lambda sibling of that arity; 0 = a binding of that name that is NOT
   ; an n-ary-callable fixed-arity lambda -- it SHADOWS outer fars, so stop; -1 = not bound in this
   ; scope, keep walking. so a saturated call to a letrec lambda sibling can take the one-shot n-ary
   ; apply (apn/tapn) instead of currying, the same as a book global.
   (falook c h) (?- 0 c
-   (: far (c 'far) a (? (tablet? far) (peep far h -1) -1)
+   (: far (c 'far) a (tablet? far ? (peep far h -1) -1)
     (? (0 < a) a (-1 = a) (falook (c 'par) h) 0)))
   ; apxh: (apx n head . args) -> apply. n > 1 -> r2l eval of the leading n args and one n-ary
   ; apply, with any surplus arg curried onto the ANSWER l2r; n = 0 -> the plain 1-ary chain (kap
@@ -573,7 +572,7 @@
               ; the name (its walk passes frames carrying no far at all). Guessing n < the real
               ; arity then skips the saturation check and enters a body short of its arguments.
               ; Exact saturation is the most a guess can carry.
-              n2 (? nary nary (nom? head && (: a (falook c head) (? (1 < a && a = tally args) a 0))))
+              n2 (? nary nary (nom? head && (: a (falook c head) (1 < a && a = #args && a))))
               f (ana c head) s (c 'stk) _ (push c 'stk 0) s2 (c 'stk)
               g (? n2 (napn c args n2 s2) (apl2r c args))
               (pin c 'stk s, f * g))
@@ -601,7 +600,7 @@
   ; (lvm_cond) to the next clause; on true, runs its result and JUMPS to the join (the cond's
   ; continuation k). the wrapper records k on the 'join stack for the duration. a constant test
   ; (pro folds it to a quote) picks its branch outright, no code.
-  (aco c b) (:- (: f (clauses b) (\ k n (: k2 (f (push c 'join * k) n) _ (pop c 'join) k2)))
+  (aco c b) (:- (: f (clauses b) (\ k n (: k2 (f (push c 'join * k) n) (pop c 'join, k2))))
    ; tojoin: after a result, jump to the join (top of 'join) -- but fuse a ret/tap/tapn join INLINE
    ; rather than emit a jump straight to a return.
    (tojoin k n) (:
@@ -636,19 +635,19 @@
   ; backpatch mutate THROUGH the box, so the shared mutable cell is a proper heap object.
   (mkc v) {0 v}
   (cof e) (peep >e 0 0)
-  (cput e v) (: _ (pin >e 0 v) v)
+  (cput e v) (pin >e 0 v, v)
   (lz c lfd scope)(: code <(cof lfd)
                    p (? code (em2 lvm_quote code)
-                        (: site (lfd >< {})
-                           _ (pin scope 'sites (site >< scope 'sites))
-                         (qsite site)))
-                   _ (push c 'stk 0)
-                   q (apl2r c >(cof lfd))
-                   _ (pop c 'stk)
-                 (p * q))
+                        (: site (lfd . {})
+                         (pin scope 'sites (site . scope 'sites),
+                          qsite site)))
+                   q (push c 'stk 0,
+                      apl2r c >(cof lfd))
+                 (pop c 'stk,
+                  p * q))
   (ava c x) (avw c c x)
   (shadowed? c d x) (: far (d 'far)
-   (tablet? far && 0 <= peep far x -1 && !(member? x ((d 'par) 'stk))))
+   (tablet? far && 0 <= peep far x -1 && !(member? x (d 'par 'stk))))
   (avw c d x)
    (? !d ; outside all lexical scopes?
     (: y (gv x gone) (y == gone ? (em2 lvm_index x) (kim y)))   ; ==, not the pin: see gv
@@ -662,21 +661,21 @@
          (?- (avw c (d 'par) x)
           (member? x s) (? home (karg (lidx x s))
                          (c 'par ? (push c 'imp x), q #(c 'stk)))
-          (stki d >= 0) (? home (q (tally (c 'stk)))
-                           (: _ (? (c 'par) (push c 'imp x)) (q (tally (c 'stk))))))))))
+          (stki d >= 0) (? home (q #(c 'stk))
+                         (c 'par ? (push c 'imp x), q #(c 'stk))))))))
   ; lambda analyzer
   (ala c imp exp) (:
    d (sco c (init exp) imp)
    k (ana d (last exp) (k0s d))
    a (ary d)
-   e ((? (a = 1) k (em2 lvm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
-   os (assoc exp (rootc c 'src))
-   s ('\ >< (d 'imp + (? (two? os) >>os exp)))
-   _ (poke -1 s e)                                  ; value[-1] = source \-expr
-   _ (trim (seek -1 e))                             ; tag head spans [src .. body]; value stays e
-   hk (gv 'natjit 0)
-   ((? hk (hk e s a gv (farq c) (c 'lam)) e) >< d 'imp))
-  (farq k x) (? (nil? k) 0
+   e ((a = 1 ? k (em2 lvm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
+   os (assq exp (rootc c 'src))
+   s ('\ . (d 'imp + (? (two? os) >>os exp)))
+   hk (poke -1 s e,                                  ; value[-1] = source \-expr
+       trim (seek -1 e),                             ; tag head spans [src .. body]; value stays e
+       gv 'natjit 0)
+   ((!hk ? e (hk e s a gv (farq c) (c 'lam))) . d 'imp))
+  (farq k x) (? !k 0
                (: f (k 'far)
                   (? (tablet? f && 0 <= peep f x -1) 1 (farq (k 'par) x))))
 
@@ -687,9 +686,9 @@
     ; collect: gather (name . def) chains in source order -> (prs body . even). the body is the
     ; trailing odd form; even = a body-LESS let (last value is result, names defglob).
     (collect prs n d rest) (: nd (dsug n d)
-     (? (atom? rest)       (rev (nd >< prs) >< <nd >< 1)   ; body-less: last NAME is the body
-        (atom? >rest)      (rev (nd >< prs) >< <rest >< 0)   ; a trailing body form
-                           (collect (nd >< prs) <rest <>rest >>rest)))
+     (? (atom? rest)       (rev (nd . prs) . <nd . 1)   ; body-less: last NAME is the body
+        (atom? >rest)      (rev (nd . prs) . <rest . 0)   ; a trailing body form
+                           (collect (nd . prs) <rest <>rest >>rest)))
     cb (collect 0 a <b >b)
     ; far: {name -> arity} for the lambda siblings, SYNTACTIC (binder count off the \-expr), stable
     ; through the backpatch rebuild that zeroes closure cells. only fixed-arity multi-arg lambdas
@@ -697,8 +696,8 @@
     ; ⚠ pinned BEFORE the closures analyze their bodies (and weave's re-analysis), so falook sees it.
     (farof ps t) (?- t (two? ps)
      (: pr <ps k <pr d >pr
-        a (? (-1 = peep t k -1 && lambp d) (tally >d - 1) 0)
-      (farof >ps (pin t k (? (1 < a) a 0)))))
+        a (? (-1 = peep t k -1 && lambp d) (#>d - 1) 0)
+      (farof >ps (pin t k (1 < a ? a 0)))))
     _ (pin q 'far (farof <cb {}))
     ; closures: each lambda def -> a closure via ala (a non-lambda -> just a stack slot), building
     ; [names..] on the stack; then PROPAGATE captures to a fixpoint, and return the lambdas with the
@@ -709,13 +708,13 @@
      (split a ps) (?
       (atom? ps) a
       !(lambp ><ps)
-       (: _ (push c 'stk <<ps)
-        (split a >ps))
+       (push c 'stk <<ps,
+        split a >ps)
       (: k <<ps
          v (ala q () >><ps)
-         a2 ((k >< mkc v) >< a)
-       _ (push c 'stk k)
-       (split a2 >ps)))
+         a2 ((k . mkc v) . a)
+       (push c 'stk k,
+        split a2 >ps)))
      l (split 0 prs)
      _ (pin c 'stk s)
      ; capture propagation: if k1 references sibling k2, k2 must ALSO capture k1's imports (mutual
@@ -723,16 +722,16 @@
      ; `monofix` repeats the pass until `capsize` stops growing -- the pass mutates the cells and
      ; returns the SAME list, so monofix's snapshot-BEFORE size catches each pass's growth.
      (pour e1 e2) (each >(cof e1)                         ; pour e1's imports into e2 (skip dups; prepend)
-        (\ var (? (member? var >(cof e2)) 0 (cput e2 (<(cof e2) >< var >< >(cof e2))))))
+        (var \ member? var >(cof e2) ? 0 (cput e2 (<(cof e2) . var . >(cof e2)))))
      (pass1 lst k1 k2) (? (atom? k1) lst                       ; one full sweep over ordered pairs k1 x k2
         (atom? k2) (pass1 lst >k1 lst)                    ; k2 done -> next k1, reset k2
-        (!(k1 = k2) && (member? <<k1 >(cof <k2)))   ; k2 references k1
-         (: _ (pour <k1 <k2) (pass1 lst k1 >k2))
+        (k1 != k2 && member? <<k1 >(cof <k2))   ; k2 references k1
+         (pour <k1 <k2, pass1 lst k1 >k2)
         (pass1 lst k1 >k2))
-     (capsize lst) (foldl (\ a e (a + tally >(cof e))) 0 lst)   ; total imports across closures (the measure)
-     (fixcaps lst) (: done (monofix lst (\ st (pass1 st st st)) capsize)
+     (capsize lst) (foldl (a \ e \ a + #>(cof e)) 0 lst)   ; total imports across closures (the measure)
+     (fixcaps lst) (: done (monofix lst (st \ pass1 st st st) capsize)
                       j (map cap done)
-                      (dropj x) (<x >< mkc (<(cof x) >< foldl (flip ldel) >(cof x) j))
+                      (dropj x) (<x . mkc (<(cof x) . foldl (flip ldel) >(cof x) j))
                       (map dropj done)))
 
    (wire prs body even lams) (:
@@ -745,11 +744,10 @@
                              ; ⚠ the import row is FROZEN here: every ref site that already
                              ; compiled applied (cup (cof cls)), so growth means those sites
                              ; under-apply -- scare, never miscompile.
-                             _ (? (tally >x = tally >(cof cls)) ()
-                                  (scare 'imports-grew n))
-                           (cput cls x)))
+                           (#>x != #>(cof cls) ? (scare 'imports-grew n),
+                            cput cls x)))
         f (ana c d)
-        g (?- id (even && (nil? (c 'par)) && !(id? n '_)) (em2 lvm_defglob n))  ; `_` binds locally, never to the book
+        g (?- id (even && !(c 'par) && !(id? n '_)) (em2 lvm_defglob n))  ; `_` binds locally, never to the book
         h (push c 'stk n,
            weave >nds)
         (f * g * h)))
@@ -758,7 +756,7 @@
     g (push c 'stk 0,
     ; clear stale first-build closures so a ref hit during the rebuild defers to a backpatch site;
     ; the import sets are kept.
-       each lams (\ e (cput e (0 >< >(cof e)))),
+       each lams (e \ cput e (0 . >(cof e))),
        weave prs)
     ; closures final -> backpatch each recorded recursive-fn ref with its text.
     f (each (q 'sites) (s \ poke 0 <(cof <s) (peep >s 0 0)),
