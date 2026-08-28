@@ -154,12 +154,12 @@
                  (go i (j + 1) acc))
              (go 0 0 ()))))
    (abl? g nm) (member? nm (g 'abl))
-   ; the one-build world (moon-ssa rungs 6+7, the x64 AND a64 DEFAULT): any
-   ; old-world knob keeps the dance byte-identically, and so does t32/rv until
-   ; rung 7 calibrates them -- MOON_ABLATE=uni opts a remaining ISA in for that
-   ; work. alive's widened universe and repack's paired-cs reuse ride exactly
+   ; the one-build world (moon-ssa rungs 6+7, the DEFAULT on x64, a64, and
+   ; rv64): any old-world knob keeps the dance byte-identically, and so does
+   ; t32 until its calibration -- MOON_ABLATE=uni opts it in for that work.
+   ; alive's widened universe and repack's paired-cs reuse ride exactly
    ; this world -- the three gates must never drift apart.
-   (uniw? g) ((!(t32? g || rv? g) || abl? g 'uni) &&
+   (uniw? g) ((!(t32? g) || abl? g 'uni) &&
               !(abl? g 'obuild || abl? g 'pcell || abl? g 'alloc ||
                 abl? g 'pdefcs || abl? g 'pdef))
    (ralloc g) (? !(abl? g 'ralloc)
@@ -8081,11 +8081,11 @@
        ; gp 1. the ret lane reads g 'sret back; fnreset holds the neutral.
        srt (? (two? sig) <sig 'long)
        sr6f (sretm? g srt)
-       ; -- the one build (moon-ssa rungs 6+7, the x64 and a64 DEFAULT): seats
-       ; from alive, one build per fn, the dance retired to MOON_ABLATE=obuild
-       ; (and the other old-world knobs). a memory sret and varargs keep the
-       ; old path either way (it already builds them once), and t32/rv keep
-       ; the dance until rung 7 calibrates them (uniw?'s law).
+       ; -- the one build (moon-ssa rungs 6+7, the default on x64, a64, and
+       ; rv64): seats from alive, one build per fn, the dance retired to
+       ; MOON_ABLATE=obuild (and the other old-world knobs). a memory sret
+       ; and varargs keep the old path either way (it already builds them
+       ; once), and t32 keeps the dance until its calibration (uniw?'s law).
        uni9 ((uniw? g) && !(sr6f || vararg))
        _ (? sr6f (pin g 'sret (ntmp g 'long)) ())
        sp1 (? uni9 ()
