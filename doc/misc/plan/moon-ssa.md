@@ -460,7 +460,14 @@ until rung 6.
   parity closed at the FILE HASH this time: the rv64 artifact carries no t32
   objects, so post-flip default and MOON_ABLATE=uni are byte-identical.
   Gates at reference (test, ccriscv 151/151, cts_riscv 211/220, test_slow +
-  fixpoint). The a64 flip REVALIDATED post-merge on the same instrument: the
+  fixpoint). **t32 FLIPPED the same day — the LAST bar comes off uniw?: the
+  one build is the default on every target**, a hygiene flip (the empty t32
+  pool grants nothing) whose one real finding was v6m's: the first grant
+  attempt reached cspool's high registers and the encoder refused
+  (st-src-hi r8 — thumb1's 16-bit str reaches r0-r7 only), so the v6m cs
+  row lowers to r5-r7. Both thumb batteries + test + test_slow at
+  reference. The dance survives only behind the knobs; the CUT RUNG is
+  unblocked. The a64 flip REVALIDATED post-merge on the same instrument: the
   merged tree (the exact-paren pat arc, ff at 09:11) reads the a64 default
   −0.30% vs obuild on corpus-x, both worlds passing the strict-law suite —
   the pre-merge morning's binaries were all LAX-law (built before the ff),

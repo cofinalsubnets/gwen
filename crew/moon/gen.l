@@ -154,14 +154,12 @@
                  (go i (j + 1) acc))
              (go 0 0 ()))))
    (abl? g nm) (member? nm (g 'abl))
-   ; the one-build world (moon-ssa rungs 6+7, the DEFAULT on x64, a64, and
-   ; rv64): any old-world knob keeps the dance byte-identically, and so does
-   ; t32 until its calibration -- MOON_ABLATE=uni opts it in for that work.
-   ; alive's widened universe and repack's paired-cs reuse ride exactly
-   ; this world -- the three gates must never drift apart.
-   (uniw? g) ((!(t32? g) || abl? g 'uni) &&
-              !(abl? g 'obuild || abl? g 'pcell || abl? g 'alloc ||
-                abl? g 'pdefcs || abl? g 'pdef))
+   ; the one-build world (moon-ssa rungs 6+7, the DEFAULT on every target):
+   ; any old-world knob keeps the dance byte-identically. alive's widened
+   ; universe and repack's paired-cs reuse ride exactly this world -- the
+   ; three gates must never drift apart.
+   (uniw? g) !(abl? g 'obuild || abl? g 'pcell || abl? g 'alloc ||
+               abl? g 'pdefcs || abl? g 'pdef)
    (ralloc g) (? !(abl? g 'ralloc)
                (g 'pool @ (r9 >< u)
                 ; ⚠ armor: a pinned reg on the free list is the free-list/pin split
@@ -497,7 +495,7 @@
    (cspool g) (? (abl? g 'cs) ()
                  (a64? g) '(r19 r20 r21 r22 r23 r24 r25 r26 r27 r28)
                  (rv? g) '(r15 r13 r14 r19 r20 r21 r22 r23 r24 r25 r26)
-                 (v6m? g) '(r5 r6 r7 r8 r9 r10)
+                 (v6m? g) '(r5 r6 r7)                 ; the 16-bit str/ldr reach r0-r7 only
                  (t32? g) '(r5 r6 r7 r8 r9 r10)
                  (arm? g) ()
                  '(r11 r12 r13 r14))
@@ -8081,11 +8079,11 @@
        ; gp 1. the ret lane reads g 'sret back; fnreset holds the neutral.
        srt (? (two? sig) <sig 'long)
        sr6f (sretm? g srt)
-       ; -- the one build (moon-ssa rungs 6+7, the default on x64, a64, and
-       ; rv64): seats from alive, one build per fn, the dance retired to
+       ; -- the one build (moon-ssa rungs 6+7, the default on every target):
+       ; seats from alive, one build per fn, the dance retired to
        ; MOON_ABLATE=obuild (and the other old-world knobs). a memory sret
        ; and varargs keep the old path either way (it already builds them
-       ; once), and t32 keeps the dance until its calibration (uniw?'s law).
+       ; once).
        uni9 ((uniw? g) && !(sr6f || vararg))
        _ (? sr6f (pin g 'sret (ntmp g 'long)) ())
        sp1 (? uni9 ()
