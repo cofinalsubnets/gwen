@@ -16,14 +16,16 @@
 ;   (fat-mkdir fs path)    -> 1 | ()
 ;   (fat-rm fs path)       -> 1 | ()        a file, or an empty dir
 ;
-; ⚠ presence rides the (1 _) wrapper throughout (the tree's law): an empty
-; file, an empty dir and a 0-size entry are all real answers that net nothing.
-; ⚠ long names are read AND written (UCS-2's low byte; a char past 255 reads
-; as ?): a name that fits 8.3 is written short with the lowercase basis flags,
-; one that does not gets LFN entries over a ~N short alias, mtools-compatible.
-; ⚠ FAT32 only, by the format's own law: under 65525 clusters the type flips
-; to FAT16 by DEFINITION, so fat-mkfs refuses a device too small (~33 MB) --
-; absence, not divergence.
+;
+; presence rides the (1 _) wrapper throughout (the tree's law): an empty file, an
+; empty dir and a 0-size entry are all real answers that net nothing.
+;
+; long names are read and written (UCS-2's low byte; a char past 255 reads as ?): a
+; name that fits 8.3 is written short with the lowercase basis flags, one that does
+; not gets LFN entries over a ~N short alias, mtools-compatible.
+;
+; FAT32 only, by the format's own law: under 65525 clusters the type flips to FAT16 by
+; definition, so fat-mkfs refuses a device too small (~33 MB) -- absence, not divergence.
 
 (:
    ; --- little-endian scalars: strings index charms, casks pin them ---
@@ -31,7 +33,7 @@
    (u32 s i) (u16 s i + (u16 s (i + 2) << 16))
    (w16 b i v) (pin b i (v & 255), pin b (i + 1) (v >> 8 & 255), ())
    (w32 b i v) (w16 b i v, w16 b (i + 2) (v >> 16))
-   (bcopy b i s) (: n (tally s) (n ? (pour b i s 0 n), ()))      ; pour refuses an empty
+   (bcopy b i s) (: n #s (n ? (pour b i s 0 n), ()))      ; pour refuses an empty
    (bfill b i n v) (n ? (pin b i v, bfill b (i + 1) (n - 1) v))
    (zeros n) (string (cask n))
 
@@ -61,7 +63,7 @@
    (fat-end? v) (0x0FFFFFF8 <= v)
    ; a file's clusters first to last; freeing walks the same spine
    (chain-of f cl) (cl < 2 || fat-end? cl ? ()
-                    (cl >< chain-of f (fat@ f cl)))
+                    (cl . chain-of f (fat@ f cl)))
    (chain-zap f cl) (cl < 2 || fat-end? cl ? ()
                      (: nx (fat@ f cl) (fat! f cl 0, chain-zap f nx)))
    ; one free cluster, marked end -- () when the disk is full
@@ -78,7 +80,7 @@
                       (? !(charm? c) ()
                          (k = 1) [c]
                          (: r (chain-take f (k - 1))
-                          (two? r ? (fat! f c <r, c >< r)
+                          (two? r ? (fat! f c <r, c . r)
                            (fat! f c 0, ()))))))
 
    ; --- clusters <-> bytes ---
@@ -91,7 +93,7 @@
                       (go (chain-of f cl) ""))
    (chain-wr f cls s)
     (: cb (clu-bytes f)
-       n (tally s)
+       n #s
        (go c off) (atom? c ? 1
                    (: hi (off + cb < n ? (off + cb) n)
                       b (cask cb)
@@ -103,14 +105,14 @@
    ; --- names: FAT is case-blind; 8.3 when it fits, LFN over an alias when not ---
    (up1 c) (97 <= c <= 122 ? (c - 32) c)
    (dn1 c) (65 <= c <= 90 ? (c + 32) c)
-   (name=? a b) (: n (tally a)
+   (name=? a b) (: n #a
                    (n = tally b &&
                     ((: (go i) (i < n ? (up1 (a i) = up1 (b i) ? (go (i + 1)) 0) 1)) 0)))
    ; split at the LAST dot: (base . ext), ext "" when dotless
-   (splitext s) (: n (tally s)
+   (splitext s) (: n #s
                    (go i d) (? (i < n) (go (i + 1) (s i = 46 ? i d))
-                               (d < 0) (s >< "")
-                               (snip s 0 d >< snip s (d + 1) n))
+                               (d < 0) (s . "")
+                               (snip s 0 d . snip s (d + 1) n))
                    (go 0 -1))
    (alnum? c) (48 <= c <= 57 || 65 <= c <= 90 || 97 <= c <= 122)
    (plain? c) (alnum? c || c = 95 || c = 45 || c = 126)
@@ -121,7 +123,7 @@
                      (go 0))
    ; the 11 raw name bytes + the basis flags | () when the name needs LFN
    (fit83 s)
-    (splitext s @ (b >< e)
+    (splitext s @ (b . e)
      (? (tally b && tally b <= 8 && tally e <= 3 &&
          allc? b plain? && allc? e plain? &&
          (lower? b || upper? b) &&
@@ -167,7 +169,7 @@
    ; raw dir bytes -> groups. an LFN run rides `start` until its short entry
    ; claims it; a freed slot or the end orphans (drops) a half-run, honestly.
    (dir-scan s)
-    (: n (tally s)
+    (: n #s
        (go o lfn start acc)
         (? (n <= o) (rev acc)
            (: c0 (s o)
@@ -183,15 +185,15 @@
                           raw (snip s (charm? start && !label ? start o) (o + 32))
                           g (group (label || dot ? () nm) at cl (u32 s (o + 28))
                                    (snip s o (o + 11)) raw)
-                          (go (o + 32) "" () (g >< acc))))))))
+                          (go (o + 32) "" () (g . acc))))))))
        (go 0 "" () ()))
    (dir-bytes gs) (: (go m acc) (two? m ? (go >m (acc + (peep <m 5 ()))) acc) (go gs ""))
-   (dir-find (g >< s) nm)
+   (dir-find (g . s) nm)
     (: n (peep g 0 ()) (string? n && name=? n nm ? g (dir-find s nm)))
    (dir-drop gs nm) (filter (\ g (: n (peep g 0 ()) !(string? n && name=? n nm)))
                             gs)
    (dir-names gs) (: (go m acc) (? (two? m)
-                                   (go >m (: n (peep <m 0 ()) (string? n ? (n >< acc) acc)))
+                                   (go >m (: n (peep <m 0 ()) (string? n ? (n . acc) acc)))
                                    (rev acc))
                      (go gs ()))
 
@@ -215,10 +217,10 @@
    ;     the leaf's name, and the leaf's group when present: [dircl nm g|()] --
    ;     () when a mid component is absent or no dir. "" and "/" answer the
    ;     root itself: [rootcl "" ()] ---
-   (comps p) (: n (tally p)
-                (go i w acc) (? (n <= i) (rev (tally w ? (w >< acc) acc))
+   (comps p) (: n #p
+                (go i w acc) (? (n <= i) (rev (tally w ? (w . acc) acc))
                                 (: c (p i)
-                                   (? (c = 47) (go (i + 1) "" (tally w ? (w >< acc) acc))
+                                   (? (c = 47) (go (i + 1) "" (tally w ? (w . acc) acc))
                                       (go (i + 1) (w + string [c]) acc))))
                 (go 0 "" ()))
    (fat-walk f path)
@@ -239,7 +241,7 @@
        d (doy - ((153 * mp + 2) // 5) + 1)
        m (mp < 10 ? (mp + 3) (mp - 9))
        y (m <= 2 ? (y + 1) y)
-       (((y - 1980) << 9) + (m << 5) + d ><
+       (((y - 1980) << 9) + (m << 5) + d .
         ((secs // 3600) << 11) + ((secs // 60 % 60) << 5) + (secs % 60 // 2)))
 
    ; --- building one entry group for a name ---
@@ -327,25 +329,25 @@
      (? (!(tablet? g) || (peep g 1 () & 16)) ()
         (: sz (peep g 3 ())
          (sz ? [1 (snip (chain-rd f (peep g 2 ())) 0 sz)] [1 ""]))))
-   ; ⚠ the ORDER is the safety: new chain laid, entry swapped in, and only then
-   ; the old chain freed -- a refusal mid-way leaves the old file whole.
+   ; the order is the safety: new chain laid, entry swapped in, and only then the old
+   ; chain freed -- a refusal mid-way leaves the old file whole.
    (fat-write f path s)
     (fat-walk f path @ [dcl nm old]
-     (? (!(tally nm) || (tablet? old && (peep old 1 () & 24))) ()
+     (? (!#nm || (tablet? old && (peep old 1 () & 24))) ()
         (: cb (clu-bytes f)
            need ((tally s + cb - 1) // cb)
            cls (chain-take f need)
            (? (need && atom? cls) ()                  ; the disk is full; nothing changed
               (: _ (need ? (chain-wr f cls s))
                  gs (dir-drop (dir-load f dcl) nm)
-                 ng (mk-group gs nm 32 (need ? <cls 0) (tally s))
+                 ng (mk-group gs nm 32 (need ? <cls 0) #s)
                  ok (tablet? ng ? (dir-save f dcl (gs + [ng])))
                  (? ok (tablet? old ? (chain-zap f (peep old 2 ())), 1)
                   (need ? (chain-zap f <cls),
                    ())))))))
    (fat-mkdir f path)
     (fat-walk f path @ [dcl nm g]
-     (? (!(tally nm) || tablet? g) ()                 ; no name, or it exists already
+     (? (!#nm || tablet? g) ()                 ; no name, or it exists already
         (: cls (chain-take f 1)
            (? (atom? cls) ()
               (: c <cls cb (clu-bytes f)

@@ -10,12 +10,12 @@
    ; the directory is positional, so a mistyped flag would be TAKEN as one and a whole
    ; tree laid under it. a leading dash is never a directory here: name the flags, ask
    ; about anything else.
-   (src-dash? w) (: n (tally w) ((0 < n) && (w 0 = 45)))
+   (src-dash? w) (: n #w ((0 < n) && (w 0 = 45)))
    (src-help? w) ((w = "-h") || (w = "--help") || (w = "-help") || (w = "help"))
    (src-not-dir m w)
     (src-die (w + " is not a directory -- `love " + m + " help` for usage"))
 
-   (src-head nom) (: n (tally nom)
+   (src-head nom) (: n #nom
                      (go i) (? (n <= i) nom (nom i = 47) (snip nom 0 i) (go (i + 1)))
                      (go 0))
 
@@ -45,12 +45,10 @@
        w (tar-scatter dir es)
        _ (atom? w ? (src-die ("can't write " + dir)))
        root (dir = "." ? top (dir + "/" + top))
-       ; ⚠ NO LOVE IS LAID BESIDE THE SOURCE, and the tree has no opinion about who
-       ; compiles it. A copy in bin/ was the toolchain BY BEING THERE, so a plain `make`
-       ; preferred it over the machine's own compiler -- the weaker claim, chosen by a
-       ; file existing rather than by anyone deciding. Which mode a build is in belongs to
-       ; whoever DRIVES it: bare make has no love and can only mean the ambient cc; a love
-       ; driving knows its own selfpath and says so in CC. Neither needs a copy.
+       ; no love is laid beside the source: which mode a build is in belongs to whoever
+       ; drives it. bare make has no love and can only mean the ambient cc; a love driving
+       ; knows its own selfpath and says so in CC. a copy in bin/ would be the toolchain by
+       ; being there, which is a claim made by a file existing rather than by anyone.
        (src-lay-tgz root top gz,
         [1 root <>w]))
 
@@ -66,9 +64,9 @@
      (puts (";; wrote " + <>r + "\n"), 0))
 
    (src-dirs _)
-    (: p ("" + getenv "PATH") n (tally p)
-       (go k st acc) (? (n <= k) (rev (snip p st k >< acc))
-                        (p k = 58) (go (k + 1) (k + 1) (snip p st k >< acc))
+    (: p ("" + getenv "PATH") n #p
+       (go k st acc) (? (n <= k) (rev (snip p st k . acc))
+                        (p k = 58) (go (k + 1) (k + 1) (snip p st k . acc))
                         (go (k + 1) st acc))
        (go 0 0 ()))
    (src-foreign? p) (: a (stat p) b (stat (selfpath 0)) (two? a ? !(a = b) 0))
@@ -89,7 +87,7 @@
              _ (unlink c) _ (unlink o)
              (0 = st))))
    (src-cc dir)
-    (: (try (w >< x))
+    (: (try (w . x))
      (: (go ds) (atom? ds ? (try x)
               (: d (tally <ds ? <ds ".") p (d + "/" + w)
                (src-foreign? p && src-ccworks? p dir ? [1 p] (go >ds))))
@@ -112,15 +110,13 @@
                         (any ds) (? !(two? ds) 0
                                     (: d (tally <ds ? <ds ".") p (d + "/" + w)
                                        (src-foreign? p ? 1 (any >ds))))
-                        (go >l (any (src-dirs ()) ? acc (w >< acc)))))
+                        (go >l (any (src-dirs ()) ? acc (w . acc)))))
        (go ns ()))
-   ; ⚠ NOT (sha256 (slurp a) = sha256 (slurp b)): slurp draws a byte at a time
-   ; and the answer is copied, so two 13 MB binaries cost the waiter ~140 MB it
-   ; never gets back. The question is only whether the bytes agree, and a walk
-   ; answers it in two buffers. A short read rides as a LEFTOVER, so the streams
-   ; line up however the reads happen to fall.
-   ; ⚠ `snip` reads the CASK: (snip (string b) 0 k) would copy all 64K to take the k
-   ; bytes the read filled, and a short read at the tail of every file pays it twice.
+   ; not (sha256 (slurp a) = sha256 (slurp b)): slurp draws a byte at a time and the
+   ; answer is copied, so two 13 MB binaries cost the waiter ~140 MB it never gets back.
+   ; a short read rides as a leftover, so the streams line up however the reads fall.
+   ; `snip` reads the cask -- (snip (string b) 0 k) would copy all 64K to take the k bytes
+   ; the read filled, and a short read at the tail of every file pays it twice.
    (src-chunk q b) (: k (swig q b) (? (0 < k) (snip b 0 k) ""))
    (src-same? p1 p2)
     (: q1 (open p1 "r")
@@ -131,8 +127,8 @@
              (go r1 r2)
               (: r1 (tally r1 ? r1 (src-chunk q1 b1))
                  r2 (tally r2 ? r2 (src-chunk q2 b2))
-                 n1 (tally r1)
-                 n2 (tally r2)
+                 n1 #r1
+                 n2 #r2
                  m (? (n1 < n2) n1 n2)
                  (? (0 = m) (? (0 = (n1 + n2)) 1 0)      ; both ended, same place
                     (n1 = n2) (r1 = r2 ? (go "" "") 0)   ; the even case: no snip at all
@@ -143,15 +139,13 @@
              _ (close q2)
              v)))
 
-   ; ⚠ THE FIXPOINT IS SCOPED, NOT DROPPED. It can hold only where the output
-   ; ought to BE this binary, and a cross lay is the one case the invocation
-   ; itself says it cannot -- so it is skipped for a reason the caller NAMED,
-   ; never for one that was discovered. A dirty tree still fails.
-   ; ⚠ AND THE LAY IS AN EGG: the crew arrives at BAKE and a bake means RUNNING
-   ; the artifact, which this machine cannot do for another ISA. it does not have
-   ; to: the egg carries its source and the dist roster, and its FIRST BOOT on
-   ; the target machine bakes and patches it in place (src/main.c) -- the same
-   ; bytes a native `make dist` lays, with nothing foreign anywhere in the chain.
+   ; the fixpoint is scoped, not dropped: it can hold only where the output ought to be
+   ; this binary, and a cross lay is the one case the invocation itself says it cannot.
+   ; a dirty tree still fails.
+   ; the lay is an egg -- the crew arrives at bake and a bake means running the artifact,
+   ; which this machine cannot do for another ISA. the egg carries its source and the dist
+   ; roster, and its first boot on the target bakes and patches it in place (src/main.c),
+   ; the same bytes a native `make dist` lays.
    (seed-cross root xa dst)
     (: made (root + "/out/x-" + (arch-mach (intern xa)) + "/love")
        e (copyfile made dst)
@@ -163,13 +157,11 @@
                 + ";; `love seed` on the " + xa + " machine proves it.\n"))
        0)
 
-   ; ⚠ THE WAIT RUNS IN A FRESH PROCESS. src-lay's inflate leaves ~200 MB of
-   ; heap that the parent would otherwise hold through the whole build, for
-   ; nothing -- and no collection gives it back, because free coalesces into a
-   ; list and never unmaps, so tightening the budget only ever RAISES rss. exec
-   ; is the one thing that returns the pages; the waiter boots at ~57 MB, which
-   ; is what a small box under build pressure has to spare. PATH, CC and the cwd
-   ; all ride the environment across it, so only the root has to be said.
+   ; the wait runs in a fresh process. src-lay's inflate leaves ~200 MB of heap the parent
+   ; would otherwise hold through the whole build, and no collection gives it back -- free
+   ; coalesces into a list and never unmaps, so tightening the budget only raises rss. exec
+   ; is the one thing that returns the pages; the waiter boots at ~57 MB. PATH, CC and the
+   ; cwd all ride the environment across it, so only the root has to be said.
    (seed-wait root xa dst)
     (: exe (selfpath 0)
        _ (string? exe ? 0 (src-die "can't find seed path"))
@@ -193,14 +185,14 @@
    ; lays a seed for a machine it is not -- which is the portability story now
    ; that one binary per ISA is the shape. Every love carries every ISA's
    ; runtime (mkrt joins all three), so any version builds any other.
-   ; ⚠ CANONICAL INSIDE, the world's word only at the doors. the prel's arch-canon takes
+   ; canonical inside, the world's word only at the doors. the prel's arch-canon takes
    ; every other spelling anyone types -- uname's, Debian's, the ISA shorthands -- so there
    ; is no second table here; `arch-mach` puts the triple word back on where make wants it
    ; (a cross toolchain's prefix is spelled aarch64-, never arm64-).
    seed-arches '(amd64 arm64 rv64)
    ; the arch word is positional and A PATH STILL WINS: `./aarch64` is the
    ; directory, the verb rail's own rule worn one level down.
-   (seed-arch? w) (: n (tally w)
+   (seed-arch? w) (: n #w
                      (go i) (? (n <= i) (member? (arch-nom w) seed-arches)
                                (w i = 47) 0
                                (go (i + 1)))
@@ -222,8 +214,8 @@
        ; naming THIS machine is a NATIVE seed, fixpoint and all: the cross lane
        ; exists for a machine we are not, and the fixpoint is scoped to where the
        ; output ought to BE this binary -- which `love seed x86_64` on an x86_64
-       ; box asks for exactly as much as a bare `love seed`. ⚠ the WORD is eaten
-       ; either way, or the arch would go on to be read as the directory.
+       ; box asks for exactly as much as a bare `love seed`. the word is eaten either
+       ; way, or the arch would go on to be read as the directory.
        xa0 (? ((two? as1) && (seed-arch? <as1)) (arch-nom <as1) ())
        xa (? ((nom? xa0) && (id? xa0 (seed-native 0))) () xa0)
        as (nom? xa0 ? >as1 as1)
@@ -241,12 +233,12 @@
        _ (setenv "PATH" (self? ? (farm + ":" + path) (path + ":" + farm)))
        env (getenv "CC")
        amb (!self? && !(string? env) ? (src-cc $ root + "/out"))
-       ; ⚠ SOMETHING HAS TO BE NAMED. The tree carries no love, so an unnamed CC is the
+       ; something has to be named. the tree carries no love, so an unnamed CC is the
        ; ambient cc and nothing else -- right as make's default, wrong as this verb's
-       ; answer where the probe just found no cc that works. A working ambient one is the
-       ; STRONGER claim (a foreign compiler holding the scaffold is the one thing a self
-       ; build cannot say); this binary's own mooncc is the fallback, and --self takes
-       ; it outright. Naming CC reaches any other mix: `CC="<love> mooncc" love seed`
+       ; answer where the probe just found no cc that works. a working ambient one is the
+       ; stronger claim, a foreign compiler holding the scaffold being the one thing a self
+       ; build cannot say; this binary's own mooncc is the fallback and --self takes it
+       ; outright. naming CC reaches any other mix: `CC="<love> mooncc" love seed`
        ; is our compiler under an ambient userland.
        _ (string? env ? 0
           (two? amb ? (setenv "CC" <>amb) (setenv "CC" (exe + " mooncc"))))
@@ -326,7 +318,7 @@
             + "(: kb (peep (from 'verbs 'tab) 'kern-in 0)"
             + "   bb (string (cask (lay-boot-bytes (peep kb 'arch 0))))"
             + "   (kproject (peep kb 'pie 0) bb (peep kb 'out 0) (peep kb 'arch 0)))")
-       _ (reads (tap ((: (g i) (? (< i (tally cat)) (link (peep cat i 0) (g (+ 1 i))))) 0)))
+       _ (reads (tap ((: (g i) (? (< i #cat) (link (peep cat i 0) (g (+ 1 i))))) 0)))
        _ (pull vt 'kern-in 0)
        _ (puts (";; wrote " + out + " (" + arch + ")\n"))
        0)

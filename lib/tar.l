@@ -5,34 +5,34 @@
 ;   (tar-gather root path) -> (1 entries) | ()    walk the filesystem into entries
 ;   (tar-scatter root es)  -> (1 count) | ()      write entries back out under root
 ;
-; an ENTRY is a tablet, because the header has fourteen fields and a positional list
+; an entry is a tablet, because the header has fourteen fields and a positional list
 ; of them would be unreadable at every call site. the keys, and the only ones that
-; matter: 'nom the path AS STORED (relative, no leading /), 'kind one of 'file 'dir
+; matter: 'nom the path as stored (relative, no leading /), 'kind one of 'file 'dir
 ; 'link, 'body the bytes (a file), 'to the target (a link), 'mode the permission bits,
 ; 'mtime, 'uid, 'gid, 'uname, 'gname. (tar-entry nom kind body) fills the rest with the
 ; ordinary defaults, which is what nearly every caller wants.
 ;
-; ⚠ presence rides the (1 _) wrapper on both READS, and it must: an empty archive is a
+; presence rides the (1 _) wrapper on both reads, and it must: an empty archive is a
 ; legitimate archive and answers no entries, which nets nothing -- indistinguishable
 ; from a torn one by the value alone. test with two?.
 ;
 ; the format, in one breath: a 512-byte header per member, then the body padded up to
-; the next 512, then two zero blocks to end. Every numeric field is OCTAL IN ASCII with
+; the next 512, then two zero blocks to end. Every numeric field is octal in ASCII with
 ; a NUL or a space where the digits stop, which is why they are written by hand here
 ; rather than by any number printer -- the widths are the format's, not ours.
 ;
-; ⚠ THE CHECKSUM IS COMPUTED OVER THE HEADER WITH ITS OWN FIELD READ AS EIGHT SPACES.
+; the checksum is computed over the header with its own field read as eight spaces.
 ; That is not a convention we could choose differently: it is how the field can live
 ; inside the block it sums. It is written back as six octal digits, a NUL, then a
 ; space -- an order two of the three historical tars disagree about, and the one every
 ; reader accepts.
 ;
-; ⚠ USTAR SPLITS A LONG NAME across `prefix` (155) and `name` (100), joined with a "/"
-; that is NOT stored. A path that fits neither -- no "/" leaving a <=100 tail -- is
+; ustar splits a long name across `prefix` (155) and `name` (100), joined with a "/"
+; that is not stored. a path that fits neither -- no "/" leaving a <=100 tail -- is
 ; refused rather than truncated: a silently shortened path is a wrong archive that
 ; looks right until something extracts it.
 ; the wrap: tar rides module 'tar. a consumer says (use 'tar); riding a cat -- the
-; dist artifact's, where this file is EVALUATED INTO THE IMAGE -- the wrap registers
+; dist artifact's, where this file is evaluated into the image -- the wrap registers
 ; the same module, so the compile is paid once at bake time and (use 'tar) is a splice
 ; afterwards rather than a reload. unwrapped it leaked its names into the cat's layer
 ; and `use` found no module, so every caller recompiled this file from lib/.
@@ -62,14 +62,14 @@
    (tar-entry nom kind body)
     {'nom nom 'kind kind 'body (body + "") 'to "" 'mode (kind @ 'dir 493 420)
      'mtime 0 'uid 0 'gid 0 'uname "root" 'gname "root"}
-   ; peep's own default IS the presence test here -- it answers d only when the key is
-   ; ABSENT, so an entry whose 'body is legitimately "" keeps its "". ⚠ not `lit?`,
-   ; which asks whether a NAME is bound and reads it.
+   ; peep's own default is the presence test here -- it answers d only when the key is
+   ; absent, so an entry whose 'body is legitimately "" keeps its "". not `lit?`,
+   ; which asks whether a name is bound and reads it.
    tar-get peep
 
    ; --- the name split -------------------------------------------------------
    ; ustar joins prefix and name with a "/" it does not store, so the split must fall
-   ; ON a separator. we take the LONGEST prefix under 156 that leaves a name under 101
+   ; on a separator. we take the longest prefix under 156 that leaves a name under 101
    ; -- longest, because it is the tail that is tight.
    (tar-split m)                          ; -> (prefix name) | ()
     (: n #m
@@ -99,7 +99,7 @@
             tar-oct! b 100 8 (tar-get e 'mode 420),
             tar-oct! b 108 8 (tar-get e 'uid 0),
             tar-oct! b 116 8 (tar-get e 'gid 0),
-             ; the size comes off 'size when the entry carries one -- a THIN entry
+             ; the size comes off 'size when the entry carries one -- a thin entry
              ; (tar-thin?) knows its length without holding its bytes. no 'size and
              ; it is the body's tally, which is every fat entry, unchanged.
             tar-oct! b 124 12 (kind @- 0 'file (tar-get e 'size #body)),
@@ -107,28 +107,28 @@
             pin b 156 (tar-kindc kind),
             tar-txt! b 157 100 (tar-get e 'to ""),
             tar-txt! b 257 6 "ustar",                     ; magic, NUL-ended
-            pins b 263 48 264 48,                ; version "00", NOT NUL-ended
+            pins b 263 48 264 48,                ; version "00", not NUL-ended
             tar-txt! b 265 32 (tar-get e 'uname "root"),
             tar-txt! b 297 32 (tar-get e 'gname "root"),
             tar-oct! b 329 8 0, tar-oct! b 337 8 0,    ; devmajor/minor
             tar-txt! b 345 155 <sp,                     ; prefix
-             ; the checksum LAST -- it sums the block it sits in, so every other
+             ; the checksum last -- it sums the block it sits in, so every other
              ; field must already be written. six digits, NUL, space.
             tar-oct! b 148 7 (tar-sum b),
             pin b 154 32,
             string b))))
-   ; --- the archive as a STREAM ----------------------------------------------
+   ; --- the archive as a stream ----------------------------------------------
    ; tar-pack's answer exists to be looked at once and dropped, and for a source tree
    ; that is megabytes held to be hashed. tar-hash is the same archive fed through a
    ; resumable sha-256 (src/hash.c) a bufferful at a time: the header, then the file's
    ; bytes read straight off 'path, then the pad -- so the peak is one cask and not one
    ; archive. It answers what (sha256 (tar-pack es)) answers, and test/gate/targz.sh
    ; holds the two together over a tree with the awkward shapes in it.
-   ; ⚠ IT READS WHAT THE HEADER SAYS. a file that moved between the walk's stat and
+   ; it reads what the header says. a file that moved between the walk's stat and
    ; this read would put a body of one length under a header of another, so a short
-   ; read is a TORN archive and answers () -- the caller cuts the fat way, which reads
+   ; read is a torn archive and answers () -- the caller cuts the fat way, which reads
    ; each file once and cannot disagree with itself.
-   ; ⚠ `snip` READS THE CASK, and it must: (snip (string buf) 0 k) copies the whole
+   ; `snip` reads the cask, and it must: (snip (string buf) 0 k) copies the whole
    ; buffer to take the corner a read filled -- 64K for a 12-byte file, and over a
    ; source tree more copying than the archive it is hashing.
    (tar-feed h buf e)                       ; feed one file's body + pad; 1 | ()
@@ -197,7 +197,7 @@
                 kind (? (tc = 53) 'dir (member? tc '(50 49)) 'link 'file)   ; '5' '2'/'1'
                 sz (kind == 'file && tar-oct s (o + 124) 12)
                 ; a member whose body runs past the end of the bytes we were handed
-                ; is a TRUNCATED archive, and the size field is where that shows.
+                ; is a truncated archive, and the size field is where that shows.
                 (? (n < (o + tar-blk + sz)) ()
                    (: e {
                        'nom nom 'kind kind
@@ -211,8 +211,8 @@
                       'body (!sz ? "" (cask sz @ c (pour c 0 s (o + tar-blk) sz, string c)))}
                       blocks (sz && tar-blk * ((sz + tar-blk - 1) // tar-blk))
                       [1 e (o + tar-blk + blocks)]))))))
-   ; ⚠ AN ARCHIVE ENDS AT ITS ZERO BLOCK, never at the end of the bytes. Running
-   ; out of input mid-walk is TORN, not a clean finish -- a truncated download that
+   ; an archive ends at its zero block, never at the end of the bytes. Running
+   ; out of input mid-walk is torn, not a clean finish -- a truncated download that
    ; answered the members it happened to contain would extract half a tree in
    ; silence, which is worse than extracting none. (Trailing padding past the zero
    ; block is fine: the walk has already stopped by then.)
@@ -225,28 +225,28 @@
                       r (go <>>r (<(>r) . acc))))))
 
    ; --- the filesystem, in and out -------------------------------------------
-   ; ⚠ a walk answers PATHS RELATIVE TO root and stores them that way: an archive
+   ; a walk answers paths relative to root and stores them that way: an archive
    ; carrying "/home/gwen/..." is one that unpacks over somebody's system. tar's own
    ; "removing leading /" warning exists because the naive spelling does that.
    (tar-slurp p) (: q (open p "r") (? q (: s (slurp q) (close q, [1 (s + "")]))))
    (tar-blurt p s) (: q (open p "w") (? q (say q s, close q, 1)))
    (tar-join a b) (? #a (a + "/" + b) b)
-   ; stat answers (size mtime-ms mode mtime-ns), and its mtime is MILLISECONDS where
-   ; tar's field is seconds. ⚠ it FOLLOWS a symlink -- there is no lstat here -- so the
+   ; stat answers (size mtime-ms mode mtime-ns), and its mtime is milliseconds where
+   ; tar's field is seconds. it follows a symlink -- there is no lstat here -- so the
    ; link test is readlink, which answers the target for one and nothing for anything
    ; else. Without that test a tree of symlinks archives as copies of its own files.
    (tar-mode st) (4095 & <>>st)
    (tar-dir? st) (61440 & <>>st = 16384)
    (tar-secs st) (<>st // 1000)
-   ; the pruned walk: `keep` is asked with each child's rel nom BEFORE the walk
+   ; the pruned walk: `keep` is asked with each child's rel nom before the walk
    ; descends or slurps, so what the caller will not carry is never read -- a
    ; build tree's out/ is gigabytes the archive was never going to hold.
    (tar-gather? keep root rel) (tar-walk? keep root rel 1)
-   ; THE THIN WALK: the same walk that reads no file. each file entry carries its
+   ; the thin walk: the same walk that reads no file. each file entry carries its
    ; 'size (off stat) and its 'path (where the bytes are) instead of its body, which
-   ; is what lets a caller hash or write the archive as a STREAM -- the fat walk holds
+   ; is what lets a caller hash or write the archive as a stream -- the fat walk holds
    ; every byte of the tree at once, and a tree is megabytes that exist to be read
-   ; through once. ⚠ 'path is this machine's and rides no header; tar-head reads
+   ; through once. 'path is this machine's and rides no header; tar-head reads
    ; neither key but 'size, so a thin entry heads exactly as its fat twin does.
    (tar-thin? keep root rel) (tar-walk? keep root rel 0)
    (tar-walk? keep root rel fat)            ; -> (1 entries) | ()
@@ -257,7 +257,7 @@
           (: e (tar-entry rel 'link "")
              _ (pin e 'to lnk) _ (pin e 'mode 511)
              _ (? (two? st) (pin e 'mtime (tar-secs st)) 0)
-             ; ⚠ the inner ` is load-bearing: `(1 (e)) would APPLY e to nothing, and
+             ; the inner ` is load-bearing: `(1 (e)) would apply e to nothing, and
              ; (f) == f, so the caller would take a bare entry for a list of them.
              [1 [e]])
           (! (two? st)) ()
@@ -283,25 +283,25 @@
              (b ?
                 (: e (tar-entry rel 'file (<(>b)))
                    _ (pin e 'mode (tar-mode st)) _ (pin e 'mtime (tar-secs st))
-                   ; ⚠ the inner ` is load-bearing: `(1 (e)) would APPLY e to nothing, and
+                   ; the inner ` is load-bearing: `(1 (e)) would apply e to nothing, and
              ; (f) == f, so the caller would take a bare entry for a list of them.
              [1 [e]])))))
    (tar-gather root rel) (tar-gather? (\ _ 1) root rel)
-   ; ⚠ `mkdir` IS DYADIC (path, mode). At one operand it hands back a CLOSURE and makes
+   ; `mkdir` is dyadic (path, mode). At one operand it hands back a closure and makes
    ; no directory -- (f x) curries, it does not default -- and the closure is truthy, so
    ; the miss is silent at every call site that tests it.
-   ; ⚠ AND NEITHER PRIMITIVE ANSWERS ITS OWN SUCCESS: mkdir and symlink both return the
-   ; zero point when they worked. So each write is CHECKED by looking -- stat for a dir
+   ; and neither primitive answers its own success: mkdir and symlink both return the
+   ; zero point when they worked. So each write is checked by looking -- stat for a dir
    ; or a file, readlink for a link. The presence law from the other side: the value
    ; cannot say, so ask out of band.
    (tar-there? p) (two? (stat p))
    (tar-strip nom)                          ; the "./" GNU tar stores on a `-C dir .`
     (#nom > 1 && nom 0 = 46 && nom 1 = 47 ? (snip nom 2 #nom) nom)
-   ; ⚠ A RELEASE TARBALL MUST NOT CARRY THE CLOCK OR THE PACKER'S UID. Two cuts of
+   ; a release tarball must not carry the clock or the packer's uid. Two cuts of
    ; one tree would hash differently, and "this is that release" stops being a thing
    ; anyone can check. mtime, uid and gid drift with who ran the pack and when -- and
-   ; so does the MODE, for the same reason: `mkdir` and `open` wear the packer's
-   ; UMASK, so one tree cut under 022 and under 077 disagrees in every directory.
+   ; so does the mode, for the same reason: `mkdir` and `open` wear the packer's
+   ; umask, so one tree cut under 022 and under 077 disagrees in every directory.
    ; Only the x bit of it is content (a binary that unpacks unrunnable is a broken
    ; artifact), so that is the half kept and the rest is spelled canonically.
    (tar-canon e) (: k (tar-get e 'kind 'file)
@@ -321,9 +321,9 @@
          nom (tar-strip (tar-get e 'nom ""))
          p (? (tally nom) (? (tally root) (root + "/" + nom) nom) root)
          kind (tar-get e 'kind 'file)
-         ; ⚠ THE MODE IS CONTENT, and it must be laid back EXPLICITLY: `open`
+         ; the mode is content, and it must be laid back explicitly: `open`
          ; and `mkdir` both create at the umask's pleasure, so a file written
-         ; here comes out 0644 whatever the header said, an extracted BINARY is
+         ; here comes out 0644 whatever the header said, an extracted binary is
          ; not executable, and under 077 every directory lands 0700. The archive
          ; carried the mode and we dropped it -- which `diff -r` cannot see,
          ; because it compares bytes and not modes. chmod is the only door: it

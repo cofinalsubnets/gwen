@@ -3,7 +3,7 @@
 ; nothing about it is lovely; this file is the translation desk, nothing more.
 ; `(use 'json)`, then json-read and json-show.
 ;
-; the MAPPING, a BIJECTION in both directions:
+; the mapping, a bijection in both directions:
 ;   null    <-> json-null       a coin, like the booleans -- see the notes below
 ;   true    <-> json-true
 ;   false   <-> json-false
@@ -16,12 +16,12 @@
 (: json-die   {0 'json-bool}
    json-true  (coin json-die 1)
    json-false (coin json-die 0)
-   ; ⚠ `&&` is value-preserving, so the bare conjunction answers () and not the bit a
+   ; `&&` is value-preserving, so the bare conjunction answers () and not the bit a
    ; predicate owes; `!!` is the clamp. same for json-null? below.
    (json-bool? v) !!(coin? v && id? (die-of v) json-die)
    (json-bool v)  (v ? json-true json-false)
 
-   ; null, on its OWN die -- payload 0 so it nets blue like the nothing it is, but
+   ; null, on its own die -- payload 0 so it nets blue like the nothing it is, but
    ; never `=` json-false.
    json-null-die  {0 'json-null}
    json-null      (coin json-null-die 0)
@@ -75,7 +75,7 @@
                     [(jutf8 (65536 + (u - 55296) * 1024 + (v - 56320))) <>l]
                     [(jutf8 u) k]))))))
 
-   ; the byte AFTER the backslash. -1 for "no such escape", never () -- 0 is a fine byte.
+   ; the byte after the backslash. -1 for "no such escape", never () -- 0 is a fine byte.
    (jesc s i n) (? (i < n)
                    (: c (s i)
                       (? (c = 117) (juni s (i + 1) n)
@@ -103,7 +103,7 @@
 
    (jpow10 e) (e < 0 ? (1.0 / -e 10) (1.0 * e 10))
 
-   ; a whole int stays EXACT (charm -> sun -> big, whatever it needs); anything with a
+   ; a whole int stays exact (charm -> sun -> big, whatever it needs); anything with a
    ; fraction or an exponent becomes a gem, which is what json means by those.
    (jnum s i n) (: neg (i < n && (s i = 45))
                    a   (? neg (i + 1) i)
@@ -179,7 +179,7 @@
    ; bytes >= 128 ride out untouched: love strings are byte strings and json is utf-8, so
    ; already-utf-8 text is already right. only the seven named escapes and the control
    ; bytes need saying.
-   ; ⚠ every byte is SPELLED (a literal or `string`), never built by +: mixed + is the
+   ; every byte is spelled (a literal or `string`), never built by +: mixed + is the
    ; degenerate law now, so ("" + 34) answers "" -- the old byte-append spellings
    ; silently erased the very quotes and brackets they meant to write.
    (jqc c) (c @ 34 "\\\""  92 "\\\\"
@@ -196,14 +196,14 @@
                  ((: (go l acc) (? (two? l) (go >l ((acc + ",") + <l)) acc)) >xs <xs))
 
    ; show is the whole number lane -- it already lays a charm, a sun, a big and a gem down
-   ; the way json spells them. the GUARD is for what json has no word for: ieee-inf and
+   ; the way json spells them. the guard is for what json has no word for: ieee-inf and
    ; friends show as names, so anything not starting with a digit or a minus becomes null
    ; rather than riding out as text that no parser would take back.
    (jnumshow v) (: t (show v)
                    c (? (0 < (tally t)) (t 0) 0)
                    (? (|| (c = 45) (&& (48 <= c) (c <= 57))) t "null"))
 
-   ; the () = v test is EXACT -- true only for () itself, never 0 or "" (different bands)
+   ; the () = v test is exact -- true only for () itself, never 0 or "" (different bands)
    ; -- so a bare () after a map or a filter writes `[]` with no renaming step. anything
    ; json has no spelling for scares rather than riding out as a plausible null; trays
    ; stay out of the contract (arrays are lists here).
