@@ -150,24 +150,21 @@ uintptr_t intern_reserve(struct ai*),
 union u *map_fill_back(union u*, uintptr_t);
 lvm_t lvm_kcall,
  lvm_chain, lvm_tray, lvm_sym, lvm_nom, lvm_str, lvm_big, lvm_gembox, // the data sentinels; each tail-jumps to its apply handler
- lvm_putn, lvm_gauge, lvm_tune, lvm_clock, lvm_nclock, lvm_please, lvm_apof, lvm_seal, lvm_heard, lvm_worn, lvm_myself, lvm_books, lvm_setbooks, lvm_mods,
- lvm_nilp,  lvm_putc, lvm_mint, lvm_nomctor, lvm_intern, lvm_chainp,
- lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_casknew, lvm_bcopy,
- lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_add_coin, lvm_mul_coin, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
- lvm_charmp,  lvm_nomp,   lvm_namep,  lvm_mintp,  lvm_strp,   lvm_tabp, lvm_band,   lvm_bor,  lvm_gem,  lvm_gemp,
+ lvm_putn, lvm_seal, lvm_heard, lvm_worn, lvm_myself,
+ lvm_nilp, lvm_putc, lvm_intern,
+ lvm_saturate, lvm_ceil, lvm_peep, lvm_lamsrc, lvm_nifnom, lvm_cask, lvm_bcopy,
+ lvm_coin, lvm_coinmk, lvm_load, lvm_dieof, lvm_coinp, lvm_sub_coin, lvm_quot_coin,   // newtypes: a coin (die + payload), a typed hot riding KHot
+ lvm_charmp, lvm_tabp, lvm_band, lvm_bor, lvm_gem, lvm_gemp,
  lvm_sin, lvm_cos, lvm_log, lvm_pow,   // sqrt/exp/tan/atan/atan2 are derived (numeral/complex forms), not nifs
  lvm_twin, lvm_twinp, lvm_re, lvm_im, lvm_conj, lvm_abs, lvm_carg,   // complex; lvm_twin_bin declared apart below
- lvm_bxor,  lvm_bsr,    lvm_bsl,    lvm_snip,
- lvm_link,   lvm_cap,  lvm_cup,    lvm_puts,
+ lvm_bxor, lvm_bsr, lvm_bsl, lvm_puts,
  lvm_string, lvm_lt,     lvm_le,   lvm_eq,     lvm_same, lvm_gt,  lvm_ge,
  lvm_sort,  lvm_tally, lvm_longp,
  lvm_pin, lvm_pull, lvm_tablet,   lvm_keys,  lvm_dig,
  lvm_unc, lvm_poke, lvm_peek,
  lvm_seek,  lvm_trim,   lvm_spin,   lvm_add,
- lvm_sub,   lvm_mul,    lvm_quot,   lvm_fquot, lvm_rem,  lvm_arg,
- lvm_bmul_start, lvm_bmul,   // resumable (yieldable) bignum multiply (chunked schoolbook)
- lvm_kmul,                   // resumable (yieldable) subquadratic Karatsuba (loop body)
- lvm_bdiv,                   // resumable (yieldable) bignum long division (loop body)
+ lvm_mul,    lvm_quot,   lvm_fquot, lvm_rem,  lvm_arg,
+ lvm_bmul_start,             // the resumable bignum multiply's entry; its loop bodies are num.c's
  lvm_quote, lvm_index,  lvm_eval,   lvm_cond, lvm_jump,   lvm_defglob,
  lvm_ap,    lvm_tap,    lvm_apn,    lvm_tapn, lvm_ret,
  lvm_argap, lvm_quoteap, lvm_argtap,
@@ -180,30 +177,25 @@ lvm_t lvm_kcall,
  lvm_argcap, lvm_argcup, lvm_argtwo, lvm_argcond,
  lvm_argtwocond,                                  // load + predicate + cond
  lvm_callk, lvm_scare, lvm_yield_sw, lvm_yield_nif, lvm_task_exit, lvm_spawn, lvm_wait,
- lvm_sleep, lvm_donep, lvm_scoop, lvm_hush, lvm_key,
+ lvm_sleep, lvm_donep, lvm_scoop, lvm_hush,
  lvm_await,
  lvm_fgetc, lvm_fungetc, lvm_chug, lvm_unchug, lvm_inhand, lvm_fputc, lvm_fputs, lvm_fflush,
  lvm_fputbn, lvm_sound0,
  lvm_trayctor, lvm_iota, lvm_rank, lvm_alen, lvm_shape, lvm_atype,   // typed multi-rank arrays
  lvm_asum, lvm_aprod, lvm_max, lvm_min, lvm_aall, lvm_inner, lvm_outer,
- lvm_packp, lvm_bigp, lvm_sunp, lvm_setp, lvm_intf, lvm_litp, lvm_hotp,
+ lvm_litp, lvm_hotp,
  lvm_nif,         // codegen backend: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_nifx,        // ... with an extras word (value[3]+8 = Ip+32): refs a native needs beyond the twin (the callout's clos, amble's ()/globals) ride a GC-walked cell slot, so value[1] stays the plain twin and the image revert (img_nif_interp) never dereferences a pack
- lvm_resume,      // the walkable call-out resume: jump blob-base + untag(offset) after delivering the result -- the frame carries an odd charm + an out-of-pool code address, so a GC (gen_grow included) with a call-out pending walks it clean (the retB stack-interior pointer is retired)
  lvm_calloutdrive, lvm_calloutresume;   // the drive addresses as fixnums (the glaze emitter bakes them as `li Ip` immediates)
 // ⚠ THE ATTRIBUTES ARE THE DECLARATION: `lvm(n)` is `ai_noinline ai_noicf _lvm(n)`, so these
 // cannot fold into the plain lvm_t list above without shedding both. ai_noicf is noipa, and the
 // data sentinels below are what it is for -- see their note.
 ai_noinline ai_noicf lvm_t
  lvm_0, lvm_add_seq, lvm_add_string, lvm_addh, lvm_arg0,
- lvm_atype, lvm_bigp, lvm_bin_a, lvm_bin_b, lvm_bin_unit,
- lvm_books, lvm_cap, lvm_chainp, lvm_clock, lvm_coinp,
- lvm_cpart, lvm_cup, lvm_dieof, lvm_dig, lvm_gemp,
- lvm_heard, lvm_hotp, lvm_math1, lvm_math2, lvm_mintp,
- lvm_mods, lvm_mulh, lvm_myself, lvm_namep, lvm_nclock,
- lvm_nilp, lvm_nomp, lvm_numap, lvm_packp, lvm_quo0,
- lvm_quom1, lvm_quotn, lvm_rank, lvm_setbooks, lvm_setp,
- lvm_strp, lvm_sunp, lvm_tabp, lvm_twinp, lvm_worn,
+ lvm_atype, lvm_bin_a, lvm_bin_b, lvm_bin_unit, lvm_coinp,
+ lvm_dieof, lvm_dig, lvm_gemp, lvm_heard, lvm_hotp,
+ lvm_mulh, lvm_myself, lvm_nilp, lvm_quo0, lvm_quom1,
+ lvm_quotn, lvm_rank, lvm_tabp, lvm_twinp, lvm_worn,
  // these carry extra operands, so they are declared apart from the plain lvm_t list
  lvm_vbin, lvm_bdiv_start, lvm_vmap1, lvm_vmap2, lvm_twin_bin, lvm_cbin, lvm_obin,
  // the data sentinels: each is the first word (ap) of its rep's heap objects and
@@ -212,8 +204,8 @@ ai_noinline ai_noicf lvm_t
  data_num_apply, data_sym_apply, data_string_apply, data_pair_apply,
  lvm_sym, lvm_nom, lvm_sunbox, lvm_gembox, lvm_twinbox,
  lvm_big, lvm_tray, lvm_str, lvm_chain,
- lvm_addn, lvm_band_slow, lvm_fquotn, lvm_muln,
- lvm_remn, lvm_subn, _lvm_yieldk;
+ lvm_addn, lvm_fquotn, lvm_muln,
+ lvm_remn, _lvm_yieldk;
 char const *ai_nif_name(intptr_t);
 #define tray(_) ((struct ai_tray*)(_))
 #define sym(_) ((struct ai_mint*)(_))
@@ -285,7 +277,6 @@ uintptr_t ai_big_bytes(struct ai_big*);
 // (bumps *hp when it boxes); one sink shared by the reader and the arith slow paths
 word ai_big_canon(ai_word **hp, ai_limb const *limb, int n, bool neg);
 ai_flo_t ai_big_to_flo(word);                 // bignum -> double (used by toflo)
-intptr_t ai_big_low(word);                   // bignum value mod 2^W (low machine word)
 int ai_big_cmp(word, word);                  // -1/0/1 over two integer operands
 bool ai_ratio_exact(struct ai*, word);  // int/ceil/saturate's exact-ratio domain: a net-mode-2 coin over integer (n d)
 struct ai
@@ -399,7 +390,6 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
 #define rng_tray_req (b2w(rng_tray_bytes))
 // whichever element kind is 8 bytes wide, so ai_tray_bytes sees the full payload
 #define rng_vt (Bytes == 4 ? ai_C : ai_Z)
-void ai_rng_seed(struct ai_tray*, uint64_t);   // shape an i64 state tray + seed it (SplitMix64)
 lvm_t lvm_wheel, lvm_turn, lvm_turnf;
 int memcmp(void const*, void const*, size_t);
 void *malloc(size_t), free(void*),
@@ -501,7 +491,6 @@ static ai_inline bool tray_put(struct ai_tray *v, uintptr_t i, word x) {
 // equality comparisons inline the fast identity check. ⚠ eqv is declared HERE, not with the
 // other bools at the tail: eql below calls it, and a caller cannot precede its declaration.
 ai_noinline bool eqv(struct ai*, word, word); // this is for checking equality of non-identical values
-bool eqv_at(struct ai*, word, word, word*);   // eqv with an explicit worklist base (for re-entrant calls from the beta bridge)
 // eqv has no value-equality for distinct charms or distinct noms -- identity is
 // their whole equality -- so eql settles both inline and skips the noinline call
 static ai_inline bool eql(struct ai *g, word a, word b) {
@@ -686,88 +675,43 @@ extern struct ai_def const *const ai_def1;
 extern uintptr_t const ai_def1_n;
 extern union u const callout_drive[];
 extern union u const yield_c[];
-ai_noinline word abs_wmin(struct ai *g);
-int arib_pos(word s, word l, int n);
 struct ai_bio *bio_of(struct ai *g, struct ai_io *i);
 size_t code_maplen(size_t codelen);
-union u
- *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live),
- *fn_base(union u *k, int *nargs);
-ai_noinline intptr_t gcp(struct ai *g, struct ai_gcx *X, word x);
+union u *fn_base(union u *k, int *nargs);
 struct ai
- *append(struct ai *g),
  *ai_eval_(struct ai *g),
- *ai_pushr(struct ai *g, uintptr_t m, uintptr_t n, va_list xs),
- *c0(struct ai *g, lvm_t *y) ai_noinline,
  *ioputc(struct ai*g, int c),
  *ioputs(struct ai*g, char const *s),
  *gen_grow(struct ai *g, uintptr_t len1),
  *gen_major(struct ai *g, uintptr_t req0, bool *tight),
- *gen_please(struct ai *g, uintptr_t req0),
- *obin_run(struct ai *g, int op), *ored(struct ai *g, int kind), *zflush(struct ai*g), *tray_to_obj(struct ai *g, int slot);
+ *ored(struct ai *g, int kind), *zflush(struct ai*g);
 uintptr_t
  bshape_n(word a, word b),
  shash(struct ai *g, word x, struct arib *env),
- map_probe(struct ai *g, word m, word k, bool *found),
- nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn, word *fv);
-Cata(pull);
-struct ai_tray *rng_copy(ai_word **hp, struct ai_tray *src);
-ai_noinline uint64_t rng_step(void *payload);
-uint64_t rotl64(uint64_t x, int k);
+ map_probe(struct ai *g, word m, word k, bool *found);
 struct ai_str *seq_cat(struct ai *g, void *w, word a, word b);
 intptr_t
  fn_arg(union u *k, int i, int nargs),
  *task_io(struct ai *g),
- obin_elem(struct ai **fp, int op, word a, word b),
  vcmp_flo(int op, ai_flo_t a, ai_flo_t b),
  vcmp_int(int op, intptr_t a, intptr_t b),
- img_nif_interp(struct img_ctx *x, word v),
  io_route(struct ai *g, word x),
- rng_canon(struct ai *g, uint64_t r) ai_noinline,
  hot_hook(word h),
- fn_src(struct ai *c, union u *k, word x),
- ai_saturate(struct ai *g, word x),
- cmp3(struct ai *g, word a, word b);
-ai_noinline bool tray_eq(struct ai *g, word a, word b);
+ fn_src(struct ai *c, union u *k, word x);
 void
  *ai_libc_alloc(struct ai*g, void *p, size_t n),
- cbin_part(bool istray, struct ai_tray *v, ai_flo_t sre, ai_flo_t sim, uintptr_t o, ai_flo_t *re, ai_flo_t *im),
- cpart_fill(struct ai_tray *r, struct ai_tray *v, int off) ai_noinline,
- carg_fill(struct ai_tray *r, struct ai_tray *v) ai_noinline,
- cbin_fill(struct ai_tray *r, word a, word b, int op, bool cmp) ai_noinline,
  bshape_put(uintptr_t *shape, uintptr_t R, word a, word b),
  bstride(struct ai_tray *v, uintptr_t R, intptr_t *c),
- evac_tray(struct ai *g, struct ai_gcx *X),
- nat_unmap(void *p),
- twin_op(int vop, ai_flo_t ar, ai_flo_t ai, ai_flo_t br, ai_flo_t bi, ai_flo_t *re, ai_flo_t *im),
- twin_parts(word x, ai_flo_t *re, ai_flo_t *im),
  odo_step(intptr_t *idx, uintptr_t R, uintptr_t const *shape),
- twin_build_fill(struct ai_tray *r, word a, word b) ai_noinline,
- twin_fill(struct ai_twin *v, word a, word b, int vop) ai_noinline,
- twin_pow_fill(struct ai_twin *v, word wbase, word zexp) ai_noinline,
- rng_seed_into(void *payload, uint64_t seed) ai_noinline,
  gen_wb(struct ai *g, word src, word p),
  gen_wb_cell(struct ai *g, void *cl, word v);
-ai_flo_t
- u64_to_unit(uint64_t u),
- vop_flo(int op, ai_flo_t a, ai_flo_t b),
- ai_cospi(ai_flo_t x),
- ai_sinpi(ai_flo_t x);
+ai_flo_t vop_flo(int op, ai_flo_t a, ai_flo_t b);
 bool
- ai_isbs(struct ai *g, word h),
- ai_young(struct ai *g, word p),
  bio_rpending(struct ai_bio *b),
- rng_state_p(word x),
  wait_buffered(struct ai *g, lvm_t *ap, word x, int fd),
- val_vs_src(struct ai *g, word V, word b, struct arib *rb, struct clonf *cb, word *scratch),
- nf_walk(struct ai *g, word a, struct arib *ra, struct clonf *ca, word b, struct arib *rb, struct clonf *cb, word *scratch),
- clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scratch),
- clo_load(struct ai *c, word v, struct clonf *o),
  clo_nfhash(struct ai *g, word x, uintptr_t *out),
- flo_fracp(ai_flo_t x),
  fn_partialp(union u *k),
  in_heap(struct ai *c, word x),
  iop(word x),
- lam_isp(struct ai *g, word x),
- salpha(struct ai *g, word a, word b, struct arib *env);
+ lam_isp(struct ai *g, word x);
 #endif

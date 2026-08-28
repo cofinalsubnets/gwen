@@ -29,7 +29,7 @@ static struct mem {
 // collector (g->budget) so its two growing pools stay within the device's RAM. See kmain.
 static uintptr_t kram_words;
 
-struct cb *kcb;
+static struct cb *kcb;
 
 static struct {
   volatile uint32_t *_;
@@ -230,7 +230,7 @@ static ai_inline bool k_row_live(int fd) {
 // difference between this and the ceiling it replaces.
 // the ramfs is the caller: every open file is a row past the boot two, so the grow
 // branch runs on the first one (test/kernel/ramfs.l).
-struct k_source *k_source_open(int fd) {
+static struct k_source *k_source_open(int fd) {
   if (fd < 0) return NULL;
   if (fd >= k_sources_n) {
     int m = k_sources_n;

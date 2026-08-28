@@ -16,13 +16,13 @@ static ai_noinline void mag_mul(ai_limb *r, ai_limb const *a, int na, ai_limb co
 static ai_noinline void vbin_fill(struct ai_tray *r, word a, word b, int op, bool fdom);
 static ai_noinline void vmap1_fill(struct ai_tray *r, struct ai_tray *a, ai_flo_t (*fn)(ai_flo_t));
 static ai_noinline void vmap2_fill(struct ai_tray *r, word a, word b, ai_flo_t (*fn)(ai_flo_t, ai_flo_t));
-bool ratio_ifit(word x, int64_t *v);
-bool ratio_iview(word x, int64_t *n, int64_t *d);
+static bool ratio_ifit(word x, int64_t *v);
+static bool ratio_iview(word x, int64_t *n, int64_t *d);
 static bool ratio_xcmp(int64_t n1, int64_t d1, int64_t n2, int64_t d2, intptr_t *c);
 static int big_mul_mag(ai_limb *r, ai_limb const *a, int na, ai_limb const *b, int nb, ai_limb *t);
-int big_nlimbs(word x);
-int cmp_rank(struct ai *g, word x);
-int load_int_mag(word x, ai_limb scratch[wlimbs], ai_limb const **out, bool *neg);
+static int big_nlimbs(word x);
+static int cmp_rank(struct ai *g, word x);
+static int load_int_mag(word x, ai_limb scratch[wlimbs], ai_limb const **out, bool *neg);
 static int mag_copy(ai_limb *dst, ai_limb const *src, int n);
 static intptr_t bytes_cmp(const char *pa, uintptr_t la, const char *pb, uintptr_t lb);
 static intptr_t galaxy_tie(struct ai_tray *va, struct ai_tray *vb);
@@ -30,14 +30,17 @@ static intptr_t mint_cmp(struct ai *g, word a, word b);
 static intptr_t vcmp_sign(int op, int s);
 static intptr_t vop_int(int op, intptr_t a, intptr_t b);
 static lvm(lvm_aextreme);
+static lvm(lvm_bdiv);
+static lvm(lvm_bmul);
 static lvm(lvm_cmp_ord);
+static lvm(lvm_kmul);
 static struct ai *ai_bdiv_setup(struct ai *g, int which);
 static struct ai *ai_bmul_setup(struct ai *g);
 static struct ai *ai_kmul_setup(struct ai *g);
 static struct ai *big_read_radix(struct ai *g, ai_limb radix, int chunk, uintptr_t pfx);
-struct ai_zn tray_cell_zn(struct ai_tray *v, uintptr_t i);
+static struct ai_zn tray_cell_zn(struct ai_tray *v, uintptr_t i);
 static uintptr_t bdim(uintptr_t da, uintptr_t db);
-union u *as_big(ai_word **hp, word x);
+static union u *as_big(ai_word **hp, word x);
 static void big_addsub(ai_limb *r, int *rn, bool *rneg,
   ai_limb const *a, int na, bool nega, ai_limb const *b, int nb, bool negb, bool subtract);
 static void mag_add_off(ai_limb *r, int rn, ai_limb const *s, int sn, int off);
@@ -54,7 +57,7 @@ void ratio_mag_mul(uint64_t a, uint64_t b, uint64_t *hi, uint64_t *lo);
 
 
 // |slen| of a heap bignum.
-ai_inline int big_nlimbs(word x) {
+static ai_inline int big_nlimbs(word x) {
  intptr_t s = big(x)->slen;
  return (int) (s < 0 ? -s : s); }
 
@@ -186,7 +189,7 @@ static ai_noinline void mag_divmod(ai_limb *q, ai_limb *r,
 // limbs, 2 with 32-bit limbs on a 64-bit word) and points *out at it; a bignum
 // points *out into its heap limbs (stable only while no GC runs). sets *neg and
 // returns the limb count (0 for the value zero). wlimbs = limbs to hold one word.
-int load_int_mag(word x, ai_limb scratch[wlimbs], ai_limb const **out, bool *neg) {
+static int load_int_mag(word x, ai_limb scratch[wlimbs], ai_limb const **out, bool *neg) {
  if (bigp(x)) { struct ai_big *b = big(x); intptr_t s = b->slen;
   *neg = s < 0, *out = b->limb; return (int) (s < 0 ? -s : s); }
  intptr_t v = charmp(x) ? (intptr_t) getcharm(x) : sun_get(x);
@@ -209,7 +212,7 @@ ai_flo_t ai_big_to_flo(word x) {
 // the bignum's two's-complement value mod 2^W (its low machine word). used when
 // an integer-array elementwise op must broadcast a bignum scalar down to one
 // machine-int element ("arrays win; demote the bignum by its low bits").
-intptr_t ai_big_low(word x) {
+static intptr_t ai_big_low(word x) {
  struct ai_big *b = big(x);
  intptr_t sl = b->slen;
  bool neg = sl < 0;
@@ -428,10 +431,10 @@ struct ai *ai_big_quot_true(struct ai *g) {
 // work state rides the l stack [i, r, ret_ip, a, b]. operands stay heap bignums
 // so the loop reads stable limb pointers (no &scratch -- the sibcall law).
 #define bmul_chunk (1 << 14)
-union u const bmul_loop[1] = { { .ap = lvm_bmul } };
+static union u const bmul_loop[1] = { { .ap = lvm_bmul } };
 
 // materialize integer x as a heap ai_big (a bignum returns in place)
-union u *as_big(ai_word **hp, word x) {
+static union u *as_big(ai_word **hp, word x) {
  if (bigp(x)) return cell(x);
  intptr_t v = toint(x);
  bool neg = v < 0;
@@ -480,7 +483,7 @@ static struct ai *ai_bmul_setup(struct ai *g) {
 #define kmul_chunk (1 << 14)   // leaf limb-mults folded per dispatch before a yield check
 #define KmulHdr 8             // ws header limbs: [0]=n [1]=top (stack ptr) [2]=sign [3]=r_off
 #define KmulJw  6             // job record limbs: ar, br, n, rr, sr, state
-union u const kmul_loop[1] = { { .ap = lvm_kmul } };
+static union u const kmul_loop[1] = { { .ap = lvm_kmul } };
 
 static struct ai *ai_kmul_setup(struct ai *g) {
  word a = g->sp[0], b = g->sp[1];
@@ -521,7 +524,7 @@ static struct ai *ai_kmul_setup(struct ai *g) {
  return g; }
 
 // FIXME can we choose different types to reduce the amount of explicit casting in this function?
-lvm(lvm_kmul) {
+static lvm(lvm_kmul) {
  ai_limb *ws = (ai_limb*) txt(cask(Sp[0])->str);
  int n = (int) ws[0], top = (int) ws[1];
  ai_limb *jobs = ws + KmulHdr;
@@ -597,7 +600,7 @@ lvm(lvm_bmul_start) {
  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
  ai_musttail return Resume(); }
 
-lvm(lvm_bmul) {
+static lvm(lvm_bmul) {
  int i = (int) getcharm(Sp[0]);
  struct ai_big *A = big(Sp[3]), *B = big(Sp[4]);
  intptr_t sla = A->slen, slb = B->slen;
@@ -634,7 +637,7 @@ lvm(lvm_bmul) {
 // it). cheap divides one-shot through ai_big_binop. which: 0 = //, 1 = %.
 #define bdiv_chunk (1 << 14)
 #define BdivHdr 6           // ws header limbs: m, n, s(shift), which, nega, negb
-union u const bdiv_loop[1] = { { .ap = lvm_bdiv } };
+static union u const bdiv_loop[1] = { { .ap = lvm_bdiv } };
 
 static struct ai *ai_bdiv_setup(struct ai *g, int which) {
  word a = g->sp[0], b = g->sp[1];
@@ -682,7 +685,7 @@ lvm(lvm_bdiv_start) {
  if (!ai_ok(g)) return Ap(_lvm_ghelp, g);
  return Resume(); }
 
-lvm(lvm_bdiv) {
+static lvm(lvm_bdiv) {
  ai_limb *ws = (ai_limb*) txt(cask(Sp[1])->str);
  int m = (int) ws[0], n = (int) ws[1], s = (int) ws[2], which = (int) ws[3];
  bool nega = ws[4], negb = ws[5];
@@ -1133,7 +1136,7 @@ intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
 // reverse the operands (right for NaN: swap, never negate). a total preorder:
 // hash-colliding lambdas compare equal but are not =. the compare order is
 // decoupled from the enum dispatch order -- cmp_rank remaps, the matrices untouched.
-ai_inline int cmp_rank(struct ai *g, word x) {
+static ai_inline int cmp_rank(struct ai *g, word x) {
  if (nomp(x)) return 0;                            // mint/symbol -- the floor (a named sym is a (name . mint) chain)
  enum q k = ai_kind(x);
  if (k == KString) return 1;                       // string: above mint, below number
@@ -1172,7 +1175,7 @@ static ai_inline intptr_t mint_cmp(struct ai *g, word a, word b) {
 // two galaxies of equal net: a strict tiebreak so cmp3 stays antisymmetric --
 // shape lexicographically (rank, then dims), then cell content (re, then im),
 // row-major. reached only from the number band below, both operands galaxies.
-ai_inline struct ai_zn tray_cell_zn(struct ai_tray *v, uintptr_t i) {
+static ai_inline struct ai_zn tray_cell_zn(struct ai_tray *v, uintptr_t i) {
  if (v->type == ai_C) { ai_flo_t *d = tray_data(v); return zn(d[2*i], d[2*i+1]); }
  return zn(tray_get_flo(v, i), 0); }
 static intptr_t galaxy_tie(struct ai_tray *va, struct ai_tray *vb) {
@@ -1188,7 +1191,7 @@ static intptr_t galaxy_tie(struct ai_tray *va, struct ai_tray *vb) {
 // a ratio coin orders by its value: int64-fitting components cross-multiply
 // exactly (near-equal rationals order right where the float quotient ties);
 // anything wider falls to the sign-exact net quotients.
-ai_inline bool ratio_ifit(word x, int64_t *v) {
+static ai_inline bool ratio_ifit(word x, int64_t *v) {
  if (charmp(x) || sunp(x)) return *v = toint(x), true;
  if (!bigp(x)) return false;
  struct ai_big *b = big(x);
@@ -1200,7 +1203,7 @@ ai_inline bool ratio_ifit(word x, int64_t *v) {
  if (m > (uint64_t) INT64_MAX + neg) return false;
  return *v = (int64_t) (neg ? 0 - m : m), true; }
 
-ai_inline bool ratio_iview(word x, int64_t *n, int64_t *d) {
+static ai_inline bool ratio_iview(word x, int64_t *n, int64_t *d) {
  if (coinp(x)) { word p = coin_load(x);
   if (!chainp(p) || !chainp(B(p))) return false;
   return ratio_ifit(A(p), n) && ratio_ifit(A(B(p)), d) && *d != 0; }
@@ -1243,7 +1246,7 @@ static ai_inline bool ratio_xcmp(int64_t n1, int64_t d1, int64_t n2, int64_t d2,
 // floats collapse NaN to "equal" here (a structural total order can't carry IEEE
 // unorderedness); the scalar lane below keeps NaN unordered at the top level. hash
 // is alloc-free + GC-stable, so the lambda case is safe to call mid-comparison.
-intptr_t cmp3(struct ai *g, word a, word b) {
+static intptr_t cmp3(struct ai *g, word a, word b) {
  int ra = cmp_rank(g, a), rb = cmp_rank(g, b);
  if (ra != rb) return ra < rb ? -1 : 1;                    // cross-kind: the true-blue lattice (cmp_rank)
  // same band -- dispatch by the actual kind (not the synthetic cmp_rank, which remaps mint/

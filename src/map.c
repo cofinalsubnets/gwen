@@ -283,7 +283,7 @@ ai_noinline uintptr_t hash_two(struct ai *g, word x) {
 // the anchor an out-of-pool ap hashes against: the offset survives a bake/wake
 // where the raw address does not (a bake-time bucket index would miss at wake and
 // every nif-keyed table would silently read empty).
-const char hash_base[1] = {0};
+static const char hash_base[1] = {0};
 struct arib; uintptr_t shash(struct ai *g, word x, struct arib *env);  // α-invariant source hash
 bool clo_nfhash(struct ai *g, word x, uintptr_t *out);  // partial-app -> capture-substitution normal-form hash (the beta bridge)
 uintptr_t hash(struct ai *g, intptr_t x) {
@@ -338,7 +338,7 @@ uintptr_t hash(struct ai *g, intptr_t x) {
 // the W^X arena finalizer: recover the ai_str base from the code address and
 // munmap (a dead native's header is the out-of-pool code addr, a live one's a forward)
 #if __STDC_HOSTED__
-void nat_unmap(void *p) {
+static void nat_unmap(void *p) {
  char *code = (char*) ((union u*) p)[0].ap;            // header == the W^X code address
  struct ai_str *base = str(code - sizeof(struct ai_str));   // code == s->bytes
  munmap(base, code_maplen(base->len)); }

@@ -2,6 +2,11 @@
 // the shared layouts and the cross-TU seam are src/love_int.h.
 #include "love_int.h"
 // this file's own, forward-declared so order within it does not matter.
+static bool eqv_at(struct ai *g, word a, word b, word *base);
+// the bit_slow trio takes its linkage here: the macro body carries no storage class.
+static lvm(lvm_band_slow);
+static lvm(lvm_bor_slow);
+static lvm(lvm_bxor_slow);
 static lvm(lvm_mul_cart);
 static lvm(lvm_mul_rep);
 // ============================================================================
@@ -233,7 +238,7 @@ lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
 // (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `zerop`.)
 
 // >> : arithmetic right shift; a fixnum only shrinks, so the fast path never allocates
-lvm(lvm_bsr_slow) { word a = Sp[0], b = Sp[1], _res;
+static lvm(lvm_bsr_slow) { word a = Sp[0], b = Sp[1], _res;
  if (!(charmp(a) || sunp(a)) || !charmp(b)) ai_musttail return Push(ZeroPoint);
  Have(box_req);
  emit_int(_res, toint(a) >> shmask(getcharm(b)));
@@ -263,7 +268,7 @@ op11(lvm_nilp, ai_nilp(g, Sp[0]) ? putcharm(1) : zero)
 
 // unary math nif: numeric arg → double, call fn, box the rank-0 f64 result.
 // non-numeric arg → zero. TCO-clean (no & escapes).
-lvm(lvm_math1) {
+static lvm(lvm_math1) {
  ai_flo1 fn = (ai_flo1) (uintptr_t) g->b;
  word a = Sp[0];
  if (trayp(a)) {                               // (sin a-tray) etc. -> gem tray; a twin tray is undefined
@@ -274,7 +279,7 @@ lvm(lvm_math1) {
  Have(gem_req);
  Sp[0] = mk_gem(&Hp, rd); return Next(1); }
 
-lvm(lvm_math2) {
+static lvm(lvm_math2) {
  ai_flo2 fn = (ai_flo2) (uintptr_t) g->b;
  word a = Sp[0], b = Sp[1];
  if (trayp(a) || trayp(b)) {                               // (pow arr ..) etc. -> float array
@@ -312,14 +317,14 @@ op11(lvm_gemp, gemp(Sp[0]) ? putcharm(1) : zero)
 // copy the state and answer (value . new-state) -- the input is never mutated.
 // the global rand/randf stream is prel lisp over the same steps. not a CSPRNG.
 
-uint64_t rotl64(uint64_t x, int k) {
+static uint64_t rotl64(uint64_t x, int k) {
  return (x << k) | (x >> (64 - k)); }
 
 // the uint64_t scratch lives in these ai_noinline helpers, moved via memcpy:
 // taking &s in a VM ap defeats the sibcall, and memcpy is alignment-safe.
 
 // advance the 4-word state at `payload` and return one 64-bit draw
-ai_noinline uint64_t rng_step(void *payload) {
+static ai_noinline uint64_t rng_step(void *payload) {
  uint64_t s[4];
  memcpy(s, payload, sizeof s);
  uint64_t const result = rotl64(s[0] + s[3], 23) + s[0], t = s[1] << 17;
@@ -330,7 +335,7 @@ ai_noinline uint64_t rng_step(void *payload) {
 
 // fill the state from a seed via SplitMix64; the all-zero state is xoshiro's
 // fixed point, so substitute a nonzero word
-ai_noinline void rng_seed_into(void *payload, uint64_t seed) {
+static ai_noinline void rng_seed_into(void *payload, uint64_t seed) {
  uint64_t s[4], x = seed;
  for (int i = 0; i < rng_state_len; i++) {
   uint64_t z = (x += (uint64_t) 0x9e3779b97f4a7c15);
@@ -341,7 +346,7 @@ ai_noinline void rng_seed_into(void *payload, uint64_t seed) {
  memcpy(payload, s, sizeof s); }
 
 // map a 64-bit draw to a float in [0,1): keep the high mantissa bits and scale.
-ai_flo_t u64_to_unit(uint64_t u) {
+static ai_flo_t u64_to_unit(uint64_t u) {
 #if Bits >= 64
  return (ai_flo_t) (u >> 11) * (ai_flo_t) 0x1.0p-53;
 #else
@@ -350,18 +355,18 @@ ai_flo_t u64_to_unit(uint64_t u) {
 }
 
 // shape v as a state tray and seed it; no &local, so an inlining caller keeps its tail call
-void ai_rng_seed(struct ai_tray *v, uint64_t seed) {
+static void ai_rng_seed(struct ai_tray *v, uint64_t seed) {
  ini_tray(v, rng_vt, 1);
  v->shape[0] = rng_state_len;
  rng_seed_into(tray_data(v), seed); }
 
 // is x a well-formed state tray (rank-1 i64, length 4)?
-bool rng_state_p(word x) {
+static bool rng_state_p(word x) {
  return packp(x) && tray(x)->rank == 1 && tray(x)->type == rng_vt
         && tray(x)->shape[0] == rng_state_len; }
 
 // a fresh state tray at Hp copying src's limbs; caller holds Have(rng_tray_req)
-struct ai_tray *rng_copy(ai_word **hp, struct ai_tray *src) {
+static struct ai_tray *rng_copy(ai_word **hp, struct ai_tray *src) {
  struct ai_tray *v = (struct ai_tray*) *hp;
  *hp += rng_tray_req;
  ini_tray(v, rng_vt, 1);
@@ -371,7 +376,7 @@ struct ai_tray *rng_copy(ai_word **hp, struct ai_tray *src) {
 
 // canonicalize a 62-bit draw to the smallest integer tier. out-of-line so the
 // limb[] scratch never forces a frame in lvm_turn (make vmret); bump-only.
-ai_noinline word rng_canon(struct ai *g, uint64_t r) {
+static ai_noinline word rng_canon(struct ai *g, uint64_t r) {
  ai_limb limb[64 / limb_bits]; int nl = 0;               // split the 64-bit draw into native limbs (1 or 2)
  for (int i = 0; (size_t) i * limb_bits < 64; i++) limb[i] = (ai_limb) (r >> (i * limb_bits)), nl = i + 1;
  return ai_big_canon(&g->hp, limb, nl, false); }
@@ -425,12 +430,12 @@ lvm(lvm_turnf) {
 // position, free by symbol. `:` binders are not tracked (sound, conservative);
 // a one-operand \ is quote, compared as data.
 struct arib { word la, lb; int na, nb; struct arib *up; };  // binder rib: (p…body) lists + param counts
-int arib_pos(word s, word l, int n) {                // index of s among the first n of l, else -1
+static int arib_pos(word s, word l, int n) {                // index of s among the first n of l, else -1
  for (int i = 0; i < n && chainp(l); i++, l = B(l)) if (A(l) == s) return i;
  return -1; }
-bool ai_isbs(struct ai *g, word h) {                  // h is the `\` symbol?
+static bool ai_isbs(struct ai *g, word h) {                  // h is the `\` symbol?
  struct ai_str *n; return (n = nom_str(g, h)) && n->len == 1 && n->bytes[0] == '\\'; }
-bool salpha(struct ai *g, word a, word b, struct arib *env) {
+static bool salpha(struct ai *g, word a, word b, struct arib *env) {
  if (nomp(a) || nomp(b)) {
   if (!nomp(a) || !nomp(b)) return false;
   for (struct arib *r = env; r; r = r->up) {
@@ -486,7 +491,7 @@ struct clonf { word body, rem, fsyms; int nr, fn; word fv[nf_maxcap]; };  // res
 
 // load a closure value's capture-substitution residual. a partial-app over a sourced base, or a
 // no-capture lambda (fn = 0). returns false for a source-less base (a bif) or a quote -- caller falls back.
-bool clo_load(struct ai *c, word v, struct clonf *o) {
+static bool clo_load(struct ai *c, word v, struct clonf *o) {
  if (!lamp(v) || datp(v) || !in_heap(c, v)) return false;
  union u *k = cell(v);
  word s; int na = 0;
@@ -509,7 +514,7 @@ bool clo_load(struct ai *c, word v, struct clonf *o) {
 
 // α-invariant hash of a residual's body, mirroring shash: a genuine binder by
 // coordinate, a filled binder by its captured value's hash, a free var by symbol
-uintptr_t nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn, word *fv) {
+static uintptr_t nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn, word *fv) {
  if (nomp(x)) {
   int d = 0;
   for (struct arib *r = env; r; r = r->up, d++) {
@@ -537,7 +542,7 @@ bool clo_nfhash(struct ai *g, word x, uintptr_t *out) {
 
 // does runtime value V equal the meaning of source term b? filled binder ->
 // compare captures; literal atom -> compare; anything else conservative false.
-bool val_vs_src(struct ai *g, word V, word b, struct arib *rb, struct clonf *cb, word *scratch) {
+static bool val_vs_src(struct ai *g, word V, word b, struct arib *rb, struct clonf *cb, word *scratch) {
  if (nomp(b)) {
   for (struct arib *r = rb; r; r = r->up) if (arib_pos(b, r->la, r->na) >= 0) return false;  // a remaining param
   int j = arib_pos(b, cb->fsyms, cb->fn);
@@ -547,7 +552,7 @@ bool val_vs_src(struct ai *g, word V, word b, struct arib *rb, struct clonf *cb,
 
 // α + value equality of two residual bodies in lockstep: a nom classifies bound
 // (by coordinate), filled (a captured value), free (by symbol), or not-a-nom
-bool nf_walk(struct ai *g, word a, struct arib *ra, struct clonf *ca,
+static bool nf_walk(struct ai *g, word a, struct arib *ra, struct clonf *ca,
                                   word b, struct arib *rb, struct clonf *cb, word *scratch) {
  if (nomp(a) || nomp(b)) {
   int ka = 3; intptr_t ac = 0; word av = 0;              // 0 bound, 1 filled, 2 free, 3 not-a-nom
@@ -579,7 +584,7 @@ bool nf_walk(struct ai *g, word a, struct arib *ra, struct clonf *ca,
   struct arib rA = { pa, pa, na, na, ra }, rB = { pb, pb, nb, nb, rb };
   return nf_walk(g, ba, &rA, ca, bb, &rB, cb, scratch); }
  return nf_walk(g, A(a), ra, ca, A(b), rb, cb, scratch) && nf_walk(g, B(a), ra, ca, B(b), rb, cb, scratch); }
-bool clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scratch) {  // residual α+value equality
+static bool clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scratch) {  // residual α+value equality
  if (ca->nr != cb->nr) return false;                                   // different residual arity
  struct arib rA = { ca->rem, ca->rem, ca->nr, ca->nr, 0 }, rB = { cb->rem, cb->rem, cb->nr, cb->nr, 0 };
  return nf_walk(g, ca->body, &rA, ca, cb->body, &rB, cb, scratch); }
@@ -587,7 +592,7 @@ bool clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scratch) {  
 // `base` is where this frame's worklist starts: the public eqv passes off_pool; a
 // re-entrant beta-bridge call passes the caller's live top, so nested scratch sits
 // above the pending pairs instead of clobbering them.
-bool eqv_at(struct ai *g, word a, word b, word *base) {
+static bool eqv_at(struct ai *g, word a, word b, word *base) {
  word *top = off_pool(g) + g->len, *w = base;
  struct ai *c = ai_core_of(g);
  for (;;) {
@@ -657,7 +662,7 @@ ai_noinline bool eqv(struct ai *g, word a, word b) { return eqv_at(g, a, b, off_
 // equal), not the elementwise mask -- `<` and `>` are the mask makers. cells
 // compare across tiers (a z-tray equals a gem-tray of the same values); object
 // cells go through eqv; an object tray never equals a numeric one.
-ai_noinline bool tray_eq(struct ai *g, word a, word b) {
+static ai_noinline bool tray_eq(struct ai *g, word a, word b) {
  if (!trayp(a) || !trayp(b)) return false;            // an array is never a scalar
  struct ai_tray *va = tray(a), *vb = tray(b);
  if (va->rank != vb->rank) return false;
@@ -732,7 +737,7 @@ lvm(lvm_same) {
 // inner loop allocates, so it runs Pack'd and re-fetches every live pointer.
 
 // one element op, allocating via *fp; zero for a non-numeric/complex operand
-word obin_elem(struct ai **fp, int op, word a, word b) {
+static word obin_elem(struct ai **fp, int op, word a, word b) {
  if (op >= vop_lt) {                            // comparison -> 1 / zero, no allocation
   if (!isnum(a) || !isnum(b)) return zero;       // twinp not in isnum -> unordered -> zero
   intptr_t t = (gemp(a) || gemp(b)) ? vcmp_flo(op, toflo(a), toflo(b))
@@ -774,7 +779,7 @@ word obin_elem(struct ai **fp, int op, word a, word b) {
 
 // widen the numeric array at g->sp[slot] to a ai_O copy (box each element);
 // allocates per element, everything re-fetched after every box
-struct ai *tray_to_obj(struct ai *g, int slot) {
+static struct ai *tray_to_obj(struct ai *g, int slot) {
  struct ai_tray *src = tray(g->sp[slot]);
  uintptr_t R = src->rank, n = 1;
  for (uintptr_t i = 0; i < R; i++) n *= src->shape[i];
@@ -804,7 +809,7 @@ struct ai *tray_to_obj(struct ai *g, int slot) {
  return g; }
 
 // Pack'd body of lvm_obin (operands at g->sp[0..1], >=1 is a ai_O array).
-struct ai *obin_run(struct ai *g, int op) {
+static struct ai *obin_run(struct ai *g, int op) {
  word a = g->sp[0], b = g->sp[1];
  bool atray = trayp(a), btray = trayp(b);
  if (atray && tray(a)->type != ai_O) { if (!ai_ok(g = tray_to_obj(g, 0))) return g; }
@@ -874,13 +879,13 @@ struct ai *ored(struct ai *g, int kind) {
 
 // (re, im) of an operand: a complex its parts, a real (value, 0); caller
 // guarantees twinp or isnum
-void twin_parts(word x, ai_flo_t *re, ai_flo_t *im) {
+static void twin_parts(word x, ai_flo_t *re, ai_flo_t *im) {
  if (twinp(x)) *re = twin_re(x), *im = twin_im(x);
  else *re = toflo(x), *im = 0; }
 
 // (ar,ai) `vop` (br,bi) in components: the one set of complex formulas, shared
 // by the scalar lane (twin_fill) and the packed array lane (cbin_fill).
-void twin_op(int vop, ai_flo_t ar, ai_flo_t ai, ai_flo_t br, ai_flo_t bi,
+static void twin_op(int vop, ai_flo_t ar, ai_flo_t ai, ai_flo_t br, ai_flo_t bi,
                              ai_flo_t *re, ai_flo_t *im) {
  switch (vop) {
   case vop_sub: *re = ar - br; *im = ai - bi; break;
@@ -890,7 +895,7 @@ void twin_op(int vop, ai_flo_t ar, ai_flo_t ai, ai_flo_t br, ai_flo_t bi,
   default: *re = ar + br; *im = ai + bi; } }          // vop_add
 
 // fill the complex box with a `vop` b; the &-taking lives here (the wrapper's tail call)
-ai_noinline void twin_fill(struct ai_twin *v, word a, word b, int vop) {
+static ai_noinline void twin_fill(struct ai_twin *v, word a, word b, int vop) {
  ai_flo_t ar, ai, br, bi, re, im;
  twin_parts(a, &ar, &ai); twin_parts(b, &br, &bi);
  twin_op(vop, ar, ai, br, bi, &re, &im);
@@ -910,13 +915,13 @@ lvm(lvm_twin_bin) {
 
 // --- complex-array elementwise lane (ai_C): lvm_vbin's complex twin -- packed
 // (re,im) broadcast, a real element promoting to (v, 0)
-void cbin_part(bool istray, struct ai_tray *v, ai_flo_t sre, ai_flo_t sim,
+static void cbin_part(bool istray, struct ai_tray *v, ai_flo_t sre, ai_flo_t sim,
                                uintptr_t o, ai_flo_t *re, ai_flo_t *im) {
  if (!istray) { *re = sre; *im = sim; return; }
  if (v->type == ai_C) { ai_flo_t *fp = tray_data(v); *re = fp[2*o]; *im = fp[2*o+1]; }
  else { *re = tray_get_flo(v, o); *im = 0; } }
 
-ai_noinline void cbin_fill(struct ai_tray *r, word a, word b, int op, bool cmp) {
+static ai_noinline void cbin_fill(struct ai_tray *r, word a, word b, int op, bool cmp) {
  uintptr_t R = r->rank, n = tray_nelem(r);
  bool atray = trayp(a), btray = trayp(b);
  struct ai_tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
@@ -970,7 +975,7 @@ lvm(lvm_cbin) {
  return Push(word(r)); }
 
 // w ** z via the principal branch: exp(z * Log w); w == 0 falls out as the IEEE limit
-ai_noinline void twin_pow_fill(struct ai_twin *v, word wbase, word zexp) {
+static ai_noinline void twin_pow_fill(struct ai_twin *v, word wbase, word zexp) {
  ai_flo_t wr, wi, zr, zi;
  twin_parts(wbase, &wr, &wi); twin_parts(zexp, &zr, &zi);
  ai_flo_t lr = (ai_flo_t) 0.5 * ai_log(wr * wr + wi * wi),    // ln|w|
@@ -981,13 +986,13 @@ ai_noinline void twin_pow_fill(struct ai_twin *v, word wbase, word zexp) {
 
 // sin/cos of pi*x, the angle reduced before multiplying by pi so a half-integer
 // lands exactly on the axis -- what makes ((/ 1 2) -1) = i bit-exact
-ai_flo_t ai_sinpi(ai_flo_t x) {
+static ai_flo_t ai_sinpi(ai_flo_t x) {
  intptr_t n = (intptr_t) x; ai_flo_t r = x - (ai_flo_t) n;
  if (r < 0) r += 1, n--;                              // x = n + r, r in (0,1)
  ai_flo_t s = r == (ai_flo_t) 0.5 ? 1
    : ai_sin((ai_flo_t) 3.141592653589793 * (r < (ai_flo_t) 0.5 ? r : 1 - r));
  return n & 1 ? -s : s; }
-ai_flo_t ai_cospi(ai_flo_t x) {
+static ai_flo_t ai_cospi(ai_flo_t x) {
  intptr_t n = (intptr_t) x; ai_flo_t r = x - (ai_flo_t) n;
  if (r < 0) r += 1, n--;
  ai_flo_t c = r == (ai_flo_t) 0.5 ? 0
@@ -995,7 +1000,7 @@ ai_flo_t ai_cospi(ai_flo_t x) {
    : -ai_cos((ai_flo_t) 3.141592653589793 * (1 - r));
  return n & 1 ? -c : c; }
 // finite non-integer? everything at/past 2^mantissa is an integer; nan/inf out.
-bool flo_fracp(ai_flo_t x) {
+static bool flo_fracp(ai_flo_t x) {
  ai_flo_t lim = (ai_flo_t) (1ull << (Bits == 64 ? 53 : 24));
  return x > -lim && x < lim && (ai_flo_t) (intptr_t) x != x; }
 
@@ -1022,7 +1027,7 @@ lvm(lvm_pow) {
  { g->b = (ai_word) (uintptr_t) (ai_pow); ai_musttail return Ap(lvm_math2, g); } }
 
 // fill a packed ai_C array with (re = a-element, im = b-element) under broadcast
-ai_noinline void twin_build_fill(struct ai_tray *r, word a, word b) {
+static ai_noinline void twin_build_fill(struct ai_tray *r, word a, word b) {
  uintptr_t R = r->rank, n = tray_nelem(r);
  bool atray = trayp(a), btray = trayp(b);
  struct ai_tray *va = atray ? tray(a) : 0, *vb = btray ? tray(b) : 0;
@@ -1069,7 +1074,7 @@ op11(lvm_twinp, twinp(Sp[0]) ? putcharm(1) : zero)
 
 // fill r with component `off` (0 = re, 1 = im) of each element; off < 0 is the
 // (im realarr) lane -- all zeros
-ai_noinline void cpart_fill(struct ai_tray *r, struct ai_tray *v, int off) {
+static ai_noinline void cpart_fill(struct ai_tray *r, struct ai_tray *v, int off) {
  uintptr_t n = tray_nelem(r);
  if (off < 0) {
   intptr_t *zp = tray_data(r);
@@ -1079,7 +1084,7 @@ ai_noinline void cpart_fill(struct ai_tray *r, struct ai_tray *v, int off) {
  for (uintptr_t p = 0; p < n; p++) rf[p] = fp[2*p + off]; }
 
 // the array lane of re/im: result carries the operand's shape
-lvm(lvm_cpart) {
+static lvm(lvm_cpart) {
  int off = (int) g->b;
  struct ai_tray *v = tray(Sp[0]);
  enum ai_tray_type rt = off < 0 ? ai_Z : ai_R;
@@ -1142,7 +1147,7 @@ lvm(lvm_conj) {
 
 // (abs z): magnitude in its own tier; |INTPTR_MIN| promotes to a bignum (the one
 // magnitude the box can't hold), its limb scratch out of line per the lvm scratch rule.
-ai_noinline word abs_wmin(struct ai *g) {
+static ai_noinline word abs_wmin(struct ai *g) {
  uintptr_t u = (uintptr_t) 1 << (Bits - 1);
  ai_limb lb[wlimbs];
  for (int i = 0; i < wlimbs; i++) lb[i] = (ai_limb) (u >> (limb_bits * i));
@@ -1197,7 +1202,7 @@ lvm(lvm_abs) {
  ai_musttail return Answer(ZeroPoint); }
 
 // fill f64 array r with arg of each element of v
-ai_noinline void carg_fill(struct ai_tray *r, struct ai_tray *v) {
+static ai_noinline void carg_fill(struct ai_tray *r, struct ai_tray *v) {
  uintptr_t n = tray_nelem(v);
  ai_flo_t *rf = tray_data(r);
  if (v->type == ai_C) { ai_flo_t *fp = tray_data(v);

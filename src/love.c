@@ -10,6 +10,37 @@ static int stringrank(struct ai *g, word x);
 static intptr_t seq_byte(word x);
 static lvm(_lvm_help_scare);
 static lvm(_lvm_yield_c);
+// the nifs.h table lands mid-file and names these, so the whole set is declared up here
+// (lvm_subn's body comes out of avm_slow, which carries no storage class of its own).
+static lvm(lvm_apof);
+static lvm(lvm_bigp);
+static lvm(lvm_books);
+static lvm(lvm_cap);
+static lvm(lvm_casknew);
+static lvm(lvm_chainp);
+static lvm(lvm_clock);
+static lvm(lvm_cup);
+static lvm(lvm_gauge);
+static lvm(lvm_intf);
+static lvm(lvm_key);
+static lvm(lvm_link);
+static lvm(lvm_mint);
+static lvm(lvm_mintp);
+static lvm(lvm_mods);
+static lvm(lvm_namep);
+static lvm(lvm_nclock);
+static lvm(lvm_nomctor);
+static lvm(lvm_nomp);
+static lvm(lvm_packp);
+static lvm(lvm_please);
+static lvm(lvm_setbooks);
+static lvm(lvm_setp);
+static lvm(lvm_snip);
+static lvm(lvm_strp);
+static lvm(lvm_sub);
+static lvm(lvm_subn);
+static lvm(lvm_sunp);
+static lvm(lvm_tune);
 static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, void*, size_t));
 static struct ai *ai_modtab(struct ai *g, char const *mod);
 static struct ai_tag *ttag2(struct ai *g, struct ai_gcx *X, union u *k);
@@ -230,7 +261,7 @@ struct ai *ai_ini(void) { return ai_ini_m(ai_libc_alloc); }
 // ============================================================================
 // stack
 // ============================================================================
-struct ai *ai_pushr(struct ai *g, uintptr_t m, uintptr_t n, va_list xs) {
+static struct ai *ai_pushr(struct ai *g, uintptr_t m, uintptr_t n, va_list xs) {
  if (n == m) return ai_please(g, m);
  word x = va_arg(xs, word);
  mm(g, &x);
@@ -272,7 +303,7 @@ lvm(lvm_gc) {
  if (!ai_ok(g = ai_please(g, n))) return Ap(_lvm_ghelp, g);
  return Resume(); }
 
-word gcp(struct ai*, struct ai_gcx*, word);
+static ai_noinline word gcp(struct ai*, struct ai_gcx*, word);
 
 static ai_inline void evac_chain(struct ai *g, struct ai_gcx *X) {
  struct ai_chain *w = (struct ai_chain*) X->cp;
@@ -280,7 +311,7 @@ static ai_inline void evac_chain(struct ai *g, struct ai_gcx *X) {
  w->a = gcp(g, X, w->a);
  w->b = gcp(g, X, w->b); }
 
-void evac_tray(struct ai *g, struct ai_gcx *X) {
+static void evac_tray(struct ai *g, struct ai_gcx *X) {
  struct ai_tray *v = tray(X->cp);
  X->cp += b2w(ai_tray_bytes(v));
  if (v->type != ai_O) return;                 // numeric trays are GC leaves (flat payload)
@@ -336,7 +367,7 @@ static ai_inline void evac_data(struct ai *g, struct ai_gcx *X) {
 // the one escape is overflow (rem_miss): a dropped entry forces the next collection
 // major, which traces from roots and needs no rem set.
 // young?: the address is the generation (no age bits) -- in [end, hp).
-bool ai_young(struct ai *g, word p) {
+static bool ai_young(struct ai *g, word p) {
  return lamp(p) && ptr(p) >= (word*) g->end && ptr(p) < g->hp; }
 static bool gen_remembered(struct ai *g, word obj) {
  for (uintptr_t i = 0; i < g->rem_n; i++) if (g->rem[i] == obj) return true;
@@ -579,7 +610,7 @@ struct ai *gen_grow(struct ai *g, uintptr_t len1) {
 
 // the GC entry: a minor unless the rem set overflowed or the major lacks headroom --
 // then a major. afterwards size the minor by appel's rule against the budget.
-struct ai *gen_please(struct ai *g, uintptr_t req0) {
+static struct ai *gen_please(struct ai *g, uintptr_t req0) {
  uintptr_t seen_young = (uintptr_t)(g->hp - g->end);
  uintptr_t major_free = (uintptr_t)((g->major_base + g->major_len) - g->major_hp);
  g->since_major += seen_young;                                  // young allocated (∝ scanned) since the last major
@@ -747,7 +778,7 @@ static ai_inline word copy_thread(struct ai *g, struct ai_gcx *X, union u *src) 
  for (union u *s = ini; !tagl(g, X, s->x); s->x = (word) d, d++, s++) d->x = s->x;
  return (word) (tagthread(dst, d - dst) + (src - ini)); }
 
-ai_noinline intptr_t gcp(struct ai *g, struct ai_gcx *X, word x) {
+static ai_noinline intptr_t gcp(struct ai *g, struct ai_gcx *X, word x) {
  // a number stays; else x must sit in a from-space range this pass traces (a major traces two)
  if (charmp(x)) return x;
  if (!(ptr(x) >= X->p0 && ptr(x) < X->t0)
@@ -777,7 +808,7 @@ op11(lvm_nclock, putcharm(ai_nclock() - (charmp(Sp[0]) ? getcharm(Sp[0]) : 0)))
 // never steers: the resize window is zeroed for the call and put back, so a probe
 // forcing minors can't talk the nursery into doubling (the pause gauge's first
 // draft ran the pool to oom@8GB through exactly that feedback).
-lvm(lvm_please) {
+static lvm(lvm_please) {
  word n = Sp[0];
  Pack(g);
  if (charmp(n) && getcharm(n) > 0)
@@ -809,7 +840,7 @@ lvm(lvm_please) {
 //  [14] minor_hi  peak words one minor copied -- the pause gauge (a copying
 //  [15] major_hi  peak words one major copied    collection's pause is its copy volume)
 // derive: mortality = (n_seen - n_evac)/n_seen ; copy-amp = n_evac/max_heap
-lvm(lvm_gauge) {
+static lvm(lvm_gauge) {
  enum { N = 16 };
  uintptr_t const bytes = sizeof(struct ai_tray) + 1 * sizeof(word) + N * ai_T[ai_Z];
  Have(b2w(bytes));
@@ -846,7 +877,7 @@ lvm(lvm_gauge) {
 // so pair it with (please 1). a wrong shape is a silent no-op answering the current
 // knobs (pin's misuse convention). these are untraced scalars ahead of v0, so a bake
 // does not carry them: a woken image tunes again (host's LOVE_BUDGET_MB does exactly that).
-lvm(lvm_tune) {
+static lvm(lvm_tune) {
  enum { N = 4 };
  uintptr_t const bytes = sizeof(struct ai_tray) + 1 * sizeof(word) + N * ai_T[ai_Z];
  Have(b2w(bytes));
@@ -871,7 +902,7 @@ lvm(lvm_tune) {
 
 // (apof x): x's kind pointer (cell[0]) as a fixnum, 0 for a fixnum/immediate. the string-lane glaze
 // reads the kind of a reference string at codegen time and emits a `cmp [s], kind; jne deopt` type guard.
-lvm(lvm_apof) {
+static lvm(lvm_apof) {
  word x = Sp[0];
  Sp[0] = putcharm(lamp(x) ? (uintptr_t) cell(x)->ap : 0);
  Ip += 1;
@@ -898,7 +929,7 @@ __attribute__((weak)) ai_noinline void ai_sleep(uintptr_t ticks) {
 // three terms (pushback, buffered run, fd), or a port with bytes in hand reads
 // "not ready". it asks will you answer, not is there data: a hung-up fd reads
 // ready and the see answers -1. a non-port asks about stdin (the bare (cue? 0)).
-lvm(lvm_key) {
+static lvm(lvm_key) {
  Sp[0] = io_route(g, iop(Sp[0]) ? Sp[0] : (word) &ai_stdin);   // the bare (cue? 0) asks about stdin, so it routes too
  struct ai_io *i = (struct ai_io*) Sp[0];
  Sp[0] = (getcharm(i->ungetc_buf) != EOF || bio_rpending(bio_of(g, i))
@@ -925,7 +956,7 @@ op11(lvm_strp, strp(Sp[0]) ? putcharm(1) : zero)
 // a cask snips as the string of its bytes, the way `pour` already reads one: swig
 // fills a buffer and the caller wants the prefix it filled, and (string b) first
 // copies the whole buffer to take a corner of it -- 64K a read for a 12-byte file.
-lvm(lvm_snip) {
+static lvm(lvm_snip) {
  if (!strp(Sp[0]) && !caskp(Sp[0])) Sp[2] = zero;
  else {
   struct ai_str *s = bytes_of(Sp[0]), *t;
@@ -957,7 +988,7 @@ lvm(lvm_cask) {
 // (cask n) — a zeroed n-byte mutable cask; (cask charlist) — one holding those
 // bytes (the bulk way in). n<=0 -> EmptyString, so no empty cask object exists.
 // two heap objects under one Have, so no GC sees a half-built cask.
-lvm(lvm_casknew) {
+static lvm(lvm_casknew) {
  bool listp = chainp(Sp[0]);
  intptr_t n = charmp(Sp[0]) ? getcharm(Sp[0]) : listp ? (intptr_t) llen(Sp[0]) : 0;
  if (n <= 0) ai_musttail return Answer(EmptyString);   // no empty cask: it is ""
@@ -1014,7 +1045,7 @@ lvm(lvm_intern) {
 // (mint _) -> a fresh nameless point, identity its only property (the arg is
 // ignored). `code` gets the mint serial: its hash and its order key, GC-stable.
 // mints answer nomp, so they bind as gensyms.
-lvm(lvm_mint) {
+static lvm(lvm_mint) {
  Have(Width(struct ai_mint));
  struct ai_mint *y = (struct ai_mint*) Hp;
  Hp += Width(struct ai_mint);                   // mints are uniform: ap, code
@@ -1027,7 +1058,7 @@ lvm(lvm_mint) {
 // (nom n) -> a fresh, uninterned named point: a string names it, a symbol lends
 // its spelling, anything else falls to a bare mint. two (nom 'x) are distinct --
 // the gensym-with-a-name.
-lvm(lvm_nomctor) {
+static lvm(lvm_nomctor) {
  Have(Width(struct ai_nom));                    // >= Width(struct ai_mint), so the bare-mint fallback fits too
  word n = Sp[0];                                // re-read post-GC (the stack is rooted)
  struct ai_str *nm = strp(n) ? str(n) : nom_str(g, n);   // a string is the name; a sym lends its spelling
@@ -1098,7 +1129,7 @@ op11(lvm_setp, trayp(Sp[0]) ? putcharm(1) : zero)
 // int: a gem truncates toward zero, saturating at the charm bounds like the other
 // rungs (the bare cast wrapped above 2^62 -- UB read as 0); an exact-ratio coin
 // truncates by long division; everything else passes through.
-lvm(lvm_intf) {
+static lvm(lvm_intf) {
  if (ai_ratio_exact(g, Sp[0])) { Pack(g); g = ai_ratio_rung(g, 0);
   if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
   ai_musttail return Resume(); }
@@ -1138,7 +1169,7 @@ struct ai *ai_unsplice_(struct ai *g) {
 
 op11(lvm_chainp, (chainp(Sp[0]) && !nomp(Sp[0])) ? putcharm(1) : zero)  // the surface chain?: a real compound list. a named symbol reads (name . mint) but counts as an atom
 
-lvm(lvm_link) {
+static lvm(lvm_link) {
  Have(Width(struct ai_chain));
  struct ai_chain *w = (struct ai_chain*) Hp;
  Hp += Width(struct ai_chain);
@@ -1216,7 +1247,7 @@ lvm(lvm_quotn) {
 
 // `-`: fixnum fast path, the () unit, then coins (`-` has no kind matrix, so the
 // interception lives here), then the numeric slow lane
-lvm(lvm_sub) {
+static lvm(lvm_sub) {
  word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) { intptr_t t;
   if (!__builtin_sub_overflow((intptr_t) getcharm(a), (intptr_t) getcharm(b), &t) &&

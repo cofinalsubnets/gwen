@@ -23,30 +23,30 @@ static struct ai *img_wake(void const *buf, uintptr_t len,
                            void *(*al)(struct ai*, void*, size_t));
 static uintptr_t hc_hchain(struct ai_chain *c);
 static uintptr_t hc_hstr(struct ai_str *s);
-uintptr_t hc_off(struct hc *h, word x);
-uintptr_t hc_stride(struct ai *g, union u *p, int *fzp);
+static uintptr_t hc_off(struct hc *h, word x);
+static uintptr_t hc_stride(struct ai *g, union u *p, int *fzp);
 static uintptr_t image_datasize(union u *d, void const *s);
 static uintptr_t image_nhost(void);
-uintptr_t image_objsize(struct ai *g, union u *p);
+static uintptr_t image_objsize(struct ai *g, union u *p);
 static uintptr_t img_dict(word *sorted, uintptr_t nw, word *dict);
-uintptr_t img_hash(word v);
+static uintptr_t img_hash(word v);
 static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const *slots,
                                  uintptr_t nslot, word *rank, uintptr_t nser);
 static uintptr_t img_stream(unsigned char *out, word const *blob, uintptr_t nw,
                             word const *key, unsigned char const *tk);
-unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
+static unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
                                        unsigned char const *end, word const *dict);
-unsigned char hc_flag(struct hc *h, word x);
+static unsigned char hc_flag(struct hc *h, word x);
 static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintptr_t nw, uintptr_t *outlen);
-void image_root_enc(struct img_ctx *x, word v, uint64_t *tag, uint64_t *val);
+static void image_root_enc(struct img_ctx *x, word v, uint64_t *tag, uint64_t *val);
 static void img_hashcons(struct ai *g);
 static void img_ord_sift(struct img_ord const *o, uintptr_t i, uintptr_t n);
 static void img_ord_swap(struct img_ord const *o, uintptr_t i, uintptr_t j);
 static void img_sort(struct img_ord const *o, uintptr_t n);
 static word *img_build(struct ai *g, struct image_hdr *Ho, struct ai_image_guard const *guard,
                        uintptr_t *outnw, uint8_t *why);
-word hc_can(struct hc *h, word x);
-word hc_intern(struct hc *h, union u *p, uintptr_t hv);
+static word hc_can(struct hc *h, word x);
+static word hc_intern(struct hc *h, union u *p, uintptr_t hv);
 static word image_root_dec(uint64_t tag, uint64_t val, word *base);
 // ============================================================================
 // the heap-image snapshot (doc/misc/snapshot.md): serialize the compacted live heap
@@ -78,7 +78,7 @@ static uintptr_t image_datasize(union u *d, void const *s) {
   case DBig:   return b2w(ai_big_bytes((struct ai_big*)(word) s));
   case DTray:  return b2w(ai_tray_bytes((struct ai_tray*)(word) s)); }
  return 0; }                                                     // unreachable: ai_typ covers the 9
-uintptr_t image_objsize(struct ai *g, union u *p) {
+static uintptr_t image_objsize(struct ai *g, union u *p) {
  if (in_data(p->ap)) return image_datasize(p, p);
  word *term = (word*) ttag(g, p);                                // thread: scan to terminator (production)
  return (uintptr_t)(term - (word*) p) + 1; }
@@ -131,7 +131,7 @@ static intptr_t image_fn_resolve(intptr_t j) {
 // in an undressed rbuf/wbuf), map_gap appended last so existing indices stay stable
 // every port vtable belongs here: a port's head carries its vt, so an imaged
 // port holds a binary address that only an index survives the trip.
-const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr, 0, map_gap,
+static const word image_immortals[] = { ZeroPoint, EmptyString, (word) &ai_stdin, (word) &ai_stdout, (word) &ai_stderr, 0, map_gap,
  (word) &ai_fd_port_vt, (word) &ai_to_vt, (word) &ai_closed_vt, (word) &ai_ci_vt,
  (word) yield_c };   // g->ip's parked value: a root holds this binary address, so only an index survives
 intptr_t image_imm_index(word v) {
@@ -183,7 +183,7 @@ int img_wxp(struct img_ctx *x, word v) {         // an un-wakeable absolute? (ev
  if (image_ap_index((intptr_t) v) >= 0) return 0;       // lvm table
  if (image_imm_index(v) >= 0) return 0;                 // immortal
  return x->guard && !x->guard->ok(x->guard->ctx, (uintptr_t) v, x->cur_off, x->cur_ap); }
-word img_nif_interp(struct img_ctx *x, word v) {   // v -> a cell value; its bytecode twin | 0
+static word img_nif_interp(struct img_ctx *x, word v) {   // v -> a cell value; its bytecode twin | 0
  word *base = x->base, *hp = x->hp;
  word *c = (word*) v; word e = 0;
  // match every fixed word and c[-2]: [code, interp, lvm_ret, n] is also what
@@ -200,7 +200,7 @@ word img_nif_interp(struct img_ctx *x, word v) {   // v -> a cell value; its byt
  return e; }
 // encode a live value (post-compaction) -> portable (tag,payload):
 //  0 FIX raw | 1 PTR word-offset into the blob | 2 LVM table index | 3 IMM immortal index
-void image_root_enc(struct img_ctx *x, word v, uint64_t *tag, uint64_t *val) {
+static void image_root_enc(struct img_ctx *x, word v, uint64_t *tag, uint64_t *val) {
  intptr_t li = image_ap_index((intptr_t) v); if (li >= 0) { *tag = 2, *val = (uint64_t) li; return; }  // ap table first: thumb aps are odd (see img_encode)
  if (oddp(v)) { *tag = 0, *val = (uint64_t) v; return; }
  if ((word*) v >= x->base && (word*) v < x->hp) {
@@ -338,7 +338,7 @@ ai_inline intptr_t img_decode(intptr_t v, word *base, intptr_t delta) {
 // the encoder's tables ride the allocator, never the frame: together they are kilobytes, and
 // an arm32 load has 12 bits of displacement -- port/mps2 refused to compile them onto the stack.
 struct img_dic { word dict[ImageNDict], key[ImageDHash]; unsigned char tk[ImageDHash]; };
-uintptr_t img_hash(word v) {
+static uintptr_t img_hash(word v) {
  uintptr_t h = (uintptr_t) v;
  return h ^= h >> 17,
         h *= 0x9e3779b1u,
@@ -411,7 +411,7 @@ static uintptr_t img_stream(unsigned char *out, word const *blob, uintptr_t nw,
 // a foreign buffer, so the caller boots normally. it does not require the whole stream: a
 // derived image is the first nw words of a longer one, and only the caller knows whether
 // a leftover tail is a prefix or a corruption.
-unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
+static unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
                                        unsigned char const *end, word const *dict) {
  for (uintptr_t i = 0; i < nw; i++) {
   if (p >= end) return NULL;
@@ -503,12 +503,12 @@ static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const
 // port's buffers are memcpy'd through their holder, and those two pin (below).
 enum { HcHead = 1, HcChain = 2, HcStr = 4, HcPin = 8, HcDone = 16, HcProg = 32 };
 struct hc { word *base, *hp; unsigned char *fl; word *cn, *tab, *stk; uintptr_t mask; };
-ai_inline uintptr_t hc_off(struct hc *h, word x) { return (uintptr_t) ((word*) x - h->base); }
+static ai_inline uintptr_t hc_off(struct hc *h, word x) { return (uintptr_t) ((word*) x - h->base); }
 // the flags at x, or 0 where x does not name an object head in the walked heap
-ai_inline unsigned char hc_flag(struct hc *h, word x) {
+static ai_inline unsigned char hc_flag(struct hc *h, word x) {
  return !(x & (word) (sizeof(word) - 1)) && (word*) x >= h->base && (word*) x < h->hp
       ? h->fl[hc_off(h, x)] : 0; }
-ai_inline word hc_can(struct hc *h, word x) {
+static ai_inline word hc_can(struct hc *h, word x) {
  return hc_flag(h, x) & HcDone ? h->cn[hc_off(h, x)] : x; }
 static uintptr_t hc_hstr(struct ai_str *s) {
  uintptr_t r = 1469598103934665603u ^ s->len * 1099511628211u;
@@ -517,7 +517,7 @@ static uintptr_t hc_hstr(struct ai_str *s) {
 static uintptr_t hc_hchain(struct ai_chain *c) {
  return (uintptr_t) c->a * 0x9E3779B97F4A7C15u ^ (uintptr_t) c->b * 0xC2B2AE3D27D4EB4Fu; }
 // the class representative for p: the first object of its shape the walk reached
-word hc_intern(struct hc *h, union u *p, uintptr_t hv) {
+static word hc_intern(struct hc *h, union u *p, uintptr_t hv) {
  for (uintptr_t i = hv & h->mask; ; i = (i + 1) & h->mask) {
   word q = h->tab[i];
   if (!q) return h->tab[i] = (word) p;
@@ -527,7 +527,7 @@ word hc_intern(struct hc *h, union u *p, uintptr_t hv) {
    if (len(r) == len(p) && !memcmp(txt(r), txt(p), len(p))) return q; }
   else if (two(r)->a == two(p)->a && two(r)->b == two(p)->b) return q; } }
 // the object stride, forging a live finalizer node's width (three raw words, no header)
-uintptr_t hc_stride(struct ai *g, union u *p, int *fzp) {
+static uintptr_t hc_stride(struct ai *g, union u *p, int *fzp) {
  struct ai_fz *z = g->fz;
  while (z && (union u*) z != p) z = z->next;
  return (*fzp = !!z) ? Width(struct ai_fz) : image_objsize(g, p); }

@@ -29,33 +29,37 @@ static ai_noinline int wake_parked(struct ai *g, uintptr_t now,
 static ai_noinline union u *yield_sw_wait(struct ai *g, uintptr_t my_wake, int my_wait_fd, int my_events, int me_live);
 static ai_noinline void wait_one(int fd, int events, uintptr_t ms);
 static ai_noinline word missing_tag(struct ai *g);
-bool lambp(struct ai *g, word x);
-bool lexbound(struct ai *g, struct env *d, word x);
+static bool lambp(struct ai *g, word x);
+static bool lexbound(struct ai *g, struct env *d, word x);
 static int parked_ready(struct ai *g, union u *n, uintptr_t now,
                                   struct ai_wait_fd const *fds, int nfds, int *cur, int ask);
 static int polled_ready(struct ai_wait_fd const *fds, int nfds, int *cur, int fd, int ev);
 static int task_live(struct ai *g, union u *head, intptr_t pid, int me_live);
-intptr_t ai_ceilnet(struct ai *g, word x);
+static intptr_t ai_ceilnet(struct ai *g, word x);
 static lvm(ap_next);
 static lvm(help_ret_more);
 static lvm(help_ret_scare);
+static lvm(lvm_add_coin);
 static lvm(lvm_coin_op);
+static lvm(lvm_mul_coin);
+static lvm(lvm_numap);
 static lvm(lvm_numtap);
+static lvm(lvm_resume);
 static struct ai *ai_raise(struct ai *c, word a, word b, union u const *K);
-struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x);
-struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x);
+static struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x);
+static struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x);
 static struct ai *ana_d(struct ai *g, struct env **b, word exp);
 static struct ai *c0_i(struct ai *g, struct env **c, lvm_t *i);
-struct ai *c0_ix(struct ai *g, struct env **c, lvm_t *i, word x);
+static struct ai *c0_ix(struct ai *g, struct env **c, lvm_t *i, word x);
 static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_t exp);
 static struct ai *enscope(struct ai *g, struct env *par, word args, word imps);
-struct ai *eset(struct ai *g, struct env **c, int k, word v);
+static struct ai *eset(struct ai *g, struct env **c, int k, word v);
 static struct ai *lbox(struct ai *g);
 static struct ai *ldels(struct ai *g, word lam, word l);
-struct ai *lset(struct ai *g, word y, int k, word v);
+static struct ai *lset(struct ai *g, word y, int k, word v);
 static struct ai *pushl(struct ai*g);
 static struct ai *rev(struct ai *g, word l);
-struct ai *sset(struct ai *g, word s, int k, word v);
+static struct ai *sset(struct ai *g, word s, int k, word v);
 static union u *parked_find(struct ai *g, intptr_t pid, union u **prevp);
 static union u *run_splice_at(struct ai *g, union u *tail, union u *n);
 static void parked_drop(struct ai *g, union u *prev, union u *n);
@@ -63,14 +67,14 @@ static word *task_help(struct ai *g);
 static word assq(struct ai *g, word l, word k);
 static word eget(struct ai *g, struct env *e, int k);
 static word lget(struct ai *g, word y, int k);
-word lidx(struct ai*g, word x, word l);
+static word lidx(struct ai*g, word x, word l);
 static word memq(struct ai *g, word l, word k);
 static word sget(struct ai *g, word s, int k);
 // ============================================================================
 // ev
 // ============================================================================
 static ai_inline struct ai *pushl(struct ai*g) { return intern(ai_strof(g, "\\")); }
-struct ai *c0(struct ai *g, lvm_t *y);
+static ai_noinline struct ai *c0(struct ai *g, lvm_t *y);
 struct ai *ai_eval_(struct ai *g);
 
 // function state using this type
@@ -87,10 +91,10 @@ struct env {
 typedef Ana(ana);
 typedef Cata(cata);
 static Ana(ana_2, word, word);
-Cata(pull) { return ai_ok(g) ? ((cata*) pop1(g))(g, c) : g; }
+static Cata(pull) { return ai_ok(g) ? ((cata*) pop1(g))(g, c) : g; }
 
 // generic instruction ana aps
-ai_inline struct ai *c0_ix(struct ai *g, struct env **c, lvm_t *i, word x) {
+static ai_inline struct ai *c0_ix(struct ai *g, struct env **c, lvm_t *i, word x) {
  return incl(*c, 2), ai_push(g, 3, c1_ix, i, x); }
 
 static ai_inline struct ai *c0_i(struct ai *g, struct env **c, lvm_t *i) {
@@ -102,7 +106,7 @@ static ai_inline struct ai *c0_i(struct ai *g, struct env **c, lvm_t *i) {
 enum { EStack, EArgs, EImps, ELams, EBranch, EExit, ESites, ESrc, EFars };
 static ai_inline word eget(struct ai *g, struct env *e, int k) {
  return ai_mapget(g, zero, putcharm(k), e->tab); }
-struct ai *eset(struct ai *g, struct env **c, int k, word v) {
+static struct ai *eset(struct ai *g, struct env **c, int k, word v) {
  g = ai_push(g, 3, putcharm(k), v, (*c)->tab);   // sp0 key, sp1 val, sp2 map
  if (ai_ok(g = ai_mapput(g))) g->sp++;           // mapput leaves the map: drop it
  return g; }
@@ -119,13 +123,13 @@ enum { LThread, LImps };
 enum { SEntry, SCell };
 static ai_inline word sget(struct ai *g, word s, int k) {
  return ai_mapget(g, zero, putcharm(k), s); }
-struct ai *sset(struct ai *g, word s, int k, word v) {
+static struct ai *sset(struct ai *g, word s, int k, word v) {
  g = ai_push(g, 3, putcharm(k), v, s);
  if (ai_ok(g = ai_mapput(g))) g->sp++;
  return g; }
 static ai_inline word lget(struct ai *g, word y, int k) {
  return ai_mapget(g, zero, putcharm(k), B(y)); }
-struct ai *lset(struct ai *g, word y, int k, word v) {   // ⚠ y must be rooted: a
+static struct ai *lset(struct ai *g, word y, int k, word v) {   // ⚠ y must be rooted: a
  g = ai_push(g, 3, putcharm(k), v, B(y));                       //   growing put allocates
  if (ai_ok(g = ai_mapput(g))) g->sp++;
  return g; }
@@ -165,7 +169,7 @@ static word assq(struct ai *g, word l, word k) {
  for (; chainp(l); l = B(l)) if (eql(g, k, AA(l))) return A(l);
  return 0; }
 
-struct ai *append(struct ai *g) {
+static struct ai *append(struct ai *g) {
  uintptr_t i = 0;
  for (word l; ai_ok(g) && chainp(g->sp[0]); i++)
   l = B(g->sp[0]),
@@ -178,7 +182,7 @@ struct ai *append(struct ai *g) {
  return g; }
 
 // don't inline this so callers can tail call optimize
-ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
+static ai_noinline struct ai *c0(struct ai *g, lvm_t *y) {
  // every in-place store below is precisely barriered (gen_wb_cell/two), so a
  // mid-compile collection stays minor. the opfix prepass runs first; a chain whose
  // head is already a top is a constructed direct application (never readable
@@ -320,7 +324,7 @@ struct ai *ai_eval_(struct ai *g) {
 #endif
 }
 
-word lidx(struct ai*g, word x, word l) {
+static word lidx(struct ai*g, word x, word l) {
  word i = 0;
  for (; chainp(l); i++, l = B(l)) if (eql(g, x, A(l))) return i;
  return -1; }
@@ -466,8 +470,8 @@ static Ana(c0_cond_r) { return
   g = c0_cond_r(g, c, BB(x))), g); }
 
 
-struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x);
-struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x) {
+static struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x);
+static struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x) {
  if (!ai_ok(g)) return g;
  bool imfp =
   g->sp[0] == (word) c1_ix &&
@@ -513,7 +517,7 @@ struct ai *ana_ap(struct ai *g, struct env **c, intptr_t x) {
  return g; }
 
 
-struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x) {
+static struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x) {
  if (chainp(x)) {
   word y = A(x);
   avec(g, y, g = ana_ap_r2l(g, c, B(x)));
@@ -522,7 +526,7 @@ struct ai *ana_ap_r2l(struct ai *g, struct env **c, word x) {
   if (ai_ok(g)) g = eset(g, c, EStack, pop1(g)); }
  return g; }
 
-ai_inline bool lambp(struct ai *g, word x) {
+static ai_inline bool lambp(struct ai *g, word x) {
  struct ai_str *n;                                      // headed by the named symbol \ (nom_str 0 for a bare mint / non-sym)
  return chainp(x) && chainp(B(x)) && chainp(B(B(x))) &&
   (n = nom_str(g, A(x))) && len(n) == 1 && txt(n)[0] == '\\'; }
@@ -541,7 +545,7 @@ static struct ai *ldels(struct ai *g, word lam, word l);
 
 // a lexically bound nom shadows a macro of the same spelling (ev.l's wx/cprop
 // carry the twin guard). binder rosters only -- imps may record undefined globals.
-bool lexbound(struct ai *g, struct env *d, word x) {
+static bool lexbound(struct ai *g, struct env *d, word x) {
  for (; !zerop(d); d = d->par)
   if (memq(g, eget(g, d, EArgs), x) || memq(g, eget(g, d, EStack), x) ||
       memq(g, eget(g, d, EFars), x) || assq(g, eget(g, d, ELams), x)) return true;
@@ -837,7 +841,7 @@ lvm(lvm_scare) {
  return Pack(g), ai_raise(g, a, b, help_more_k); }
 // the missing miss sentinel: a private static address no book value can equal,
 // so a name bound to zero stays distinct from no entry at all.
-union u const no_entry[1];
+static union u const no_entry[1];
 // the GC-free C-data emitters (defined below), forward-declared for lvm_index's unheard-miss face.
 struct ai *ioputs(struct ai*, char const*),
                  *ioputc(struct ai*, int);
@@ -892,7 +896,7 @@ lvm(lvm_index) {
 #define NumapHave(self) if (Sp < Hp + 2) { \
  Pack(g); g = ai_please(g, 2); if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g); \
  Unpack(g); ai_musttail return Ap(self, g); }
-lvm(lvm_numap) {
+static lvm(lvm_numap) {
  NumapHave(lvm_numap);
  word h = hot_hook(g->hot_numap);
  word n = Sp[1], x = Sp[0], *dst = Sp - 2, ret = word(Ip + 1);
@@ -974,8 +978,8 @@ static lvm(lvm_coin_op) {
  word *dst = Sp - 2, ret = word(Ip + 1);
  dst[0] = a, dst[1] = f, dst[2] = b, dst[3] = ret;
  Sp = dst; Ip = (union u*) numap_drive; return Continue(); }
-lvm(lvm_add_coin) { { g->b = (ai_word) (DieAdd); ai_musttail return Ap(lvm_coin_op, g); } }
-lvm(lvm_mul_coin) { { g->b = (ai_word) (DieMul); ai_musttail return Ap(lvm_coin_op, g); } }
+static lvm(lvm_add_coin) { { g->b = (ai_word) (DieAdd); ai_musttail return Ap(lvm_coin_op, g); } }
+static lvm(lvm_mul_coin) { { g->b = (ai_word) (DieMul); ai_musttail return Ap(lvm_coin_op, g); } }
 // `-` and `/` have no kind matrix; lvm_sub/lvm_quot intercept coins themselves and land here.
 lvm(lvm_sub_coin) { { g->b = (ai_word) (DieSub); ai_musttail return Ap(lvm_coin_op, g); } }
 lvm(lvm_quot_coin) { { g->b = (ai_word) (DieDiv); ai_musttail return Ap(lvm_coin_op, g); } }
@@ -1063,7 +1067,7 @@ lvm(lvm_ret0) { return
 // two frame words consumed -- the same landing as the retired retB path) and tail-jump the blob's
 // resume label. Ip is dead across a call-out (the blobs cache their twin in a Sp slot), so it rides
 // through unchanged.
-lvm(lvm_resume) {
+static lvm(lvm_resume) {
  lvm_t *t = (lvm_t*) (Sp[2] + ((word) Sp[1] >> 1));
  Sp[2] = Sp[0];
  Sp += 2;
@@ -1179,7 +1183,7 @@ static ai_inline int polled_ready(struct ai_wait_fd const *fds, int nfds, int *c
 // runnable and the scheduler never reaches its wait (the catch park carries no
 // state: Ip is unadvanced, so the saved ip is the catch, the pid its stack top).
 // the wait_fd arm is a floor, not a path: a slipped invariant costs a re-park.
-union u *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live) {
+static union u *find_runnable(struct ai *g, union u *head, uintptr_t now, int me_live) {
  for (union u *n = head->m; n != head; n = n->m)
   if (n[1].m->ap != lvm_task_exit && (uintptr_t) getcharm(n[3].x) <= now) {
    if (n[1].m->ap == lvm_wait && task_live(g, head, getcharm(n[8].x), me_live)) continue;
@@ -1746,7 +1750,7 @@ struct ai_zn ai_net(struct ai *g, word x) {
       return s; } }
   return zn(1, 0); }
 // $: the net observed once -- max(0, ceil) of its real part
-intptr_t ai_saturate(struct ai *g, word x) {
+static intptr_t ai_saturate(struct ai *g, word x) {
   // the charm lane is exactness, not speed: the net is a double, so above 2^53 a
   // charm comes back rounded -- and $ is the identity on every green charm (spec.l).
   if (charmp(x)) { intptr_t n = getcharm(x); return n <= 0 ? 0 : n; }
@@ -1764,7 +1768,7 @@ lvm(lvm_saturate) {
 // saturate is this one with its floor raised to 0 and bit is it with the ceiling lowered to 1.
 // it saturates at the charm bounds like every rung below it: a charm is the codomain, so a
 // measure that will not fit lands on the edge rather than wrapping or widening.
-intptr_t ai_ceilnet(struct ai *g, word x) {
+static intptr_t ai_ceilnet(struct ai *g, word x) {
   if (charmp(x)) return getcharm(x);
   ai_flo_t re = ai_net(g, x).re;
   if (re >= (ai_flo_t) maxcharm) return maxcharm;
