@@ -340,6 +340,34 @@ until rung 6.
   nhome=0 TODAY — locals in registers for the first time on riscv's t0..t3
   pool; thumb2's pool is empty so cs seats only. ccarch/ccriscv gate each.
 
+  **OPENED 2026-08-28 (ee160604): MOON_ABLATE=uni opts a remaining ISA into
+  the one build; a64 is calibrated and gate-green, NOT yet flipped.** The a64
+  work forced the classifier to grow up, and every advance came from chasing
+  a real face: (a) a soft site costs its callee's TRANSITIVE hard count
+  (nhin, memoized, cycle-floored — lvm_add_string's spliced seq_cat brought
+  four memcpys and the armed shadow wrapped four homes at nineteen calls);
+  (b) a MUSTTAIL tail rides free where a plain soft tail splices (the
+  contract owes the jump vs the inlret door — gcp's plain ret-ternary
+  splices both copy fns, the VM fleet's ai_musttail sites never do);
+  (c) the fn-level count is a PATH MAXIMUM (the pmax lesson at AST grain: an
+  if takes its heavier arm, loop weight multiplies, goto bars) and
+  leaf-SHAPED means at most two cold weighted crossings — one depth-0 call
+  no longer costs a hot fn its homes (gxr, irB, hdf all compute on arrivals
+  and wrap exactly at the call); (d) d128 material refuses every param
+  verdict — the spilled params are what FREE the wide-pair park's registers
+  (mag_divmod's cells doubled under pointer rides; with wd9 held, w2's inner
+  mul went CELL-FREE for the first time, m128r on the park). x64 default:
+  −1935 forms vs the dance, corpus insns −0.2% vs obuild (the optimistic
+  pre-nhin config read −1.0% — its edge lived in gcp-class fns where
+  homed-through-storm won dynamically because per-PATH crossings are rare;
+  chasing that residual wants path frequency, not more static counts).
+  a64 under the knob: −1391 forms vs the dance, zero genfails over 86 TUs,
+  test_ccarm64 153/153, test_cts_arm64 211/220 (the corpus reference),
+  moon-tar/gzip-arm64 build+run+roundtrip. arm64check.sh fails on BOTH
+  worlds — the local cross-gcc predates musttail (environmental, recorded).
+  THE A64 FLIP still wants dynamic pricing on silicon (pi.lan) or an explicit
+  census+gates decision like the sweeps arc took; rv64/t32 untouched.
+
 ## the standing constraints (read before building)
 
 - the staging quad r0–r3 belongs to expression staging through rung 5; the
