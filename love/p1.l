@@ -19,7 +19,7 @@
                     (go k) (? (<= n k) () (= (s k) c) 1 (go (+ k 1)))
                     (go 0))
    (p1-bits c) (+ (? (? (= c 12) 1 (p1-cin? " \t\n\r" c)) 2 0)
-                (+ (? (p1-cin? "!#$%&*+-./:<=>?\\^|~" c) 4 0)
+                (+ (? (p1-cin? "!#$%&*+-./:<=>?@\\^|~" c) 4 0)
                 (+ (? (? (= c 12) 1 (p1-cin? " \t\n\r;#()[]{}\"," c)) 8 0)
                 (+ (? (p1-cin? "([{" c) 16 0)
                 (+ (? (p1-cin? ")]}" c) 32 0)
@@ -116,8 +116,10 @@
    ; and factored later by opfix. ⚠ a trailing '-' right before a digit is the
    ; next number's sign, not part of the run -- the run sheds it and the '-' is
    ; put back, so `!-5` is ! then -5.
+   ; ⚠ @ may START a run (@- and friends) but never EXTEND one: past the first char it
+   ; is the tuple sigil, so `!@0` is ! then @0 and not the symbol !@.
    (p1-run cl acc)
-     (? (? (link? cl) (p1-opc? (cap cl)) ())
+     (? (? (link? cl) (? (= (cap cl) 64) (nil? (link? acc)) (p1-opc? (cap cl))) ())
         (p1-run (p1-cup cl) (link (cap cl) acc))
         ; the run ended: shed a trailing '-' if a digit follows and the run has
         ; more than that '-' to it, and hand the '-' back for the number lane.
@@ -196,7 +198,12 @@
                  (& (p1-cls c) 32) ()
                  (= c 34) (p1-str r ())
                  (= c 39) (p1-lift (name "\\") r head)
-                 (= c 64) (? (p1-glued? r) (p1-lift 'tuple r head) (link (name "@") r))
+                 ; @ glued to an operator char is an operator RUN (@- and friends), not the
+                 ; tuple sigil: a datum cannot start with one. the run's own shed rule keeps
+                 ; @-5 a number, exactly as it keeps !-5.
+                 (= c 64) (? (? (link? r) (p1-opc? (cap r)) ()) (p1-op cl)
+                             (p1-glued? r) (p1-lift 'tuple r head)
+                             (link (name "@") r))
                  (= c 44) (link (name ",") r)
                  (? (p1-opc? c) (nil? numlead) ()) (p1-op cl)
                  (p1-dig? c) (p1-nop cl)

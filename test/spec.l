@@ -675,6 +675,7 @@
  (2 = (|| 0 2 3)) ('(1 2 3) = [1 2 3]) (6 = (do 1 2 6)) (3 = (let a 1 b 2 (a + b)))
  (1 = (quote 1)) ('a = (quote a))                                  ; quote, the macro spelling of '
  (3 = (:- (a + b) a 1 b 2)) ('big = (?- 'else (1 < 2) 'big)) (9 = ((<=< (+ 1) (\ x (x * 2))) 4))
+ ('two = (2 @- 'else 2 'two)) ('else = (9 @- 'else 2 'two))   ; @- fronts the fallthrough, subject stays
  (id? () (list)) (tray? (tuple)) (tablet? (hash)) (id? () (unless))   ; ⚠ the zero-operand macro
  (id? () (:)) (id? () (?)) (id? () (\)))                           ;   ..and the empty forms, still their head's value
 

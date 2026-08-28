@@ -15,38 +15,38 @@
 
 (module 'peg
 (: (eps s y n) (y s ())
-   (lit l s y n) (? (tally l <= tally s && l = snip s 0 (tally l))
-                  (y (snip s (tally l) (tally s)) [l])
+   (lit l s y n) (? (#l <= #s && l = snip s 0 #l)
+                  (y (snip s #l #s) [l])
                   (n s))
    ; ⚠ the payload element is a ONE-CHAR STRING, not the charm: every element a peg
    ; parser yields is then a string fragment, so a consumer's join is pure concat.
    ; the predicate still sees the charm.
-   (one p s y n) (? (0 < tally s && p (s 0))
-                  (y (snip s 1 (tally s)) [(snip s 0 1)])
+   (one p s y n) (? (0 < #s && p (s 0))
+                  (y (snip s 1 #s) [(snip s 0 1)])
                   (n s))
    (span p s y n) (:
-    (g j)(j < tally s && p (s j) ? (g (1 + j)) j)
+    (g j)(j < #s && p (s j) ? (g (1 + j)) j)
     i (g 0)
-    (y (snip s i (tally s)) [(snip s 0 i)]))
-   (alt a b s y n) (a s y (\ _ (b s y n)))
-   (seq a b s y n) (a s (\ s1 p1 (b s1 (\ s2 p2 (y s2 (p1 + p2))) n)) n)
+    (y (snip s i #s) [(snip s 0 i)]))
+   (alt a b s y n) (a s y (_ \ b s y n))
+   (seq a b s y n) (a s (s1 \ p1 \ b s1 (s2 \ p2 \ y s2 (p1 + p2)) n) n)
    (seqs l) (foldr seq eps l)
-   (opt a s y n) (a s y (\ _ (y s ())))
+   (opt a s y n) (a s y (_ \ y s ()))
    (skip a s y n) (a s (\ s1 _ (y s1 ())) n)
    (pmap f a s y n) (a s (\ s1 x (y s1 (f x))) n)
    (many a s y n) (a s
-    (\ s1 p1 (many a s1 (\ s2 p2 (y s2 (p1 + p2))) (\ _ (y s1 p1))))
-    (\ _ (y s ())))
+    (s1 \ p1 \ many a s1 (s2 \ p2 \ y s2 (p1 + p2)) (_ \ y s1 p1))
+    (_ \ y s ()))
    ; --- the set the consumers kept re-deriving (crew/lapiz/lapiz.l had all of these
    ; --- under a comment reading "the combinators peg's set lacked") ------------
    (nope s y n) (n s)                                            ; the always-failing parser: alts' unit
-   (notp a s y n) (a s (\ _ _ (n s)) (\ _ (y s ())))              ; NEGATIVE LOOKAHEAD -- consumes nothing either way
+   (notp a s y n) (a s (_ \ _ \ n s) (_ \ y s ()))              ; NEGATIVE LOOKAHEAD -- consumes nothing either way
    (many1 a) (seq a (many a))
    alts (foldr alt nope)
-   (pack a) (pmap (\ p [p]) a)                                   ; a whole payload folded to ONE element
-   (tag f a) (pmap (\ p [(f p)]) a)                              ; ..and that element built into a node
-   (dflt a v) (alt a (pmap (\ _ [v]) eps))                       ; a always yields ONE element, v when absent
-   (parse p s) (p s (\ r x (? (0 = tally r) x ())) (\ _ ()))     ; STRICT: whole input must parse
-   (runp p s)  (p s (\ r x x) (\ _ ())))                           ; LENIENT: keep the payload, ignore trailing slack
+   (pack a) (pmap (p \ [p]) a)                                   ; a whole payload folded to ONE element
+   (tag f a) (pmap (p \ [(f p)]) a)                              ; ..and that element built into a node
+   (dflt a v) (alt a (pmap (_ \ [v]) eps))                       ; a always yields ONE element, v when absent
+   (parse p s) (p s (r \ x \ r @ "" x) ())     ; STRICT: whole input must parse
+   (runp p s)  (p s 0 ()))                           ; LENIENT: keep the payload, ignore trailing slack
 
 ) ; module peg

@@ -18,48 +18,34 @@
 
 ; salt-file is out because test/host/salt.l is written against it: it takes the
 ; path, where `salt` reads the two the environment names.
-(module (salt salt salt-all salt-one salt-has? salt-file)
-(:
-   ; --- reading one file ------------------------------------------------------
-   ; overlay path's settings onto the tablet c, mutated and answered back. the open
-   ; is the presence test. `sound` answers three ways -- the datum consed onto the
-   ; rest, () at a clean end, `torn` on a dropped paren -- so ask two?, never spin.
-   (salt-file path c)
-    (: q (open path "r")
-       (? q (: t (slurp q)
-               (go x) (: r (sound x)
-                          (? (two? r)
-                             (: d (cap r)
-                                _ (? (&& (two? d) (name? <d)) (pin c <d >d) 0)
-                                (go (cup r)))
-                             0))                               ; a clean end, or torn: keep what landed
-               _ (go t)
-               _ (close q)
-               c)
-          c))
+(module (salt salt salt-all salt-one salt-has? salt-file) (:
+ ; --- reading one file ------------------------------------------------------
+ ; overlay path's settings onto the tablet c, mutated and answered back. the open
+ ; is the presence test. `sound` answers three ways -- the datum consed onto the
+ ; rest, () at a clean end, `torn` on a dropped paren -- so ask two?, never spin.
+ (salt-file path c)
+  (open path "r" @ () c q (: t (slurp q)
+                              (go x) (sound x @ (d . u) (two? d && name? <d && pin c <d >d, go u))
+                            (go t, close q, c)))
 
-   ; --- the door --------------------------------------------------------------
-   ; HOME, not the seat: /usr/bin/love seats at /usr and nobody's settings live in
-   ; /usr/etc. reading it wrong looks like no config at all, which is legal here.
-   (salt-user app) (: h (getenv "HOME")
-                      (? (string? h) (h + "/.love/etc/" + (string app) + ".l") ()))
-   (salt-here app) ("." + (string app) + ".l")
+ ; --- the door --------------------------------------------------------------
+ ; HOME, not the seat: /usr/bin/love seats at /usr and nobody's settings live in
+ ; /usr/etc. reading it wrong looks like no config at all, which is legal here.
+ (salt-user a) (getenv "HOME" @ h (string? h && h + "/.love/etc/" + string a + ".l"))
+ (salt-here a) ("." + string a + ".l")
 
-   (salt app) (: c (tablet 0)
-                 u (salt-user app)
-                 _ (? (string? u) (salt-file u c) 0)
-                 _ (salt-file (salt-here app) c)
-                 c)
+ (salt app) (: c {} u (salt-user app)
+             (string? u && salt-file u c,
+              salt-file (salt-here app) c,
+              c))
 
-   ; --- reading a setting -----------------------------------------------------
-   ; the whole tail, or (); and the first operand, or a default. an absent key and
-   ; one written with no operand are both (), so a switch is `(singleton 1)`.
-   (salt-all c k)   (peep c k ())
-   (salt-one c k d) (: v (peep c k ()) (? (two? v) <v d))
+ ; --- reading a setting -----------------------------------------------------
+ ; the whole tail, or (); and the first operand, or a default. an absent key and
+ ; one written with no operand are both (), so a switch is `(singleton 1)`.
+ salt-all 1
+ (salt-one c k d) (c k @ (a . _) a d)
 
-   ; is nm listed under k? a roster entry is a bare name or `(name "hint")`
-   (salt-has? c k nm)
-    (: (go l) (? (! (two? l)) ()
-                 (: e <l (? ((? (two? e) <e e) = nm) [1 e] (go >l))))
-       (go (salt-all c k))))
-) ; module salt
+ ; is nm listed under k? a roster entry is a bare name or `(name "hint")`
+ (salt-has? c k nm)
+  (: (go (e . u)) (<e @ ^nm [1 e] (go u))
+   (go (salt-all c k)))))

@@ -306,8 +306,16 @@
 ; reads (). test a result with ? or id?, not arithmetic.
 (:: '&& (\ l (: (and l) (? (two? (cup l)) (list '? (cap l) (and (cup l)) ()) (cap l)) (? (two? l) (and l) 1))))
 (:: '|| (\ l (: (or l) (? (two? l) (: y (nom 0) (list ': y (cap l) (list '? y y (or (cup l))))) ()) (or l))))
+; end weighting: the head argument moves to the tail, so the form a long body would
+; have buried -- a `:` body, a `?` fallthrough -- is read first instead of last.
+; ⚠ a `:` these build cannot carry a DESTRUCTURING binding head: the pattern rewrite
+; that makes (f (a . u)) bind a and u runs in the read pass, ahead of `::`, so the
+; names compile as book lookups and miss. plain parameters are fine.
 (:: ':- (\ a (link ': (cat (cup a) (link (cap a) ())))))
 (:: '?- (\ a (link '? (cat (cup a) (link (cap a) ())))))
+; @ carries a SUBJECT the other two lack, so @- moves the second argument, not the
+; first: (x @- dflt p v ..) is (x @ p v .. dflt), and the subject stays where it reads.
+(:: '@- (\ a (link '@ (link (cap a) (cat (cup (cup a)) (link (cap (cup a)) ()))))))
 (:: '>>= (\ l (link (last l) (init l))))
 (:: '<=< (\ g (: y (nom 0) (list '\ y (foldr (\ f x (list f x)) y g)))))
 ; (pins t k v ..): pin each pair onto an EXISTING tablet -- the mutable-accumulator twin of {..},
@@ -452,7 +460,8 @@
                                                     ; LEFT of it as its parameter: (map $ a \ f a) is (map (\ a (f a))),
                                                     ; not a match against ($ map a). a looser `\` made that a silent trap.
  -1 (pins (tablet 0)                                ; --- ARITY -1: spaced, no bound. a left, then all of them
- '? 10 '@ 10                                        ; the CLAUSE forms: cond, and match -- every arm stays an operand
+ '? 10 '@ 10 '@- 10                                 ; the CLAUSE forms: cond, and match -- every arm stays an operand
+                                                    ; (@- rides @'s band so it reads infix; :- and ?- are prefix-only)
  ': 3 ':= ':)                                       ; the binder, loosest of all; := is a bare nom, so it NAMES
                                                     ; `:` and takes its band -- an alias cannot drift from it
  -2 (pins (tablet 0)                                ; --- ARITY -2: spaced, and it CHAINS. a left and a right, but
