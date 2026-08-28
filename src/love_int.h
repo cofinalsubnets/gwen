@@ -687,7 +687,8 @@ struct ai
  *ored(struct ai *g, int kind), *zflush(struct ai*g);
 uintptr_t
  bshape_n(word a, word b),
- shash(struct ai *g, word x, struct arib *env),
+ shash(struct ai *g, word x, struct arib *env, word *base),
+ hash_at(struct ai *g, intptr_t x, word *base),
  map_probe(struct ai *g, word m, word k, bool *found);
 struct ai_str *seq_cat(struct ai *g, void *w, word a, word b);
 intptr_t
@@ -709,7 +710,7 @@ ai_flo_t vop_flo(int op, ai_flo_t a, ai_flo_t b);
 bool
  bio_rpending(struct ai_bio *b),
  wait_buffered(struct ai *g, lvm_t *ap, word x, int fd),
- clo_nfhash(struct ai *g, word x, uintptr_t *out),
+ clo_nfhash(struct ai *g, word x, uintptr_t *out, word *base),
  fn_partialp(union u *k),
  in_heap(struct ai *c, word x),
  iop(word x),

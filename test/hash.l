@@ -17,7 +17,11 @@
  ; (dig x) exposes the runtime hashing method: a fixnum, equal for eql keys
  (charm? (dig 'k))
  (= (dig 'k) (dig 'k))
- (= (dig '(1 2)) (dig '(1 2))))
+ (= (dig '(1 2)) (dig '(1 2)))
+ ; a lambda leaf hashes its source, and a quote body in that source walks as data --
+ ; that re-entrant walk scratches above the elements still pending beside it, so the
+ ; leading 1/3 still reaches the digest
+ (nil? (= (dig [1 (\ a (\ 5)) 2]) (dig [3 (\ a (\ 5)) 2]))))
 
 ; {…} reader form: splices a list operand into (hash …), wraps an atom as (hash x) --
 ; a BOX. {} reads to the EMPTY MAP directly: the reader emits (tablet 0) -- () is the

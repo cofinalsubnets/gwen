@@ -3,7 +3,7 @@
 #include "love_int.h"
 // this file's own, forward-declared so order within it does not matter.
 static ai_noinline struct ai *map_grow(struct ai *g);
-static ai_noinline uintptr_t hash_two(struct ai *g, word x);
+static ai_noinline uintptr_t hash_two(struct ai *g, word x, word *base);
 static ai_noinline word ai_mapdel(struct ai *g, word m, word k, word dflt);
 // ============================================================================
 // map (lookup-lambda backed by an open-addressed thread; see tabp comment)
@@ -270,37 +270,44 @@ lvm(lvm_keys) {
  Ip += 1;
  ai_musttail return Continue(); }
 
-ai_noinline uintptr_t hash_two(struct ai *g, word x) {
- word *base = off_pool(g), *top = base + g->len, *w = base;
+// `base` is where this walk's worklist starts, on the eqv_at pattern: a leaf that is
+// a lambda hashes its source, and that source can hold a quote to walk as data -- the
+// re-entrant call scratches above the elements still pending here.
+ai_noinline uintptr_t hash_two(struct ai *g, word x, word *base) {
+ word *top = off_pool(g) + g->len, *w = base;
  for (uintptr_t h = mix;; x = *--w) {
   while (chainp(x)) {
    if (w == top) __builtin_trap();       // worklist overflow: a cycle
    h = (h ^ mix) * mix;                  // mark a chain node
    *w++ = A(x), x = B(x); }
-  h = (h ^ hash(g, x)) * mix;          // x is a leaf: hash won't recur
+  h = (h ^ hash_at(g, x, w)) * mix;     // x is a leaf: only a lambda source recurses
   if (w == base) return h; } }
 
 // the anchor an out-of-pool ap hashes against: the offset survives a bake/wake
 // where the raw address does not (a bake-time bucket index would miss at wake and
 // every nif-keyed table would silently read empty).
 static const char hash_base[1] = {0};
-struct arib; uintptr_t shash(struct ai *g, word x, struct arib *env);  // α-invariant source hash
-bool clo_nfhash(struct ai *g, word x, uintptr_t *out);  // partial-app -> capture-substitution normal-form hash (the beta bridge)
+struct arib; uintptr_t shash(struct ai *g, word x, struct arib *env, word *base);  // α-invariant source hash
+bool clo_nfhash(struct ai *g, word x, uintptr_t *out, word *base);  // partial-app -> capture-substitution normal-form hash (the beta bridge)
+// the walk-from-nothing entry; hash_at is the same walk continued above a live
+// worklist. a charm settles here so the hot key never pays for the hand-off.
 uintptr_t hash(struct ai *g, intptr_t x) {
+ return charmp(x) ? rot(x*mix) : hash_at(g, x, off_pool(g)); }
+uintptr_t hash_at(struct ai *g, intptr_t x, word *base) {
  if (charmp(x)) return rot(x*mix);
  if (!datp(x)) {
    // out-of-pool: offset from hash_base. in-pool: a sourced lambda hashes its
    // \-expr α-invariantly (agreeing with `=`), else by length. all GC-stable.
    if (!in_heap(g, x)) return rot((x - (intptr_t) hash_base) * mix);   // a tenured closure lives in the major pool, still in-heap
    union u *k = cell(x); struct ai_tag *tg = ttag(g, k);
-   if (tag_head(tg) < k) return shash(g, k[-1].x, 0);   // no-capture lambda: α-invariant source hash
+   if (tag_head(tg) < k) return shash(g, k[-1].x, 0, base);   // no-capture lambda: α-invariant source hash
    uintptr_t nf;                                        // partial-app over a sourced base: hash its capture-substitution
-   if (clo_nfhash(g, x, &nf)) return nf;                // normal form, so the beta bridge stays hash-consistent (=-equal -> same hash)
+   if (clo_nfhash(g, x, &nf, base)) return nf;          // normal form, so the beta bridge stays hash-consistent (=-equal -> same hash)
    uintptr_t r = mix;                                   // else (continuation / handle / bif-based partial-app): by object length
    for (union u *y = k; y < (union u*) tg; y++) r ^= r * mix;
    return r; }
  switch (typ(x)) {
-   case DChain: return hash_two(g, x);
+   case DChain: return hash_two(g, x, base);
    case DMint: return sym(x)->code;
    case DNom: return nom(x)->dig;                  // the cached spelling hash -- a serial would key
                                                    // bucket order to intern history (a reproducible-

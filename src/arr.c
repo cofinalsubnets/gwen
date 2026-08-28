@@ -433,52 +433,110 @@ struct arib { word la, lb; int na, nb; struct arib *up; };  // binder rib: (p…
 static int arib_pos(word s, word l, int n) {                // index of s among the first n of l, else -1
  for (int i = 0; i < n && chainp(l); i++, l = B(l)) if (A(l) == s) return i;
  return -1; }
+// a source is as deep as whatever built it, so the four walkers below descend in the
+// heap gap the eqv/hash worklists already use, not on the C stack. frames and ribs bump
+// up from the caller's live top, and what a walker hands to eqv_at / hash_at is its own
+// top, so those scratch above these. a frame's tag carries the resume: which descent,
+// and the spine flag / binder count to restore (the env comes off the rib's own `up`).
+enum { sw_app = 0, sw_lam = 1 };                            // descend into an operand | into a \-body
+#define sw_tag(kind, spine, n) ((word) (((uintptr_t) (n) << 2) | ((kind) << 1) | (spine)))
+#define sw_kind(t) (((t) >> 1) & 1)
+#define sw_spine(t) ((t) & 1)
+#define sw_n(t) ((int) ((uintptr_t) (t) >> 2))
+// written open over two plain pointers, not as calls over a struct: mooncc builds the
+// artifact, does not honour always_inline, and seats a struct local in memory
+#define sw_take(w, end, T) (((uintptr_t) ((end) - (w)) < Width(T) ? __builtin_trap() : (void) 0), \
+                            (w) += Width(T), (T*) ((w) - Width(T)))   /* gap exhausted: trap, never run past the pool */
+#define sw_drop(w, T) ((T*) ((w) -= Width(T)))
 static bool ai_isbs(struct ai *g, word h) {                  // h is the `\` symbol?
  struct ai_str *n; return (n = nom_str(g, h)) && n->len == 1 && n->bytes[0] == '\\'; }
-static bool salpha(struct ai *g, word a, word b, struct arib *env) {
- if (nomp(a) || nomp(b)) {
-  if (!nomp(a) || !nomp(b)) return false;
-  for (struct arib *r = env; r; r = r->up) {
-   int ia = arib_pos(a, r->la, r->na), ib = arib_pos(b, r->lb, r->nb);
-   if (ia >= 0 || ib >= 0) return ia == ib; }               // bound at this rib: positions agree
-  return a == b; }                                          // both free: same symbol
- if (!chainp(a) || !chainp(b)) return eqv(g, a, b);             // numbers / strings / atoms
- if (ai_isbs(g, A(a)) && ai_isbs(g, A(b))) {                        // both `\`-headed
-  word pa = B(a), pb = B(b);
-  if (!chainp(pa) || !chainp(pb)
-   || !chainp(B(pa)) || !chainp(B(pb))) return eqv(g, a, b);    // one-operand \ = quote: data
-  int na = 0, nb = 0;                                       // (\ p1..pn body): params = init, body = last
-  word t = pa;
-  for (; chainp(B(t)); t = B(t)) na++;
-  word ba = A(t);
-  for (t = pb; chainp(B(t)); t = B(t)) nb++;
-  word bb = A(t);
-  if (na != nb) return false;
-  struct arib r = { pa, pb, na, nb, env };
-  return salpha(g, ba, bb, &r); }
- return salpha(g, A(a), A(b), env) && salpha(g, B(a), B(b), env); }  // structural: app / ? / :
+// `scratch` is the caller's live worklist top: frames stack above the pairs the calling
+// eqv_at still has pending, and the data fallbacks below scratch above the frames.
+struct salf { word ra, rb, tag; };                          // the term to resume with
+static bool salpha(struct ai *g, word a, word b, struct arib *env, word *scratch) {
+ word *sw = scratch, *swend = off_pool(g) + g->len;
+ for (;;) {
+  bool ok;
+  if (nomp(a) || nomp(b)) {
+   if (!nomp(a) || !nomp(b)) return false;
+   ok = a == b;                                             // both free: same symbol
+   for (struct arib *r = env; r; r = r->up) {
+    int ia = arib_pos(a, r->la, r->na), ib = arib_pos(b, r->lb, r->nb);
+    if (ia >= 0 || ib >= 0) { ok = ia == ib; break; } } }    // bound at this rib: positions agree
+  else if (!chainp(a) || !chainp(b)) ok = eqv_at(g, a, b, sw);  // numbers / strings / atoms
+  else if (!ai_isbs(g, A(a)) || !ai_isbs(g, A(b))) {              // structural: app / ? / :
+   struct salf *f = sw_take(sw, swend, struct salf);
+   *f = (struct salf) { B(a), B(b), sw_tag(sw_app, 0, 0) };
+   a = A(a), b = A(b);
+   continue; }
+  else {                                                    // both `\`-headed
+   word pa = B(a), pb = B(b);
+   if (!chainp(pa) || !chainp(pb)
+    || !chainp(B(pa)) || !chainp(B(pb))) ok = eqv_at(g, a, b, sw);  // one-operand \ = quote: data
+   else {
+    int na = 0, nb = 0;                                     // (\ p1..pn body): params = init, body = last
+    word t = pa;
+    for (; chainp(B(t)); t = B(t)) na++;
+    word ba = A(t);
+    for (t = pb; chainp(B(t)); t = B(t)) nb++;
+    word bb = A(t);
+    if (na != nb) return false;
+    struct arib *r = sw_take(sw, swend, struct arib);
+    *r = (struct arib) { pa, pb, na, nb, env };
+    struct salf *f = sw_take(sw, swend, struct salf);
+    *f = (struct salf) { 0, 0, sw_tag(sw_lam, 0, 0) };      // the body is the \'s whole value
+    env = r, a = ba, b = bb;
+    continue; } }
+  if (!ok) return false;
+  for (;;) {                                                // this term holds: resume whatever wanted it
+   if (sw == scratch) return true;
+   struct salf *f = sw_drop(sw, struct salf);
+   if (sw_kind(f->tag) == sw_app) { a = f->ra, b = f->rb; break; }
+   env = ((struct arib*) sw_drop(sw, struct arib))->up; } } }  // a \-body: its value is the \'s, keep popping
 
 // α-invariant hash of a source \-expr, parallel to salpha: a bound variable hashes by its
 // binder coordinate (rib depth, position), a free variable by its symbol code, so α-equal
 // lambdas hash equal and the total order (cmp3, by repr hash) agrees with `=`.
-uintptr_t shash(struct ai *g, word x, struct arib *env) {
- if (nomp(x)) {
-  int d = 0;
-  for (struct arib *r = env; r; r = r->up, d++) {
-   int i = arib_pos(x, r->la, r->na);
-   if (i >= 0) return rot((uintptr_t) (d * 131 + i + 1) * mix); }
-  return hash(g, x); }                  // a free variable: its stable identity hash (mint serial / interned name . mint)
- if (!chainp(x)) return hash(g, x);
- if (ai_isbs(g, A(x))) {
-  word p = B(x);
-  if (!chainp(p) || !chainp(B(p))) return hash(g, x);         // one-operand \ = quote: data
-  int n = 0;
-  word t = p;
-  for (; chainp(B(t)); t = B(t)) n++;
-  word body = A(t);
-  struct arib r = { p, p, n, n, env };
-  return (mix * (uintptr_t) (n + 7)) ^ (shash(g, body, &r) * mix); }
- return (mix ^ (shash(g, A(x), env) * mix)) ^ (shash(g, B(x), env) * mix); }
+// the spine folds left, and the descents stack in the gap, as salpha's do.
+struct shf { uintptr_t h; word rest, tag; };                // rest: the spine past this descent
+uintptr_t shash(struct ai *g, word x, struct arib *env, word *base) {
+ word *sw = base, *swend = off_pool(g) + g->len;
+ uintptr_t h = mix, t;
+ bool spine = false;
+ for (;;) {
+  if (nomp(x)) {
+   int d = 0, i = -1;
+   struct arib *r = env;
+   for (; r; r = r->up, d++) if ((i = arib_pos(x, r->la, r->na)) >= 0) break;
+   t = r ? rot((uintptr_t) (d * 131 + i + 1) * mix)         // a bound variable: its binder coordinate
+         : hash_at(g, x, sw); }                            // a free one: its stable identity hash
+  else if (!chainp(x)) t = hash_at(g, x, sw);
+  else if (!ai_isbs(g, A(x))) {                             // structural: app / ? / :
+   struct shf *f = sw_take(sw, swend, struct shf);
+   *f = (struct shf) { h, B(x), sw_tag(sw_app, spine, 0) };
+   h = mix, spine = false, x = A(x);
+   continue; }
+  else {
+   word p = B(x);
+   if (!chainp(p) || !chainp(B(p))) t = hash_at(g, x, sw);  // one-operand \ = quote: data
+   else {
+    int n = 0;
+    word q = p;
+    for (; chainp(B(q)); q = B(q)) n++;
+    struct arib *r = sw_take(sw, swend, struct arib);
+    *r = (struct arib) { p, p, n, n, env };
+    struct shf *f = sw_take(sw, swend, struct shf);
+    *f = (struct shf) { h, 0, sw_tag(sw_lam, spine, n) };
+    env = r, h = mix, spine = false, x = A(q);
+    continue; } }
+  for (;;) {                                                // this term is hashed: fold it back
+   uintptr_t v = spine ? (h ^ t) * mix : t;
+   if (sw == base) return v;
+   struct shf *f = sw_drop(sw, struct shf);
+   h = f->h, spine = sw_spine(f->tag);
+   if (sw_kind(f->tag) == sw_app) { h = (h ^ (v * mix)) * mix, spine = true, x = f->rest; break; }
+   env = ((struct arib*) sw_drop(sw, struct arib))->up;
+   t = (mix * (uintptr_t) (sw_n(f->tag) + 7)) ^ (v * mix); } } }   // a \: wrapped by its binder count
 
 // --- the beta bridge: a closure value compares up to the capture-substitution
 // ev already performed -- (adder 5) = (\ x (+ x 5)). done without allocating: the
@@ -514,30 +572,50 @@ static bool clo_load(struct ai *c, word v, struct clonf *o) {
 
 // α-invariant hash of a residual's body, mirroring shash: a genuine binder by
 // coordinate, a filled binder by its captured value's hash, a free var by symbol
-static uintptr_t nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn, word *fv) {
- if (nomp(x)) {
-  int d = 0;
-  for (struct arib *r = env; r; r = r->up, d++) {
-   int i = arib_pos(x, r->la, r->na);
-   if (i >= 0) return rot((uintptr_t) (d * 131 + i + 1) * mix); }   // genuine binder
-  int j = arib_pos(x, fs, fn);
-  if (j >= 0) return hash(g, fv[j]);                      // filled binder: the captured value as a literal
-  return hash(g, x); }                                    // free var
- if (!chainp(x)) return hash(g, x);
- if (ai_isbs(g, A(x))) {
-  word p = B(x);
-  if (!chainp(B(p))) return hash(g, x);                   // quote: data
-  int n = 0; word t = p;
-  for (; chainp(B(t)); t = B(t)) n++;
-  word body = A(t);
-  struct arib r = { p, p, n, n, env };
-  return (mix * (uintptr_t) (n + 7)) ^ (nf_hash(g, body, &r, fs, fn, fv) * mix); }
- return (mix ^ (nf_hash(g, A(x), env, fs, fn, fv) * mix)) ^ (nf_hash(g, B(x), env, fs, fn, fv) * mix); }
-bool clo_nfhash(struct ai *g, word x, uintptr_t *out) {
+static uintptr_t nf_hash(struct ai *g, word x, struct arib *env, word fs, int fn, word *fv, word *base) {
+ word *sw = base, *swend = off_pool(g) + g->len;         // the same walk shash does
+ uintptr_t h = mix, t;
+ bool spine = false;
+ for (;;) {
+  if (nomp(x)) {
+   int d = 0, i = -1;
+   struct arib *r = env;
+   for (; r; r = r->up, d++) if ((i = arib_pos(x, r->la, r->na)) >= 0) break;
+   if (r) t = rot((uintptr_t) (d * 131 + i + 1) * mix);    // genuine binder
+   else { int j = arib_pos(x, fs, fn);
+          t = j >= 0 ? hash_at(g, fv[j], sw)             // filled binder: the captured value as a literal
+                     : hash_at(g, x, sw); } }            // free var
+  else if (!chainp(x)) t = hash_at(g, x, sw);
+  else if (!ai_isbs(g, A(x))) {
+   struct shf *f = sw_take(sw, swend, struct shf);
+   *f = (struct shf) { h, B(x), sw_tag(sw_app, spine, 0) };
+   h = mix, spine = false, x = A(x);
+   continue; }
+  else {
+   word p = B(x);
+   if (!chainp(p) || !chainp(B(p))) t = hash_at(g, x, sw);  // quote: data
+   else {
+    int n = 0; word q = p;
+    for (; chainp(B(q)); q = B(q)) n++;
+    struct arib *r = sw_take(sw, swend, struct arib);
+    *r = (struct arib) { p, p, n, n, env };
+    struct shf *f = sw_take(sw, swend, struct shf);
+    *f = (struct shf) { h, 0, sw_tag(sw_lam, spine, n) };
+    env = r, h = mix, spine = false, x = A(q);
+    continue; } }
+  for (;;) {
+   uintptr_t v = spine ? (h ^ t) * mix : t;
+   if (sw == base) return v;
+   struct shf *f = sw_drop(sw, struct shf);
+   h = f->h, spine = sw_spine(f->tag);
+   if (sw_kind(f->tag) == sw_app) { h = (h ^ (v * mix)) * mix, spine = true, x = f->rest; break; }
+   env = ((struct arib*) sw_drop(sw, struct arib))->up;
+   t = (mix * (uintptr_t) (sw_n(f->tag) + 7)) ^ (v * mix); } } }
+bool clo_nfhash(struct ai *g, word x, uintptr_t *out, word *base) {
  struct clonf o;
  if (!clo_load(ai_core_of(g), x, &o) || !o.fn) return false;   // o.fn == 0: a no-capture lambda, already hashed via shash upstream
  struct arib r = { o.rem, o.rem, o.nr, o.nr, 0 };
- *out = (mix * (uintptr_t) (o.nr + 7)) ^ (nf_hash(g, o.body, &r, o.fsyms, o.fn, o.fv) * mix);
+ *out = (mix * (uintptr_t) (o.nr + 7)) ^ (nf_hash(g, o.body, &r, o.fsyms, o.fn, o.fv, base) * mix);
  return true; }
 
 // does runtime value V equal the meaning of source term b? filled binder ->
@@ -554,36 +632,55 @@ static bool val_vs_src(struct ai *g, word V, word b, struct arib *rb, struct clo
 // (by coordinate), filled (a captured value), free (by symbol), or not-a-nom
 static bool nf_walk(struct ai *g, word a, struct arib *ra, struct clonf *ca,
                                   word b, struct arib *rb, struct clonf *cb, word *scratch) {
- if (nomp(a) || nomp(b)) {
-  int ka = 3; intptr_t ac = 0; word av = 0;              // 0 bound, 1 filled, 2 free, 3 not-a-nom
-  if (nomp(a)) {
-   int d = 0; ka = 2;
-   for (struct arib *r = ra; r; r = r->up, d++) { int i = arib_pos(a, r->la, r->na); if (i >= 0) { ka = 0; ac = (intptr_t) d * 4096 + i; break; } }
-   if (ka == 2) { int j = arib_pos(a, ca->fsyms, ca->fn); if (j >= 0) { ka = 1; av = ca->fv[j]; } } }
-  int kb = 3; intptr_t bc = 0; word bv = 0;
-  if (nomp(b)) {
-   int d = 0; kb = 2;
-   for (struct arib *r = rb; r; r = r->up, d++) { int i = arib_pos(b, r->la, r->na); if (i >= 0) { kb = 0; bc = (intptr_t) d * 4096 + i; break; } }
-   if (kb == 2) { int j = arib_pos(b, cb->fsyms, cb->fn); if (j >= 0) { kb = 1; bv = cb->fv[j]; } } }
-  if (ka == 0 || kb == 0) return ka == 0 && kb == 0 && ac == bc;   // a bound var matches only the same-coordinate bound var
-  if (ka == 1 && kb == 1) return eqv_at(g, av, bv, scratch);       // two captured values
-  if (ka == 1) return val_vs_src(g, av, b, rb, cb, scratch);
-  if (kb == 1) return val_vs_src(g, bv, a, ra, ca, scratch);
-  if (ka == 2 && kb == 2) return a == b;                           // two free vars
-  return false; }                                                  // free vs not-a-nom
- if (!chainp(a) || !chainp(b)) return eqv_at(g, a, b, scratch);
- if (ai_isbs(g, A(a)) && ai_isbs(g, A(b))) {
-  word pa = B(a), pb = B(b);
-  if (!chainp(B(pa)) || !chainp(B(pb))) return eqv_at(g, a, b, scratch);   // quote: data
-  int na = 0, nb = 0; word t = pa;
-  for (; chainp(B(t)); t = B(t)) na++;
-  word ba = A(t);
-  for (t = pb; chainp(B(t)); t = B(t)) nb++;
-  word bb = A(t);
-  if (na != nb) return false;
-  struct arib rA = { pa, pa, na, na, ra }, rB = { pb, pb, nb, nb, rb };
-  return nf_walk(g, ba, &rA, ca, bb, &rB, cb, scratch); }
- return nf_walk(g, A(a), ra, ca, A(b), rb, cb, scratch) && nf_walk(g, B(a), ra, ca, B(b), rb, cb, scratch); }
+ word *sw = scratch, *swend = off_pool(g) + g->len;    // the same walk salpha does
+ for (;;) {
+  bool ok;
+  if (nomp(a) || nomp(b)) {
+   int ka = 3; intptr_t ac = 0; word av = 0;             // 0 bound, 1 filled, 2 free, 3 not-a-nom
+   if (nomp(a)) {
+    int d = 0; ka = 2;
+    for (struct arib *r = ra; r; r = r->up, d++) { int i = arib_pos(a, r->la, r->na); if (i >= 0) { ka = 0; ac = (intptr_t) d * 4096 + i; break; } }
+    if (ka == 2) { int j = arib_pos(a, ca->fsyms, ca->fn); if (j >= 0) { ka = 1; av = ca->fv[j]; } } }
+   int kb = 3; intptr_t bc = 0; word bv = 0;
+   if (nomp(b)) {
+    int d = 0; kb = 2;
+    for (struct arib *r = rb; r; r = r->up, d++) { int i = arib_pos(b, r->la, r->na); if (i >= 0) { kb = 0; bc = (intptr_t) d * 4096 + i; break; } }
+    if (kb == 2) { int j = arib_pos(b, cb->fsyms, cb->fn); if (j >= 0) { kb = 1; bv = cb->fv[j]; } } }
+   if (ka == 0 || kb == 0) ok = ka == 0 && kb == 0 && ac == bc;   // a bound var matches only the same-coordinate bound var
+   else if (ka == 1 && kb == 1) ok = eqv_at(g, av, bv, sw);     // two captured values
+   else if (ka == 1) ok = val_vs_src(g, av, b, rb, cb, sw);
+   else if (kb == 1) ok = val_vs_src(g, bv, a, ra, ca, sw);
+   else ok = ka == 2 && kb == 2 && a == b; }                      // two free vars | free vs not-a-nom
+  else if (!chainp(a) || !chainp(b)) ok = eqv_at(g, a, b, sw);
+  else if (!ai_isbs(g, A(a)) || !ai_isbs(g, A(b))) {
+   struct salf *f = sw_take(sw, swend, struct salf);
+   *f = (struct salf) { B(a), B(b), sw_tag(sw_app, 0, 0) };
+   a = A(a), b = A(b);
+   continue; }
+  else {
+   word pa = B(a), pb = B(b);
+   if (!chainp(pa) || !chainp(pb)
+    || !chainp(B(pa)) || !chainp(B(pb))) ok = eqv_at(g, a, b, sw);  // quote: data
+   else {
+    int na = 0, nb = 0; word t = pa;
+    for (; chainp(B(t)); t = B(t)) na++;
+    word ba = A(t);
+    for (t = pb; chainp(B(t)); t = B(t)) nb++;
+    word bb = A(t);
+    if (na != nb) return false;
+    struct arib *rA = sw_take(sw, swend, struct arib); *rA = (struct arib) { pa, pa, na, na, ra };
+    struct arib *rB = sw_take(sw, swend, struct arib); *rB = (struct arib) { pb, pb, nb, nb, rb };
+    struct salf *f = sw_take(sw, swend, struct salf);
+    *f = (struct salf) { 0, 0, sw_tag(sw_lam, 0, 0) };
+    ra = rA, rb = rB, a = ba, b = bb;
+    continue; } }
+  if (!ok) return false;
+  for (;;) {                                             // this term holds: resume whatever wanted it
+   if (sw == scratch) return true;
+   struct salf *f = sw_drop(sw, struct salf);
+   if (sw_kind(f->tag) == sw_app) { a = f->ra, b = f->rb; break; }
+   rb = ((struct arib*) sw_drop(sw, struct arib))->up;        // a \-body: pop both ribs
+   ra = ((struct arib*) sw_drop(sw, struct arib))->up; } } }
 static bool clo_eq(struct ai *g, struct clonf *ca, struct clonf *cb, word *scratch) {  // residual α+value equality
  if (ca->nr != cb->nr) return false;                                   // different residual arity
  struct arib rA = { ca->rem, ca->rem, ca->nr, ca->nr, 0 }, rB = { cb->rem, cb->rem, cb->nr, cb->nr, 0 };
@@ -610,7 +707,7 @@ static bool eqv_at(struct ai *g, word a, word b, word *base) {
     bool pa = fn_partialp(ka), pb = fn_partialp(kb);
     if (!pa && !pb) {                                      // common case: two no-capture lambdas -> α-compare sources
      word sa = fn_src(c, ka, a), sb = fn_src(c, kb, b);
-     if (sa && sb) { if (!salpha(g, sa, sb, 0)) return false; a = b; continue; }
+     if (sa && sb) { if (!salpha(g, sa, sb, 0, w)) return false; a = b; continue; }
      return false; }                                      // a source-less function value -> identity (already failed)
     struct clonf ra_, rb_;                                // a partial-app is in play: bridge via the capture-substitution residual
     if (clo_load(c, a, &ra_) && clo_load(c, b, &rb_)) {

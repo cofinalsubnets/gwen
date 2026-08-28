@@ -45,5 +45,9 @@
   ; but a differing tail must stay NOT equal (the bridge's re-entrant eqv must not clobber pending pairs)
   (! (= (link ((\ v x (+ x v)) '(1 2)) (link 5 6)) (link ((\ v x (+ x v)) '(1 2)) (link 5 7))))
   (= (link ((\ v x (+ x v)) '(1 2)) (link 5 6)) (link ((\ v x (+ x v)) '(1 2)) (link 5 6)))
+  ; the same safety on the NO-CAPTURE path: salpha falls back to eqv for a quote body,
+  ; and that fallback scratches above the pending pairs, so the differing tail still tells
+  (! (= (link (\ a (\ 5)) (link 5 6)) (link (\ b (\ 5)) (link 5 7))))
+  (= (link (\ a (\ 5)) (link 5 6)) (link (\ b (\ 5)) (link 5 6)))
   (string? (show map))
   (< 10 (tally (show map)))))
