@@ -902,11 +902,10 @@
    vla "int s(int n){ int a[n]; a[0]=1; return a[0]; }"
    big "struct b { long a,b,c,d,e; };\n"
    (assert
-      ; the C99 VLA: x64 and arm64 carry the lane, riscv64 does not -- and says which
+      ; the C99 VLA: x64, arm64 and riscv64 carry the lane
       (okv? (cgt vla 'amd64))
       (okv? (cgt vla 'arm64))
-      (: g (cgt vla 'rv64)
-         (gripe? g && (gmsg g = "no lane for a variable-length array on rv64 (in s)")))
+      (okv? (cgt vla 'rv64))
       ; a >16-byte struct by value. the two halves refuse SEPARATELY and each
       ; names which half it is -- passing and returning are different lanes, and
       ; "codegen error" could never tell you which one you had
@@ -1203,45 +1202,9 @@
                                           (n + 1) n))))
                  (go fs 0))
    pre9 "long g(long x); "
-   ; ⚠ the wrapped-home and cs-grant lanes are KNOB-ONLY since moon-ssa rung 5
-   ; (param cells ride repack's chains by default; MOON_ABLATE=pcell restores
-   ; the lanes, and these laws pin that face -- the setenv round-trip below)
-   _ (setenv "MOON_ABLATE" "pcell")
-   irD (cgn (pre9 + "long f(long a, long b) { long s = a+b+a*b+a-b; g(1); return s+1; } int main() { return f(20, 22); }"))
-   irL (cgn (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
-   irS (cgn (pre9 + "long q(long a, long b) { long s = a+b+a*b+a-b; g(1); { long a = s; s = a+1; } return s+2; } int main() { return q(20, 22); }"))
-   irG (cgn (pre9 + "long w(long a, long b) { long s = a+b+a*b+a-b; g(1); if (s > 9) goto out; s = s+1; out: return s+1; } int main() { return w(20, 22); }"))
-   _ (assert
-      (two? irD) (two? irL) (two? irS) (two? irG)
-      (= 0 (wraps (fnf 'f <>irD)))                   ; dead across the call: no spills at all
-      (= 2 (wraps (fnf 'h <>irL)))                   ; live across: both homes keep their wrap
-      (= 1 (wraps (fnf 'q <>irS)))                   ; the shadowed a's blanket; b's own still drops
-      (wrapon? 'r6 (fnf 'q <>irS))                   ; ...and it is a's (r6, the first gp home; q elides, slots speak sp)
-      (= 2 (wraps (fnf 'w <>irG))))                  ; a goto fn wraps everything
-   ; -- callee-saved locals (the cs lane): a local touched under NESTED loops (depth >= 2)
-   ; homes on r11..r14 (machine r12-r15) even while it CROSSES calls -- the callee preserves
-   ; the register, so the home takes no wrap; the price is one save/restore pair in the
-   ; owner's frame, and only compounding iteration counts repay it. here j, s and i ride
-   ; r11/r12/r13 (rung 4 seats hottest-first, the loop weight breaking the raw-count
-   ; tie: the inner j outweighs s outweighs i) through g(j) unwrapped; the params keep
-   ; their slots.
-   irQ (cgn (pre9 + "long ql(long a, long n) { long s = 0; long i = 0; while (i < n) { long j = 0; while (j < n) { s = s + g(j) + a; j = j + 1; } i = i + 1; } return s; } int main() { return ql(3, 4); }"))
-   qf (fnf 'ql <>irQ)
-   _ (assert
-      (two? irQ)
-      (cspair? qf 'r11)                              ; j's save/restore pair, ONCE each -- the calls never wrap it
-      (cspair? qf 'r12)                              ; s's pair likewise
-      (cspair? qf 'r13)                              ; ...and i's
-      (= 1 (tally (filter (\ f (two? f && id? <f 'cmprm && id? <>f 'r13 && id? <>>f 'sp)) qf)))
-                                                     ; the outer cond fuses against n's slot (rung 3
-                                                     ;   repacks a's cell away, so no spelled offset)
-      (cspair? qf 'r14)                              ; ...and a itself rides a cs seat now
-      (member? '(add r11 r11 1) qf)                  ; the inner step is register-only
-      (member? '(add r13 r13 1) qf))                 ; ...and so is i's
-   _ (setenv "MOON_ABLATE" ())
-   ; ...and the DEFAULT face: no home -- the params spill at ENTRY (the first arg
-   ; store precedes every ALU op) where the old lane computed on the arrivals and
-   ; spilled only at the call; the cells are repack's to place from here
+
+   ; a call-crossing fn's param cells: the spills land at ENTRY (the first arg
+   ; store precedes every ALU op); the cells are repack's to place from here
    (fsti fs rg) (: (go l i) (? !(two? l) 99
                                (two? <l && (= <<l 'st) && (= (nthr <l 3) rg)) i
                                (go >l (i + 1)))
@@ -1438,68 +1401,6 @@
       (member? '(add r9 r9 r10) <>irB)                ; s accumulates in its home
       (member? '(add r5 r5 1) <>irB)))                ; i++ is ONE add on the home
 
-; -- arm64 homing (stage D): the same alive machinery rides AAPCS64. homes come
-; off r10..r14 (caller-saved, never an argument register -- every home takes a
-; prologue mov), wraps say fp (a4ize), an overflow param (the 9th long) reads
-; at fp+32 -- ABOVE the lr+fp push cells (the x64 base 16 was stage D's first
-; bug), and a name BORN in a call-bearing statement joins that statement's
-; record (m = g(a), n = g(b): m crosses the second call INSIDE one tick --
-; statement-grain liveness can't order intra-statement events, so the kill
-; rides the wrapset and such a local keeps its frame slot; stage D's second
-; bug, x64 only masked it because the folds erase intra-statement slot traffic
-; from the ranking).
-(: (cgna src) (: r (cparse <>(clex src))
-                (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () 'arm64) ()))
-   ; the two-param homes only (r10 r11) -- the vmap's direct slot stores ride
-   ; the remaining pool (r12 r13 r14) and are not spills (wraps' twin above)
-   (wrapsa fs) (: (go l n) (? !(two? l) n
-                              (: f2 <l
-                                 (go >l (? (two? f2 &&
-                                            (<f2 = 'st) &&
-                                            (<>f2 = 'fp) &&
-                                            member? <>>>f2 '(r10 r11))
-                                           (n + 1) n))))
-                  (go fs 0))
-   (ldat fs b k) (? !(two? fs) ()
-                    (: f2 <fs
-                       (? (two? f2 && (<f2 = 'ld) && (<>>f2 = b) && (<>>>f2 = k)) 1
-                          (ldat >fs b k))))
-   (hmovs fs) (: (go l n) (? !(two? l) n
-                             (: f2 <l
-                                (go >l (? (two? f2 &&
-                                           (<f2 = 'mov) &&
-                                           member? <>f2 '(r5 r6 r7 r8 r9))
-                                          (n + 1) n))))
-                 (go fs 0))
-   pre9 "long g(long x); "
-   ; the a64 homes are the same knob-only lane (moon-ssa rung 5)
-   _ (setenv "MOON_ABLATE" "pcell")
-   irDa (cgna (pre9 + "long f(long a, long b) { long s = a+b+a*b+a-b; g(1); return s+1; } int main() { return f(20, 22); }"))
-   irLa (cgna (pre9 + "long h(long a, long b) { long s = a+b+a*b; g(1); return s+a-b+a*b; } int main() { return h(20, 22); }"))
-   irOa (cgna "static long f9(long a, long b, long c, long d, long e, long f, long g2, long h, long i) { return a+h+i; } long q(long a) { return f9(a,2,3,4,5,6,7,8,9) - 17; } int main() { return (int)(q(1) + 24); }")
-   irKa (cgna (pre9 + "long k(long a, long b) { long m = g(a), n = g(b), p = m*n; return p; } int main() { return (int)(k(2,3) - 2); }"))
-   irBa (cgna "long g(long x); long p(long n) { g(1); long s = 0; long i; for (i = 0; i < n; i++) s = s + i*i; return s; } int main() { return (int)(p(4) + 28); }")
-   (assert
-      (two? irDa) (two? irLa) (two? irOa) (two? irKa) (two? irBa)
-      (member? '(mov r10 r0) <>irDa)                 ; a homes off the pool, one prologue mov
-      (member? '(mov r11 r1) <>irDa)
-      (= 0 (wrapsa <>irDa))                          ; dead across the call: no spills
-      (= 2 (wrapsa <>irLa))                          ; live across: both homes wrap
-      ; f9 is a LEAF, so the frame elision re-addressed it off sp (K=32,
-      ; K9=64): the 9th long reads above the whole reservation, where the
-      ; caller stack sits -- fp+32 through the off+K map, never x64's +16
-      (ldat <>irOa 'sp 64)
-      !(ldat <>irOa 'sp 48)
-      !(ldat <>irOa 'fp 32)                          ; no fp read survives in a frameless leaf
-      (= 0 (hmovs <>irKa))                           ; born-at-a-call locals keep their slots
-      (member? '(li r5 0) <>irBa)                    ; the free local s homes and its init
-      !(member? '(mov r5 r0) <>irBa)                 ;  DELIVERS there (the die: no r0 bridge)
-      (member? '(ld r0 fp -16) <>irBa)               ; n reloads per iteration (no cross-call pin)
-      (member? '(cmp r6 r0) <>irBa)                  ; ...and the cond compares off the reload
-      (member? '(add r5 r5 r9) <>irBa)               ; s accumulates 3-address (i*i in r9)
-      (member? '(add r6 r6 1) <>irBa)                ; the loop counter i ALSO homes (r6): its
-      (= 0 (wrapsa <>irBa)))
-   _ (setenv "MOON_ABLATE" ()))                      ; ++ no longer leans its own slot. zero wraps
 
 ; -- register-bound branch splices: a call-free cbinl predicate reads its args from
 ; REGISTERS. a var arg over a pinned/homed local ALIASES that register (zero forms);
@@ -2020,34 +1921,23 @@
 ; --- per-def promotion (moon-ssa rung 1), on hand forms straight through repack:
 ; one cell, two lifetimes -- the first crosses a call and keeps its frame cell,
 ; the second promotes onto its own range (the store self-drops into its seat);
-; the hull path (the pdef ablation) refuses the whole cell for the one call.
 (: gR {}
    _ (pin gR 'slots '((-16 8)))
-   gH {}
-   _ (pin gH 'slots '((-16 8)))
-   _ (pin gH 'abl '(pdef))
    fs '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
         (li r5 7) (st r4 -16 r5) (call g9) (ld r6 r4 -16) (mov r0 r6)
         (li r7 9) (st r4 -16 r7) (ld r8 r4 -16) (add r0 r0 r8) (ret))
    rf (repack gR fs)
-   hf (repack gH fs)
    (assert
       (member? '(ld r6 r4 -16) rf)                  ; the crossing chain keeps its cell
       !(member? '(ld r8 r4 -16) rf)                 ; the call-free chain left the frame..
-      (member? '(mov r8 r7) rf)                     ; ..its load reads the seat, the store dropped
-      (member? '(ld r6 r4 -16) hf)                  ; the hull: a call in the window bars it whole
-      (member? '(ld r8 r4 -16) hf)))
+      (member? '(mov r8 r7) rf)))                   ; ..its load reads the seat, the store dropped
 
 ; --- narrow promotion (moon-ssa rung 2): a cell whose every touch shares one
 ; width at its own base rides the same chains, wearing the extension
 ; discipline -- the store canonicalizes the seat, a matching load is a plain
-; mov, and an si def folds the extension into its li at compile time. the
-; hull path (pdef) still refuses anything narrow.
+; mov, and an si def folds the extension into its li at compile time.
 (: gN {}
    _ (pin gN 'slots '((-16 8)))
-   gM {}
-   _ (pin gM 'slots '((-16 8)))
-   _ (pin gM 'abl '(pdef))
    fsA '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
          (li r5 7) (st4 r4 -16 r5) (ldu4 r6 r4 -16) (mov r0 r6) (ret))
    fsB '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
@@ -2055,14 +1945,12 @@
    fsC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
          (si r4 -16 42) (ld r7 r4 -16) (mov r0 r7) (ret))
    ra (repack gN fsA)
-   ha (repack gM fsA)
    rb (repack gN fsB)
    rc (repack gN fsC)
    (assert
       !(member? '(ldu4 r6 r4 -16) ra)                ; the narrow pair left the frame
       (member? '(zx4 r5) ra)                         ; the store canonicalized its seat..
       (member? '(mov r6 r5) ra)                      ; ..and the matching load is a mov
-      (member? '(ldu4 r6 r4 -16) ha)                 ; the hull still refuses narrow whole
       (member? '(li r0 -1) rb)                       ; si4 -1 under a SIGNED load: the
       (member? '(mov r7 r0) rb)                      ;   extension folded at compile time
       !(member? '(ld4 r7 r4 -16) rb)
@@ -2074,13 +1962,9 @@
 ; one when its crossings COMPOUND (a call at depth >= 2 -- one pair per
 ; invocation against iterations-squared wraps): repack emits ONE save after the
 ; r3 save and ONE restore before each teardown, and the per-iteration wrap
-; around the call becomes two movs. straight-line weight stays a cell, and
-; the pdefcs ablation holds the whole lane shut.
+; around the call becomes two movs. straight-line weight stays a cell.
 (: gS {}
    _ (pin gS 'slots '((-16 8)))
-   gT {}
-   _ (pin gT 'slots '((-16 8)))
-   _ (pin gT 'abl '(pdefcs))
    fsL '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
          (li r5 7)
          (label .O)
@@ -2098,7 +1982,6 @@
          (mov r0 r6)
          (mov sp r4) (pop r4) (ret))
    rl (repack gS fsL)
-   hl (repack gT fsL)
    rs (repack gS fsS)
    (assert
       !(member? '(ld r6 r4 -16) rl)                 ; the crossing chain left the frame..
@@ -2106,7 +1989,6 @@
       (member? '(mov r6 r11) rl)
       (member? '(st r4 -16 r11) rl)                 ; one save, after the r3 save..
       (member? '(ld r11 r4 -16) rl)                 ; ..one restore, before the teardown
-      (member? '(ld r6 r4 -16) hl)                  ; pdefcs: the wrap stays a wrap
       (member? '(ld r6 r4 -16) rs)                  ; straight-line weight 2: not worth a pair
       ; a SIB exit restores too: the peel (ld r3/mov sp/pop r4/jmp far) is one
       ; teardown run and the restore lands at its head -- a tail-called-into fn
@@ -2145,9 +2027,8 @@
 ; the regen channel can seat; short call-free ranges promote in repack anyway),
 ; and two names whose alive spans are DISJOINT share one seat. here a and b
 ; each cross calls (callee-saved material) and never overlap: one pair serves
-; both, s keeps its own -- two distinct callee-saved regs where the static
-; pick spent three. MOON_ABLATE=alloc restores lpick (byte-identical, the
-; corpus instrument holds it); the setenv round-trip pins the knob's face.
+; both, s keeps its own -- two distinct callee-saved regs where a static
+; pick would spend three.
 (: srcJ "long g(long);
 long f(long n) {
   long s = 0;
@@ -2162,13 +2043,9 @@ int main() { return 0; }"
                           {} fs)
                   (keys t))
    fJ (fnf 'f <>(cgn srcJ))
-   _ (setenv "MOON_ABLATE" "alloc")
-   fJ2 (fnf 'f <>(cgn srcJ))
-   _ (setenv "MOON_ABLATE" ())
    (assert
-      (= 2 (tally (csset fJ)))                       ; shared: a and b ride one seat
-      (= 3 (tally (csset fJ2)))))                    ; the knob: one seat each
+      (= 2 (tally (csset fJ)))))                     ; shared: a and b ride one seat
 
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default and its pcell face (rung 5) + the one-build default and its rides (rung 6) ok")
+(say err "crew/moon/law: lexer + cpp + parser + gen goldens (seams, aggregates, doubles, varargs, asm, diagnostics, objects) + the residency laws (alive, arm64 homing, splice binds, stld, copy propagation + its carrier exhaustion, cskeep, the destination die, liveness + promotion, coalescing) + the value layer (rung 0) + per-def promotion (rungs 1+2+3, narrow and cs seats ride) + the interval locals allocator (rung 4) + the param-cell default (rung 5) + the one-build default and its rides (rung 6, the only world) ok")
 (put err 10)

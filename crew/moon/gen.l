@@ -134,13 +134,10 @@
    ; the value comes back wearing the new mint -- honored by ACCIDENT, and the accident is the
    ; discipline (the old code compared physicals, so the accident counted).
    (rpeq? g a b) (id? (rp g a) (rp g b))
-   ; -- the ablation knob (the pare plan's rung 0): MOON_ABLATE="tpool,cs" holds named
-   ; mechanisms empty for PRICING -- ralloc tpool cs lhome homes pcs, obuild
-   ; (the one build falls back to the ir1+regen dance), pcell
-   ; (param cells fall back to the wrapped-home/cs-grant lanes), alloc
-   ; (locals homes fall back to lpick's static pick), pdefcs
-   ; (no cs seats for crossing chains), and pdef
-   ; (promotion falls back to the hull window). read at
+   ; -- the ablation knob: MOON_ABLATE="tpool,cs" holds named mechanisms
+   ; empty for PRICING -- ralloc, tpool, cs. the old worlds' knobs (obuild
+   ; pcell alloc pdefcs pdef) retired with the dance they named; a pre-cut
+   ; commit rebuilds any of them. read at
    ; RUN time, once per unit (a value binding folds at bake and would carry the baking
    ; session's environment). no gate rides it; unset is every mechanism on. --
    (ablenv _)
@@ -154,12 +151,6 @@
                  (go i (j + 1) acc))
              (go 0 0 ()))))
    (abl? g nm) (member? nm (g 'abl))
-   ; the one-build world (moon-ssa rungs 6+7, the DEFAULT on every target):
-   ; any old-world knob keeps the dance byte-identically. alive's widened
-   ; universe and repack's paired-cs reuse ride exactly this world -- the
-   ; three gates must never drift apart.
-   (uniw? g) !(abl? g 'obuild || abl? g 'pcell || abl? g 'alloc ||
-               abl? g 'pdefcs || abl? g 'pdef)
    (ralloc g) (? !(abl? g 'ralloc)
                (g 'pool @ (r9 >< u)
                 ; ⚠ armor: a pinned reg on the free list is the free-list/pin split
@@ -206,9 +197,9 @@
        (any9 fs ? (rasg2 g fs cfl)))
    ; ⚠ no r4 on the arm family: a4ize retargets a base-slot r4 to fp BY POSITION, and a
    ; moved mint can sit in a base slot (a pointer riding the pool) -- the a4rider? law.
-   ; ⚠ and no ARGUMENT register anywhere: the ride analysis prices ir1 as built (no
-   ; foreign def of an arrival), so a mint moved onto one drops rides and the regen
-   ; takes worse lanes -- lvm_band grew a spush cell the day this was learned.
+   ; ⚠ and no ARGUMENT register anywhere: a ridden arrival's only legitimate def
+   ; is its entry cvt (ubuild's quad re-read), so a mint moved onto one falsifies
+   ; rides -- lvm_band grew a spush cell the day this was learned.
    (rafile g)
     (filter (\ r9 !(member? r9 (csregs g) || id? r9 (fbase g) || id? r9 'sp ||
                     member? r9 (argr g) ||
@@ -717,10 +708,11 @@
    ; cvt): a pool home for a cold int param starves the d128 pair park and the hot locals
    ; (mag_mul measured +3% corpus cycles), so a non-rideable int param keeps its slot.
    (lhomable? ty) (homable? ty || member? ty '(int uint))
-   ; the homable-param fold, spelled once for its five readers (pgo/homes?/nhomable/uhomes/
-   ; rideset): a float/sse param rides its own lane and spends no gp seat, the walk stops folding
-   ; at the home limit, and hx folds each homable seat -- (hx acc gpi param) -> acc.
-   ; the gate admits int/uint for RIDESET's sake; every other reader filters back to homable?
+   ; the homable-param fold, spelled once for its three readers (pgo, upar,
+   ; ubuild's grant fold): a float/sse param rides its own lane and spends no gp
+   ; seat, the walk stops folding at the home limit, and hx folds each homable
+   ; seat -- (hx acc gpi param) -> acc. the gate admits int/uint (the ride
+   ; universe); a reader wanting pointers only filters back to homable?
    (homefold g ps gpi acc hx)
     (? !(two? ps) acc
        (: pty <><ps
@@ -3661,7 +3653,7 @@
     (? (rv? g && (<f = 'call))
        (butret (peep g 'epi epi-a64) + [['la (pkr g) <>f] ['jmpr (pkr g)]])
        (<f = 'call) (butret ejx + [['jmp <>f]])
-       ; ⚠ ejx, never the epi-a64 CONSTANT: a cs regen pins its restores into g 'epi, and the
+       ; ⚠ ejx, never the epi-a64 CONSTANT: a cs-granted build pins its restores into g 'epi, and the
        ; constant drops them -- the tail would jump with the callee's seats still dirty. the
        ; t32 line below owed the same read for a second reason: a VARARG t32 epilogue is
        ; epi-t32va, and the constant drops its `(add sp sp 16)` with the arriving block.
@@ -4427,9 +4419,8 @@
        (esc 'y ? fs (lisweep (drop fs))))
 
    ; -- slot repack: nslot never hands a cell twice, so a frame is the COUNT of its temporaries,
-   ; not the width of a moment, and a deep frame puts disp32 under every touch. POST-CHOICE (the
-   ; rankers price param slots by build offset, so ir1 must reach them unpacked; deopt restores
-   ; ir1's slot map), objects whose live windows never meet share one cell and the sub shrinks. a
+   ; not the width of a moment, and a deep frame puts disp32 under every touch. POST-CHOICE
+   ; (the built ir reaches here unpacked, its slot map whole), objects whose live windows never meet share one cell and the sub shrinks. a
    ; window is the
    ; form-index span of an object's touches, widened over every backedge it meets to a fixpoint
    ; (a loop's re-read joins everything the loop spans); an address-taken object relocates whole
@@ -4710,9 +4701,6 @@
                    ; chain's first load's extension, a matching load is a plain mov, a
                    ; mismatched one re-extends its dest, and an si def folds the extension
                    ; at compile time into its li.
-                   ; MOON_ABLATE=pdef is the HULL for pricing: one chain of every touch
-                   ; over the whole widened span, full-word st/ld only, first touch a
-                   ; store required -- the pre-rung compiler exactly. --
                    (shp9 b)                    ; the cell's one touch width | 0
                     (: (go l w) (? !(two? l) w
                                    (: t <l op <>t rg (nthr t 2) X (nthr t 3)
@@ -4727,10 +4715,7 @@
                                          (go >l w2))))
                        (go (peep tls b ()) 0))
                    scand (foldl (\ a b (: w (peep obs b ())
-                                          (? (abl? g 'pdef)
-                                             (? ((<w = 8) && !(nthr w 3) && (nthr w 4) && (nthr w 5))
-                                                (b >< a) a)
-                                             (? (!(nthr w 3) && (0 < shp9 b)) (b >< a) a))))
+                                          (? (!(nthr w 3) && (0 < shp9 b)) (b >< a) a)))
                                 () bases)
                    lot9 (? (two? scand) (lvout g fs) 'no)   ; index -> live-out, or the refusal
                    dft9 (? (id? lot9 'no) {}
@@ -4762,14 +4747,14 @@
                                            (go (i + 1))))
                               _ (go 0)
                               t))
-                   cspool9 (? (jrf || (abl? g 'pdef) || (abl? g 'pdefcs) || id? lot9 'no) ()
+                   cspool9 (? (jrf || id? lot9 'no) ()
                               (filter (\ r !(peep cswr r 0)) '(r11 r12 r13 r14)))
                    ; a cs reg the fn ALREADY pairs (a prologue save to a slot --
                    ; the one-build's fn-wide grants) is reusable INTERVAL capacity:
                    ; a chain may ride its dead ranges under plain liveness freeness,
                    ; and no new pair is owed -- the fn's own restore covers the exit.
                    ; old worlds keep the blanket exclusion (the parity instruments).
-                   csprd (? (jrf || id? lot9 'no || !(uniw? g)) ()
+                   csprd (? (jrf || id? lot9 'no) ()
                             (: t9 {}
                                (go l i) (? (!(two? l) || 12 < i) 0
                                            (: f9 <l
@@ -4809,9 +4794,7 @@
                        rg9 (foldl (\ t9 t (pin t9 <t (nthr t 2))) {} tl)
                        (rich us) (map (\ u [u (peep rg9 u ()) (xt9 (peep ot u ()))]) us)
                        (xcof us) (? !(two? us) () (xt9 (peep ot <us ())))
-                       (? (abl? g 'pdef)
-                          [[(span9 <>w <>>w) (nthr w 5) sts (rich lds) ()]]
-                          !(two? sts) ()               ; no store: nothing to promote
+                       (? !(two? sts) ()               ; no store: nothing to promote
                           !(two? >sts)                 ; ONE def: one chain, no reaching needed
                            (: lo0 <>w hi0 <>>w
                               clv (vclive lo0 hi0 succ9 sts lds)
@@ -5511,8 +5494,8 @@
                             _ (? (hmov? f2) (pin m2 <>f2 <>>f2) 0)
                             (f2 >< cpwalk u m2)))))))))
    ; ⚠ the forward half rides the BUILD TAIL, where its renames reach addrfold/cmpfuse/deaddef,
-   ; and it asks no liveness on purpose: build runs TWICE per fn (ir1 and the regen), so a
-   ; whole-fn fixpoint here is paid four times over. the backward half and the drop both ride
+   ; and it asks no liveness on purpose: build can run twice per fn (ubuild's quad
+   ; retry, the bare fallback), so a whole-fn fixpoint here is paid twice over. the backward half and the drop both ride
    ; coal, post-choice, off the one lvout that was already being paid there.
    (copyprop fs) (cpwalk fs {})
 
@@ -5914,7 +5897,7 @@
    ; SEQUENCE number, records (seq off ty) in g 'lrec, and asks g 'lhome (pinned only for a REGEN)
    ; for a home. a homed local keeps its slot as the spill shadow and binds (reg rN) in the env,
    ; so a READ is a zero-form borrow and its init lands with a mov. ⚠ the seq must be
-   ; deterministic across pass 1 and the regen: same walk, and splices don't tick. --
+   ; deterministic across ubuild's attempts: same walk, and splices don't tick. --
    (cgdecl g env pairs)
     (: ; -- the C99 VLA local: free any prior instance from this SITE first (a loop re-runs the
        ; decl; sp = ptr + rounded size also frees everything younger), evaluate the dim, stash the
@@ -5961,9 +5944,9 @@
               hreg (? (g 'inlining)
                       ; a call-free splice's body decl takes a pool seat when cginl's read
                       ; pricing licensed the name (inlrb); rpin holds it across the body's
-                      ; statements, the splice frees it (inlrbs). ⚠ REGEN attempts only
-                      ; (rgon): an ir1 bind changes the slot-touch counts lpick and the
-                      ; homing payoff gate rank on, and the attempt flip is unpriced --
+                      ; statements, the splice frees it (inlrbs). ⚠ seat-bearing
+                      ; builds only (rgon): a bare build binds no seats, so its
+                      ; splices take no pool seat either --
                       ; ioputx LOST ITS SIBCALL to one (a stack-growing call in the printer)
                       (? (g 'rgon &&
                           lhomable? ty &&
@@ -5980,7 +5963,7 @@
                                    'lrec ([sq off ty <p] >< g 'lrec))
                          lht (g 'lhome)
                          (? lht (lht sq) ())))
-              ; a d128's home is a PAIR (lo hi) off the cs pool -- lpick packs two seats
+              ; a d128's home is a PAIR (lo hi) off the cs pool -- ulloc packs two seats
               env3 ([<p (? (two? hreg) ['regw hreg] hreg ['reg hreg] off) ty] >< env2)
               ; a callee-saved home stays OFF g 'homes: no call wrap (the callee preserves it),
               ; no sib peel, and ezarg must never read its never-written shadow slot
@@ -6213,19 +6196,19 @@
          ('for _ _ _ body) [body]
          ('switch _ items) items)
 
-   ; -- alive: which homable names still matter across each call (the homing regens' liveness).
+   ; -- alive: which homable names still matter across each call (the one build's liveness).
    ; one backward statement-grain walk over the fn body, over a universe fixed up front: homable
    ; params + homable locals, minus any address-taken or multiply-declared name (two vars sharing
    ; a name must not conflate -- both keep the blanket wrap). a statement whose own expressions
    ; call records wrapset = livein u liveout under a statement counter that ⚠ ticks EXACTLY as the
-   ; regen's cgstmt/cgdecl/cgsdecl entries do (stq below; a splice never ticks). the walk numbers
+   ; build's cgstmt/cgdecl/cgsdecl entries do (stq below; a splice never ticks). the walk numbers
    ; DOWN from the prepass total, so the child-reversed backward order lands forward pre-order
    ; numbers; a livtab miss reads 'all, and a drifted walk is caught LOUD.
    ; loops seed with everything the loop reads (the back edge, no fixpoint -- a post-back-edge
    ; read is textually in the loop; a goto ESCAPES, so as a loop use it reads the whole universe);
    ; a label is a backward no-op. answers (livtab cross univ total ncw): livtab sq -> wrapset,
    ; cross name -> static call crossings, univ the analyzed names -- ⚠ a gate must never trust
-   ; cross for an outsider -- total the statement count (the regen's numbering guard), ncw the
+   ; cross for an outsider -- total the statement count (the build's numbering guard), ncw the
    ; fn's loop-weighted IN-LOOP call count (the payoff gate's per-iteration price; a depth-0
    ; call sits in the path maximum instead -- it runs at most once per invocation), spa the
    ; per-name live SPAN in tick numbers (see spn).
@@ -6284,10 +6267,6 @@
                 ('goto >< _) 99
                 ('asm >< _) 99
                 0))
-       ; the one build homes int locals like the dance's slot walk did, so its
-       ; universe widens to lhomable -- the dance's own reading stays homable
-       ; (its lalloc free?-gate keys on this set, byte-held under the knobs)
-       wide9 (uniw? g)
        (nhc e) (? !(two? e) 0
                   (e @ ('call ('var nm) as) ((? (soft? nm) (nhin nm) 1) + nhcl as)
                        ('call fh as) (1 + (nhc fh) + nhcl as)
@@ -6366,7 +6345,7 @@
                                 (: p <ps
                                    _ (pin dcl <p (1 + peep dcl <p 0))
                                    _ (? ((k = 'decl) &&
-                                         (? wide9 (lhomable? <>p) (homable? <>p)))
+                                         (lhomable? <>p))
                                         (pin n9 'loc (<p >< peep n9 'loc ())) ())
                                    _ (? ((k = 'decl) && gvarr? <>p) (pin n9 'vla 1) ())
                                    ; the decl SEQUENCE, predicted: cgdecl's dseq
@@ -6386,7 +6365,7 @@
                        (pdcl >ps)))
        ; -- the universe: the homable gp walk for the param NAMES, plus the locals --
        (pgo ps gpi acc) (homefold g ps gpi acc
-                          (\ a2 i9 p9 (? (? wide9 (lhomable? <>p9) (homable? <>p9))
+                          (\ a2 i9 p9 (? (lhomable? <>p9)
                                          (<p9 >< a2) a2)))
        _ (pdcl params)
        _ (prel items)
@@ -6628,17 +6607,16 @@
           w (? lt (peep lt q 'all) 'all)
           _ (pin g 'stwrap w)
           w))
-   ; the regen channels' NEUTRAL state, spelled once: per-fn entry and the
-   ; regen teardown ride the same reset (a wrap set dies with its fn)
+   ; the seat channels' NEUTRAL state, spelled once: per-fn entry and the
+   ; build teardown ride the same reset (a wrap set dies with its fn)
    (rgreset g)
     (pins g
-     'livtab ()  ; liveness (set only for a wrap-bearing regen)
+     'livtab ()  ; liveness (set only for a seat-bearing build)
      'lhome ()   ; locals-homing map (cgdecl's hook reads it)
-     'rgon ()    ; ...and its regen flag (the splice decl gate)
-     'pcs ()     ; the param cs-seat grant ((gpi reg)..; the shadow spill reads it)
+     'rgon ()    ; ...and its seat-bearing flag (the splice decl gate)
      'homes ())  ; non-leaf home set (call-fixed + sibs read it)
-   ; ...and their ARMED state: a regen build homes locals (lh9, lpick's map)
-   ; and wraps per-call off the liveness (av9, alive's answer)
+   ; ...and their ARMED state: a seat-bearing build homes locals (lh9,
+   ; ulloc's map) and wraps per-call off the liveness (av9, alive's answer)
    (rgset g lh9 av9)
     (pins g
      'homes ()
@@ -6655,11 +6633,11 @@
     'vrn 0                     ; the vreg mint counter (the shadow: ralloc mints, vrfix resolves)
     'vrt {})           ; ...and its per-build map, mint -> physical
    ; the g-pin RECORD: every per-fn pin and its neutral value, one roster -- cgfn's entry
-   ; and each regen attempt wipe the lot, so an attempt always starts from the clean
+   ; and each build attempt wipe the lot, so an attempt always starts from the clean
    ; record. a NEW per-fn pin registers here; the computed ones (fn, epi, pool0/pool,
    ; vslots, the fc cells, sret's slot) re-pin over their neutrals at their owner.
    (fnreset g)
-    (pins (rgreset g)          ; the regen channels' neutral state -- disjoint pin set
+    (pins (rgreset g)          ; the seat channels' neutral state -- disjoint pin set
      'off 8                    ; the frame cursor: slot -8 = saved r3 (see epi)
      'slots ()                 ; the frame's object map ((off n)..; nslot appends)
      'fesc ()                  ; escape flag (the sibcall gate reads it)
@@ -6668,7 +6646,7 @@
      'inlrb () 'inlrbs ()      ; splice decl-license + its reg roster
      'rpin ()                  ; splice bind pins
      'hasasm ()                ; an asm statement pins it (homing off)
-     'cssv ()                  ; the callee-saved save forms (a cs regen pins)
+     'cssv ()                  ; the callee-saved save forms (a cs grant pins)
      'sret ())                 ; the memory-return slot (the driver re-pins under sr6f)
 
    (cgstmt g env s)
@@ -7128,15 +7106,13 @@
        _ (pin g 'epi (? (vararg && t32? g) (v6m? g ? epi-t16va epi-t32va)
                         (vararg && rv? g) epi-rv-va
                         (v6m? g) epi-t16 (arm? g) epi-a64 epi))
-       fb9 (fbase g)                                 ; the frame base the RANKERS see: post-build ir1 (r4, or fp once a4ized)
        ; spill each param from its SysV register: integers from r6 r5 r2 r1 r7 r8 (<=6), doubles
        ; from f0..f7 (<=8), SEPARATE counters. an OVERFLOW param already sits on the caller stack
-       ; at rbp+16+8k, no store. hp is the HOME POLICY over the eligible gp params (x64/a64 regens
-       ; only): () spills every one to its slot; ('ride ridelist) homes in a register or rides the
-       ; arrival (the leaf lane); 'shadow homes AND takes a frame slot (the non-leaf lane).
-       ; under a policy the exotic composites answer 'bad -- the regen deopts to ir1 rather than
-       ; growing a memory lane the gate never counted.
-       (pol? h9) (two? h9 || id? h9 'shadow)         ; a live policy (only the ride one is a list)
+       ; at rbp+16+8k, no store. hp is the HOME POLICY over the eligible gp params:
+       ; () spills every one to its slot; ('uni rides homes excl) seats upar's verdicts,
+       ; every home wearing the armed shadow. under a policy the exotic composites
+       ; answer 'bad -- ubuild bares rather than growing a memory lane the gate never counted.
+       (pol? h9) (two? h9)                           ; the one policy is the uni seat list
        (spill hp ps gpi xmmi ovi env acc)
         (? !(two? ps) [acc env]
            (: p <ps pty <>p
@@ -7235,41 +7211,20 @@
                  (d128? pty)                            ; a wide param: not carried (mirror of the arg refusal)
                   (nolane g "a wide value is not carried as a parameter")
                  (!(flo? pty) && gpi < ngp g)
-                  (? (pol? hp && gpi < nhome g &&
-                      (? (two? hp && id? <hp 'uni)
-                         (member? gpi <>hp || member? gpi (nthr hp 2))
-                         (homable? pty ||
-                          (two? hp && (member? gpi <>hp || member? gpi (nthr hp 2))))))
-                      (? (two? hp && id? <hp 'uni)
-                         ; the one-build lane (moon-ssa rung 6): a rider keeps its
-                         ; arrival (staging lost that register), a positional home
-                         ; pays the one mov -- and EVERY home wears the armed
-                         ; shadow: the slot is reserved but untouched until a call
-                         ; actually emits, so a spliced call never wraps and an
-                         ; untouched cell packs away downstream
-                         (: inc (nthr (argr g) gpi)
-                            home (? (member? gpi <>hp) inc (homereg gpi))
-                            _ (pin g 'homes ([home (nslot g 8) <p] >< g 'homes))
-                            mv ((home != inc ? [['mov home inc]]) + cvt pty home)
-                            (spill hp >ps (gpi + 1) xmmi ovi ([<p ['reg home] pty] >< env)
-                                   (acc + mv)))
-                      (? (two? hp)                      ; the leaf lane: home in a register, moving from the
-                         (: inc (nthr (argr g) gpi)     ; incoming arg reg if it differs -- but a rideable param
-                            ; rides its ARRIVAL register: no home reserved, no entry
-                            ; mov, its home register freed to the pool
-                            home (member? gpi <>hp ? inc (homereg gpi))
-                            mv ((home != inc ? [['mov home inc]]) + cvt pty home)
-                            (spill hp >ps (gpi + 1) xmmi ovi ([<p ['reg home] pty] >< env)
-                                   (acc + mv)))
-                         (: pc9 (assoc gpi (g 'pcs))   ; a granted cs seat: the callee
-                            ; preserves it, so no call wrap, no shadow slot -- off g 'homes
-                            home (? (two? pc9) <>pc9 (homereg gpi))
-                            inc (nthr (argr g) gpi)
-                            _ (? (two? pc9) ()
-                                 (pin g 'homes ([home (nslot g 8) <p] >< g 'homes)))
-                            mv ((? (home = inc) () [['mov home inc]]) + cvt pty home)
-                            (spill hp >ps (gpi + 1) xmmi ovi ([<p ['reg home] pty] >< env)
-                                   (acc + mv)))))
+                  (? (two? hp && gpi < nhome g &&
+                      (member? gpi <>hp || member? gpi (nthr hp 2)))
+                      ; the one-build lane (moon-ssa rung 6): a rider keeps its
+                      ; arrival (staging lost that register), a positional home
+                      ; pays the one mov -- and EVERY home wears the armed
+                      ; shadow: the slot is reserved but untouched until a call
+                      ; actually emits, so a spliced call never wraps and an
+                      ; untouched cell packs away downstream
+                      (: inc (nthr (argr g) gpi)
+                         home (? (member? gpi <>hp) inc (homereg gpi))
+                         _ (pin g 'homes ([home (nslot g 8) <p] >< g 'homes))
+                         mv ((home != inc ? [['mov home inc]]) + cvt pty home)
+                         (spill hp >ps (gpi + 1) xmmi ovi ([<p ['reg home] pty] >< env)
+                                (acc + mv)))
                      (: off (nslot g 8)
                         ; a bool param CONVERTS its arrival (cc calls untyped, so the
                         ; caller passed the bare int) -- the object invariant holds at entry
@@ -7363,97 +7318,14 @@
                      (7 < gpi) (cls >qs gpi (ov + 1) ([<p ((ovb g + 64) + 8 * ov) pty] >< env))
                      (cls >qs (gpi + 1) ov ([<p (ovb g + 8 * gpi) pty] >< env)))))
            (cls ps 0 0 ()))
-       ; -- register-homed params (the leaf lane): a gp param that is an 8-byte scalar whose
-       ; address never escapes can live in a CALLER-SAVED, non-scratch register for the whole
-       ; function instead of a frame slot. the home pool ((hregs g), indexed by gp position) is
-       ; disjoint from the scratch set (r0-r3) and from the overflow/xmm registers, so Hp and Sp
-       ; MOVE out of scratch at the prologue. ⚠ applied ONLY when the fn turns out to be a LEAF:
-       ; after the sibcall pass no call/callr remains, fesc is unset, there is no raw `sys`
-       ; (rcx/r11 are syscall-clobbered), and it is not variadic. decided by GENERATING first,
-       ; then regenerating with the register env if the gate holds.
-       ; the 'shadow policy is the NON-LEAF lane: each home ALSO takes a frame slot recorded in
-       ; g 'homes, which call-fixed spills before every remaining call's pops and reloads after,
-       ; so a callee only ever sees its own ABI registers. a &param deopts the regen to ir1. --
+       ; -- register-homed params: a gp param that is an 8-byte scalar whose address
+       ; never escapes can live in a register for the whole function instead of a frame
+       ; slot. the home pool ((hregs g), indexed by gp position) is disjoint from the
+       ; scratch set (r0-r3) and from the overflow/xmm registers, so Hp and Sp MOVE out
+       ; of scratch at the prologue. every home ALSO takes a frame slot recorded in
+       ; g 'homes, which call-fixed spills before a remaining call's pops and reloads
+       ; after, so a callee only ever sees its own ABI registers. --
        (homereg gpi) (nthr (hregs g) gpi)
-       (homes? ps gpi) (0 < nhomable ps gpi 0)      ; does any gp param qualify for a register home?
-       (anyop? (f >< u) op) (f @ (^op . _) 1 (anyop? u op))
-       (hascall? fs) (anyop? fs 'call || anyop? fs 'callr)
-       ; the non-leaf PAYOFF gate: homing saves one frame load per param READ but costs a
-       ; spill+reload PER HOME around every remaining call -- worth it only where reads dominate.
-       ; counted on the post-sibcall ir1: tail calls already cost nothing.
-       (nhomable ps gpi n) (homefold g ps gpi n (\ n2 i9 p9 (? (homable? <>p9) (n2 + 1) n2)))
-       (ncalls fs n) (? !(two? fs) n
-                        (: f <fs
-                           (ncalls >fs (? (two? f && member? <f '(call callr)) (n + 1) n))))
-       ; the forward-path call maximum over post-sibcall ir1: labels merge by max, a jmp/ret/jmpr
-       ; ends its path, a BACKWARD branch is ignored (an in-loop call is ncw's charge). this is
-       ; the price a single invocation can actually pay -- the dispatch fleet's calls sit in
-       ; exclusive arms, so their total says nothing about any one path.
-       (pmax fs)
-        (: best {}
-           (mxu m c) (? (c = 'dead) m (m < c) c m)
-           (bpin lab c) (c != 'dead ?  (: b (peep best lab 0) (b < c ? (pin best lab c))))
-           (go l cur mx)
-            (? !(two? l) (mxu mx cur)
-               (: f <l
-                  (? !(two? f) (go >l cur mx)
-                   (<f @ 'label (go >l (: b (peep best <>f 0)
-                                 (? (cur = 'dead) b (b < cur) cur b)) mx)
-                       ('call || 'callr)
-                        (go >l (cur @ 'dead 'dead (cur + 1)) mx)
-                       'br (bpin <>>f cur, go >l cur mx)
-                       'jmp (bpin <>f cur, go >l 'dead (mxu mx cur))
-                       ('ret || 'jmpr) (go >l 'dead (mxu mx cur))
-                       (go >l cur mx)))))
-           (go fs 0 0))
-       ; the forward-path call MINIMUM, pmax's twin: the price a per-invocation cost must
-       ; clear -- a zero-call path (the dispatch fleet's early out) pays entry work and
-       ; earns nothing, so a grant priced per invocation needs every path to call.
-       (pmin fs)
-        (: best {} big 1000000
-           (mnu m c) (? (c = 'dead) m (c < m) c m)
-           (bpin lab c) (? (c != 'dead)
-                           (: b (peep best lab big) (c < b ? (pin best lab c))))
-           (go l cur mn)
-            (? !(two? l) (mnu mn cur)
-               (: f <l
-                  (? !(two? f) (go >l cur mn)
-                     (: k <f
-                        (k @ 'label
-                            (go >l (: b (peep best <>f big)
-                                    (? (cur = 'dead) b (cur < b) cur b)) mn)
-                           ('call || 'callr) (go >l (cur = 'dead ? 'dead (cur + 1)) mn)
-                           'br (: _ (bpin <>>f cur) (go >l cur mn))
-                           'jmp (: _ (bpin <>f cur) (go >l 'dead (mnu mn cur)))
-                           ('ret || 'jmpr) (go >l 'dead (mnu mn cur))
-                           (go >l cur mn))))))
-           (go fs 0 big))
-       (pslots env acc)                             ; the homable params' PASS-1 frame slots
-        (? !(two? env) acc
-           (: e2 <env
-              (pslots >env (? (atom? <>e2 && <>e2 < 0 && homable? <>>e2)
-                                   (<>e2 >< acc) acc))))
-       (nreads fs offs n)                           ; frame touches of those slots in ir1
-        (? !(two? fs) n
-           (: f <fs
-              hit (? !(two? f) ()
-                     (member? <f ldops9) (<>>f = fb9 && member? <>>>f offs)
-                     (member? <f gstops) (<>f = fb9 && member? <>>f offs))
-              (nreads >fs offs (? hit (n + 1) n))))
-       (nrac fs offs)                               ; the unerasable reloads: a call dirties every
-        (: t {}                             ; slot, a store cleans its own (stld remats the
-           (go l n9)                                ; loads behind it), the FIRST dirty load counts
-            (? !(two? l) n9
-               (: f <l
-                  (? !(two? f) (go >l n9)
-                     (member? <f '(call callr))
-                      (foldl (\ _ o9 (pin t o9 1)) 0 offs, go >l n9)
-                     (member? <f gstops && (<>f = fb9) && member? <>>f offs)
-                      (pin t <>>f (), go >l n9)
-                     (member? <f ldops9 && (<>>f = fb9) && member? <>>>f offs && t <>>>f)
-                      (pin t <>>>f (), go >l (n9 + 1))
-                     (go >l n9))))
-           (go fs 0))
        (build sp0)                                  ; assemble prologue + body + epilogue for a spill result
         (? (bad? sp0) 'bad
            (: _ (bldreset g)
@@ -7462,10 +7334,8 @@
                  (: frame ((peep g 'off 0 + 15) & -16)
                     (? (arm? g)
                        ; the sibcall pass rides all targets (epim?/sibjmp read the epilogue off
-                       ; g 'epi), but the IR sweeps stay OUT of the arm build: the rankers price
-                       ; ir1 as built (nreads/ntouch), and a swept ir1 starves them -- marginal
-                       ; homes stop paying and slot traffic ships instead. the a64 lane sweeps
-                       ; the CHOSEN ir at the post-choice seam, where the frame base is already
+                       ; g 'epi), but the IR sweeps stay OUT of the arm build: the a64 lane
+                       ; sweeps at the post-choice seam, where the frame base is already
                        ; fp (unambiguous: an r4 in the raw forms is also the 5th argument).
                        ; retargeted r4 -> fp AFTER the sibcall rewrite (its patterns speak
                        ; r4; the epilogue forms already say fp/sp/lr). lr rides its own push cell,
@@ -7518,318 +7388,14 @@
                               '(st r4 -8 r3)] +
                            g 'cssv + <sp0 +
                            body + '((li r0 0)) + peep g 'epi epi)))))))))))))))))))
-       ; the operand pool rides BESIDE the homes: pass 1 owns all of opool, a
-       ; regen loses the registers its param homes occupy
-       (uhomes ps gpi acc) (homefold g ps gpi acc (\ a2 i9 p9 (? (homable? <>p9) (homereg i9 >< a2) a2)))
-       ; -- the RIDE analysis (freeing a pass-through param's home): a param whose home register
-       ; differs from its arrival register, and whose ARRIVAL the body never uses as scratch, can
-       ; ride the arrival end to end -- the unhome outcome, but decided UP FRONT so its home
-       ; register returns to the pool for a hot local. ⚠ soundness: every def of the arrival reg
-       ; in ir1 must be a reload from the param's OWN spill slot; any other def, or an opaque bar
-       ; op, bars the ride. leaf lane only -- ride is empty under a call. --
-       (rst-stoff fs A)                             ; A's entry spill-store (base off) | 'no
-        (? !(two? fs) 'no
-           (: f <fs
-              (? (two? f && member? <f gstops && id? <>>>f A) [<>f <>>f]
-                 (rst-stoff >fs A))))
-       (rst-defok fs A boff)                        ; every def of A is a reload from boff -> 1 | ()
-        (? !(two? fs) 1
-           (: f <fs
-              (? !(two? f) (rst-defok >fs A boff)
-                 (: rd (rdsp f)
-                    (? (id? rd 'bar)
-                        (member? <f '(label jmp br ret jmpr) ? (rst-defok >fs A boff))
-                       !(member? A <>rd) (rst-defok >fs A boff)
-                       (member? <f ldops9 &&
-                        id? <>f A && id? <>>f <boff && id? <>>>f <>boff)
-                        (rst-defok >fs A boff)
-                       ())))))
-       (rst-ok fs A) (: bo (rst-stoff fs A) (? (id? bo 'no) () (rst-defok fs A bo)))
        ; ⚠ an arrival register that COLLIDES with the build-time frame-base spelling can never be
        ; ridden: gen speaks r4 for the frame base and a4ize retargets it to fp BY POSITION, so an
        ; r4 left in a memory op's BASE slot becomes fp -- and gp 4 arrives in x4 on arm64, where a
        ; pointer param's natural use IS a base slot. the ride is the only lane that puts a value
        ; in r4 there, so barring it closes the collision; the 5th param pays one prologue mov. --
        (a4rider? A) (!(id? (fbase g) 'r4) && id? A 'r4)
-       (rideset fs ps gpi acc)                      ; the rideable gp indices
-        (homefold g ps gpi acc
-         (\ a2 i9 p9 (: A (nthr (argr g) i9)
-                        (? (!(a4rider? A) && !(id? A (homereg i9)) && rst-ok fs A)
-                           (i9 >< a2) a2))))
-       ; ⚠ the ride verdict above is read off ir1, where every param still sits in a FRAME SLOT --
-       ; and the regen it licenses rebuilds the body with the riders in registers, so pass 2
-       ; reaches for different scratch than the pass it was measured on. on x64 the only two
-       ; rideable arrivals ARE the shuttle pair, so a store whose address shuttle moved off a
-       ; now-occupied register can land on the very register a param was told it could ride.
-       ; so the ride is a PROPOSAL: it is re-read against the code it actually produced, and a
-       ; rider whose arrival picked up a FOREIGN def is DROPPED and the regen re-runs without it
-       ; (the leaf loop below recomputes the pool per attempt) -- the fn keeps its register homes.
-       ; a def that READS its own dest is the param's own update (Sp += n riding A: the register
-       ; is the param either side of it) and passes; a foreign value must FIRST land through a
-       ; def that reads nothing of A (rdst never answers an arrival, the shuttle/protocol
-       ; placements are all plain movs/pops), so that def is the one that drops the rider. --
-       (rideok2 fs A)                               ; no FOREIGN def of A survives in fs
-        (? !(two? fs) 1
-           (: f <fs
-              (? !(two? f) (rideok2 >fs A)
-                 (: rd (rdsp f)
-                    (? (id? rd 'bar)
-                        (? (member? <f '(label jmp br ret jmpr)) (rideok2 >fs A) ())
-                       (member? A <>rd) (? (member? A <rd) (rideok2 >fs A) ())
-                       (rideok2 >fs A))))))
-       (ridesound? fs ks)                           ; every rider's arrival survived
-        (? !(two? ks) 1
-           (rideok2 fs (nthr (argr g) <ks) && ridesound? fs >ks))
-       ; -- the LOCALS picker: rank the homable locals ir1 recorded by residual frame touches,
-       ; drop any whose slot is lea'd, gate each on touches beating the per-call wrap, and hand
-       ; the hottest the FRONT of hpool -- the operand pool keeps the rest (two reserved, so
-       ; expressions never go dry). answers [lhome-tablet remaining-pool] | (). --
-       (ntouch fs off n)
-        (? !(two? fs) n
-           (: f2 <fs
-              hit (? !(two? f2) ()
-                     (member? <f2 ldops9) (<>>f2 = fb9 && <>>>f2 = off)
-                     (member? <f2 gstops) (<>f2 = fb9 && <>>f2 = off))
-              (ntouch >fs off (? hit (n + 1) n))))
-       ; only 'lea marks a slot address-taken (the & lane, a struct/va temp) -- a 'lean is an
-       ; lvalue address CONSUMED by its own load/store and never escapes, exactly as the sibcall
-       ; gate leas? reads it
-       (leaoffs fs t) (? !(two? fs) t
-                         (: f2 <fs
-                            _ (? (two? f2 && id? <f2 'lea && <>>f2 = fb9)
-                                 (pin t <>>>f2 1))
-                            (leaoffs >fs t)))
-       (lastn l n) (: d (#l - n)
-                      (go2 l2 k) (k < 1 ? l2 (go2 >l2 (k - 1)))
-                      (d < 1 ? l (go2 l d)))
-       (dropn l n) (n < 1 || atom? l ? l (dropn >l (n - 1)))
-       (lpick ir1x crs uv hp9)
-        (: nc (ncalls ir1x 0)
-           ; a call-free fn homes by touches alone (post-sibcall: tail calls cost nothing). with
-           ; calls REMAINING, only a ZERO-CROSSING local may home -- alive's cross says it is
-           ; never live across any call, so it takes no wraps and free reads are pure win.
-           ; ⚠ WRAP-PAYING locals (home iff touches beat 2x loop-weighted crossings) measured 8/8
-           ; rounds SLOWER (~2%): static counts don't predict the dynamic spill/reload balance.
-           ; ⚠ nor may a local whose crossings are merely all OUTSIDE loops: a kill-born local's
-           ; wraps land beside ALWAYS-executed calls (the irKa shape) -- per-local path
-           ; sensitivity would be needed, and the measured extra win was ~0.3% loads.
-           (free? nm) (member? nm uv && (peep crs nm 0 = 0))
-           lt (leaoffs ir1x {})
-           navl (#hp9 - 2)
-           (walk rs acc)
-            (? !(two? rs) acc
-               (: e2 <rs sq <e2 off <>e2
-                  (? (lt off) (walk >rs acc)
-                     (d128? <>>e2) (walk >rs acc)     ; a pair homes off the CS pool only (never the operand pool)
-                     ; per invocation: ir1 touches against a pool home, which no call survives --
-                     ; a zero-crossing local pays at no call at all, so it prices as a call-free one
-                     (: tc (ntouch ir1x off 0)
-                        (? (rpays? 'pool (? (free? <>>>e2) 0 nc) tc)
-                           (walk >rs ([tc sq] >< acc))
-                           (walk >rs acc))))))
-           cs (navl < 1 ? () (lastn (imsort (walk (g 'lrec) ())) navl))
-           ; the CALLEE-SAVED overflow: a home there needs no wrap -- the callee preserves
-           ; it -- so a CROSSING local qualifies too, and a call-free fn whose param homes
-           ; drank the operand pool overflows here the same way (its cs registers otherwise
-           ; sit idle while the loop locals reload per iteration). the price is the
-           ; save/restore pair on EVERY invocation, and static touch counts keep lying about
-           ; the payback (the pmax lesson wearing its locals face: a tc-only gate measured
-           ; insns +0.2%; adding any-loop touches turned loads +0.2% -- short list/scheduler
-           ; loops don't amortize the pair). only a touch under NESTED loops (depth >= 2)
-           ; licenses a home: those iteration counts compound, and the pair drowns
-           kp (cspool g)
-           taken (foldl (\ t e9 (pin t <>e9 1)) {} cs)
-           ; loop spans over ir1x, ONE per header label (the longest backward reach -- a
-           ; continue's second branch must not fake depth); a touch's depth = covering spans
-           spans (: labi {}
-                    (gi (f >< u) i) (two? f && <f = 'label ? (pin labi <>f i),
-                                     gi u (i + 1))
-                    _ (gi ir1x 0)
-                    reach {}
-                    (go l i)
-                     (? !(two? l) ()
-                        (: f <l
-                           tgt (? !(two? f) ()
-                                  (<f = 'jmp) <>f
-                                  (<f = 'br) <>>f)
-                           ti (? tgt (peep labi tgt -1) -1)
-                           _ (? (0 <= ti < i)
-                              (: b (peep reach ti -1) (b < i ? (pin reach ti i))))
-                           (go >l (i + 1))))
-                    _ (go ir1x 0)
-                    (mks ts acc) (? !(two? ts) acc
-                                    (mks >ts ([<ts (peep reach <ts 0)] >< acc)))
-                    (mks (keys reach) ()))
-           (nspan i) (: (go2 ss n) (? !(two? ss) n
-                                      (: s2 <ss
-                                       (go2 >ss (<s2 <= i && i <= <>s2 ? (n + 1) n))))
-                        (go2 spans 0))
-           (lntouch fs off i n)
-            (? !(two? fs) n
-               (: f2 <fs
-                  hit (? !(two? f2) ()
-                         (member? <f2 ldops9) (<>>f2 = fb9 && <>>>f2 = off)
-                         (member? <f2 gstops) (<>f2 = fb9 && <>>f2 = off))
-                  (lntouch >fs off (i + 1) (hit && 1 < nspan i ? (n + 1) n))))
-           ; the per-invocation price, pcs's accounting worn by the locals: a seat costs one
-           ; save plus one reload per EXIT, every call, so its touches must outnumber that.
-           ; ⚠ without the term the pick just drains the file -- invisible while x64 offered
-           ; four seats, +166/+232 insns in vbin_fill the day arm64 offered ten.
-           nx9 (: (go9 l n9) (? !(two? l) n9
-                              (go9 >l (two? <l && id? <<l 'ret ? (n9 + 1) n9)))
-                  (go9 ir1x 0))
-           (walk2 rs acc)                             ; cs candidates carry a WIDTH: a d128 pair takes two seats
-            (? !(two? rs) acc
-               (: e2 <rs sq <e2 off <>e2
-                  (lt off || taken sq ? (walk2 >rs acc)
-                     ; per invocation: ir1 touches against a seat. ⚠ the floor of 2 is MEASURED,
-                     ; not physics -- a seat never pays under three touches whatever nx9 says
-                     (: tc (ntouch ir1x off 0)
-                        (2 < tc && rpays? 'bor nx9 tc ?
-                           (walk2 >rs ([tc sq (d128? <>>e2 ? 2 1)] >< acc))
-                           (walk2 >rs acc))))))
-           ; choose HOTTEST-first while seats remain (a pair spends two; one that can't fit
-           ; skips so a scalar may still take the last seat) -- the choose-order link restores
-           ; ascending heat, so seat ASSIGNMENT stays the old positional walk (register
-           ; spellings unchanged for scalar-only fns)
-           (pick l seats acc)
-            (? (atom? l || seats < 1) acc
-               (: e3 <l w (nthr e3 2)
-                  (? (seats < w) (pick >l seats acc)
-                   (pick >l (seats - w) (e3 >< acc)))))
-           (mkk l regs t acc9)
-            (? (!(two? l) || !(two? regs)) [t acc9]
-               (: e3 <l w (nthr e3 2)
-                  (? (w = 2 && two? >regs)
-                      (pin t <>e3 [<regs <>regs],
-                       mkk >l >>regs t (<>regs >< (<regs >< acc9)))
-                     (w = 2) [t acc9]
-                     (pin t <>e3 <regs,
-                      mkk >l >regs t (<regs >< acc9)))))
-           kpk (? !(two? kp) [{} ()]
-                  (: k9 (mkk (pick (rev (imsort (walk2 (g 'lrec) ()))) #kp ()) kp {} ())
-                   [<k9 (rev <>k9)]))  ; cu0 in assignment order (the save offsets ride it)
-           (mk l hp t) (atom? l || atom? hp ? t
-                        (pin t <><l <hp, mk >l >hp t))
-           (two? cs || two? <>kpk ?
-            [(mk cs hp9 <kpk)
-             (dropn hp9 (tally cs))
-             <>kpk]))
-       ; -- the allocator (moon-ssa rung 4): locals homes placed over INTERVALS.
-       ; a candidate carries alive's tick span (spa); one scan places pool + cs,
-       ; and two names whose spans are DISJOINT share a seat -- capacity is
-       ; intervals, not names, and one pair serves every name on a cs seat. the
-       ; eligibility and the priced gates are lpick's own (a caller-saved seat
-       ; needs zero crossings, a callee-saved one pays 'bor), and so is the RAW
-       ; rank: a home's value is what repack cannot recover downstream, and raw
-       ; touches track the long-lived names only this channel can seat -- the
-       ; loop-weighted rank measured WORSE (it drains seats to deep short-lived
-       ; locals repack promotes anyway), so weight only breaks ties. answers as
-       ; lpick answers; MOON_ABLATE=alloc (and pdef, pdefcs) restores the pick.
-       (lalloc ir1x crs uv spa9 hp9)
-        (: nc (ncalls ir1x 0)
-           (free? nm) (member? nm uv && (peep crs nm 0 = 0))
-           lt (leaoffs ir1x {})
-           navl (#hp9 - 2)
-           (firstn l n) (? (atom? l || n < 1) () (<l >< firstn >l (n - 1)))
-           pfile (firstn hp9 navl)
-           kp (cspool g)
-           ; loop spans over ir1x, one per header label (lpick's shape; vwt reads them)
-           spans (: labi {}
-                    (gi (f >< u) i) (two? f && <f = 'label ? (pin labi <>f i),
-                                     gi u (i + 1))
-                    _ (gi ir1x 0)
-                    reach {}
-                    (go l i)
-                     (? !(two? l) ()
-                        (: f <l
-                           tgt (? !(two? f) ()
-                                  (<f = 'jmp) <>f
-                                  (<f = 'br) <>>f)
-                           ti (? tgt (peep labi tgt -1) -1)
-                           _ (? (0 <= ti < i)
-                              (: b (peep reach ti -1) (b < i ? (pin reach ti i))))
-                           (go >l (i + 1))))
-                    _ (go ir1x 0)
-                    (mks ts acc) (? !(two? ts) acc
-                                    (mks >ts ([<ts (peep reach <ts 0)] >< acc)))
-                    (mks (keys reach) ()))
-           (wnt fs off i n)                    ; the slot's loop-weighted touch count
-            (? !(two? fs) n
-               (: f2 <fs
-                  hit (? !(two? f2) ()
-                         (member? <f2 ldops9) (<>>f2 = fb9 && <>>>f2 = off)
-                         (member? <f2 gstops) (<>f2 = fb9 && <>>f2 = off))
-                  (wnt >fs off (i + 1) (? hit (n + vwt spans i) n))))
-           nx9 (: (go9 l n9) (? !(two? l) n9
-                              (go9 >l (two? <l && id? <<l 'ret ? (n9 + 1) n9)))
-                  (go9 ir1x 0))
-           ; candidates off the locals record: (tc wtc sq span width pool? cs?) -- a ()
-           ; span never shares (a shadowed name has no per-name liveness to trust).
-           ; the rank is lpick's own RAW count first -- long-lived names accumulate
-           ; touches, and they are the ones only this channel can seat (a short
-           ; call-free range promotes in repack anyway) -- then scalars before a
-           ; pair (two seats), the loop weight, and the seq makes it total
-           cands (: (walk rs acc)
-                     (? !(two? rs) acc
-                        (: e2 <rs sq <e2 off <>e2 ty <>>e2 nm <>>>e2
-                           (? (lt off) (walk >rs acc)
-                              (: tc (ntouch ir1x off 0)
-                                 d1 (d128? ty)
-                                 pok (? d1 () (rpays? 'pool (? (free? nm) 0 nc) tc))
-                                 cok (2 < tc && rpays? 'bor nx9 tc)
-                                 (? !(pok || cok) (walk >rs acc)
-                                    (walk >rs ([tc (wnt ir1x off 0 0) sq
-                                                (? (member? nm uv) (peep spa9 nm ()) ())
-                                                (? d1 2 1) pok cok] >< acc)))))))
-                    (walk (g 'lrec) ()))
-           byw (sortby (\ a b (? (<b < <a) 1 (<a < <b) ()
-                                  ((nthr a 4) < (nthr b 4)) 1 ((nthr b 4) < (nthr a 4)) ()
-                                  (<>b < <>a) 1 (<>a < <>b) ()
-                                  (<>>a < <>>b)))
-                       cands)
-           occ {}                             ; seat -> its occupants' spans, 'x exclusive
-           (fits? r sp)
-            (: o (peep occ r ())
-               (? (id? o 'x) ()
-                  !(two? o) 1
-                  !(two? sp) ()
-                  (: (dj l) (? !(two? l) 1
-                               (: s <l ((<>s < <sp) || (<>sp < <s) ? (dj >l) ())))
-                     (dj o))))
-           (claim r sp) (pin occ r (? !(two? sp) 'x
-                                      (: o (peep occ r ()) (? (two? o) (sp >< o) [sp]))))
-           (seat1 file sp) (? !(two? file) ()
-                              (fits? <file sp) <file
-                              (seat1 >file sp))
-           (seat2 file sp)                    ; a d128 pair: two seats, both fitting
-            (: r1 (seat1 file sp)
-               (? !r1 ()
-                  (: r2 (seat1 (filter (\ q !(id? q r1)) file) sp)
-                     (? r2 [r1 r2] ()))))
-           lh {} pw {} cw {}
-           _ (foldl
-              (\ _ c
-                (: sq (nthr c 2) sp (nthr c 3) w2 (nthr c 4) pok (nthr c 5) cok (nthr c 6)
-                   r (? pok (seat1 pfile sp) ())
-                   (? r (: _ (claim r sp) _ (pin pw r 1) (pin lh sq r))
-                      !cok 0
-                      (w2 = 2)
-                       (: p2 (seat2 kp sp)
-                          (? !(two? p2) 0
-                             (: _ (claim <p2 sp) _ (claim <>p2 sp)
-                                _ (pin cw <p2 1) _ (pin cw <>p2 1)
-                                (pin lh sq p2))))
-                      (: r2 (seat1 kp sp)
-                         (? !r2 0
-                            (: _ (claim r2 sp) _ (pin cw r2 1) (pin lh sq r2)))))))
-              0 byw)
-           pused (filter (\ q (peep pw q 0)) hp9)
-           cu0 (filter (\ q (peep cw q 0)) kp)
-           (? (two? pused || two? cu0)
-              [lh (filter (\ q !(member? q pused)) hp9) cu0]))
-       ; -- the AST-side allocator (moon-ssa rung 6): lalloc's scan, fed by alive
-       ; instead of ir1 -- raw mention counts rank (the rung-4 law), the loop
+       ; -- the AST-side allocator (moon-ssa rung 6), fed by alive --
+       ; raw mention counts rank (the rung-4 law), the loop
        ; weight breaks ties, spans share seats. candidates are the predicted decl
        ; sequence's UNIVERSE names only (a shadowed or &-taken name stays a cell;
        ; the short-lived shadowed class was repack's anyway), and a name crossing
@@ -8034,7 +7600,7 @@
                e0 (peep g 'epi epi)
                ; ⚠ no reset before the FIRST attempt: nothing has run since cgfn's
                ; entry -- and the VLA prep's pointer/size slots live in this frame
-               ; state (the old world never regened a VLA fn, so they always
+               ; state (a VLA fn never rebuilds with seats, so they always
                ; survived; a reset here re-deals their offsets under them). a
                ; RETRY resets like the bare fallback (ok9 already barred VLAs
                ; from every path that can retry)
@@ -8067,7 +7633,7 @@
                      (build sb))
                   irU))
            (attempt 1))
-       n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for a possible regen
+       n0 (peep g 'n 0) strs0 (g 'strs)             ; snapshot the accumulators for ubuild's retry
        ; ⚠ the operand pool is EMPTY on t32: AAPCS32 keeps r4-r11 callee-saved and the thumb2
        ; frame saves only lr+fp, while r0-r3/r12 are args and scratch -- there is no free
        ; caller-saved register to pool. riscv's own pool is t0..t3 (r8..r11), caller-saved and
@@ -8079,12 +7645,13 @@
        ; gp 1. the ret lane reads g 'sret back; fnreset holds the neutral.
        srt (? (two? sig) <sig 'long)
        sr6f (sretm? g srt)
-       ; -- the one build (moon-ssa rungs 6+7, the default on every target):
-       ; seats from alive, one build per fn, the dance retired to
-       ; MOON_ABLATE=obuild (and the other old-world knobs). a memory sret
-       ; and varargs keep the old path either way (it already builds them
-       ; once).
-       uni9 ((uniw? g) && !(sr6f || vararg))
+       ; -- the one build (moon-ssa rungs 6+7, the only world): seats from
+       ; alive, one build per fn. a memory sret and varargs take the bare
+       ; spill build (one build there too, no seats).
+       uni9 !(sr6f || vararg)       ; -- the one build (moon-ssa rungs 6+7, the only world): seats from
+       ; alive, one build per fn. a memory sret and varargs take the bare
+       ; spill build (one build there too, no seats).
+       uni9 !(sr6f || vararg)
        _ (? sr6f (pin g 'sret (ntmp g 'long)) ())
        sp1 (? uni9 ()
               (vararg && a64? g) (vaspill-a64 params)
@@ -8094,152 +7661,9 @@
               sr6f (spill () params 1 0 0 () [['st 'r4 (peep g 'sret 0) (nthr (argr g) 0)]])
               (spill () params 0 0 0 () ()))
        sp1 (? (uni9 || !(two? vzf)) sp1 [(<sp1 + vzf) <>sp1])   ; the VLA size-slot zeroes ride after the spills
-       ir1 (? uni9 () (build sp1))
-       n1 (peep g 'n 0) strs1 (g 'strs)             ; ir1's accumulators -- a DEOPT restores these
-       sl1 (g 'slots)                       ; ...and ir1's slot map (repack reads the WINNER's, post-choice)
-       lrec1 (g 'lrec)                      ; ir1's locals record: a leaf RETRY ranks on it (a regen leaves pass-2 offsets)
-       ride (? (sr6f || vararg || peep g 'fesc () || hascall? ir1) () (rideset ir1 params 0 ()))
-       (pools rd) (: rh (map (\ k (homereg k)) rd)   ; the freed homes rejoin the pool for locals
-                     uh (filter (\ q !(member? q rh)) (uhomes params 0 ()))
-                     (filter (\ q !(member? q uh)) tpool))
-       hpool (pools ride)
-       hm (!(abl? g 'homes) && !vararg && !sr6f && !(peep g 'hasasm ()) &&   ; sr6f: the hidden sret arg shifts every
-           !(anyop? ir1 'sys) && homes? params 0)                   ; param register -- the pickers don't model it
-       ; the alive pass runs once per homing-eligible fn: lpick reads cross/
-       ; univ (a zero-crossing local homes through calls), the regens pin its
-       ; livtab so call-fixed wraps only what a call actually needs
-       ng (sr6f || vararg || bad? ir1 || g 'hasasm || anyop? ir1 'sys)
-       av (? ng () (alive g f))
-       ; -- priced int-param homes (the leaf lane): an int/uint param earns its POSITIONAL
-       ; seat only when its ir1 slot touches pay the entry cvt (tc >= 2), the locals picked
-       ; first (a hot local's claim wins the register), and an x64 pool seat stays deep
-       ; (>= 2 free after the take). ⚠ the unpriced version was the measured anti-lever
-       ; (+3.4% cycles): cold params drank the pool and reopened mag_mul's d128 stack cell.
-       ; a64 homes past r10 sit outside the operand pool -- always free at their own seat. --
-       (poff9 nm (e2 >< u)) (id? <e2 nm ? <>e2 (poff9 nm u))
-       (ihset rd lp9)
-        (homefold g params 0 [() lp9]
-         (\ a2 i9 p9
-            (: pl <>a2 hr (homereg i9) off (poff9 <p9 <>sp1)
-               pooled (member? hr tpool)
-               (? (!(homable? <>p9) &&
-                   !(member? i9 rd) &&
-                   !(two? off) &&
-                   !(id? off ()) &&
-                   (1 < ntouch ir1 off 0) &&
-                   (? pooled (member? hr pl && deep? pl) 1))
-                   [(i9 >< <a2) (? pooled (filter (\ q !(id? q hr)) pl) pl)]
-                  a2))))
-       ; -- the SEAT TABLE (lh ih lp cs): every priced register grant in one answer -- locals
-       ; homes (lpick), int-param homes (ihset), the pool left after both, the cs homes
-       ; taken. both lanes mint it here; regen consumes it whole. --
-       (seats rd hp9 wi)
-        (: oldp (abl? g 'alloc || abl? g 'pdefcs || abl? g 'pdef)
-           lr (? !(av && !(abl? g 'lhome)) ()
-                 oldp (lpick ir1 <>av <>>av hp9)
-                 (lalloc ir1 <>av <>>av (nthr av 5) hp9))
-           lp (two? lr ? <>lr hp9)
-           ih (? wi (ihset rd lp) [() lp])
-           [(two? lr ? <lr) <ih <>ih (two? lr (nthr lr 2))])
-       st0 (seats ride hpool !(ng || abl? g 'homes || g 'fesc || hascall? ir1))
-       lh <st0 ih0 <>st0                            ; the choice below reads these two; regen takes the table whole
-       (deopt u) (pins g 'n n1 'strs strs1 'slots sl1, ir1)
-               ; ir1 stands, accumulators + slot map restored
-       ; the REGEN dance: reset the accumulators and the frame to the ir1 snapshot, pin the
-       ; analyses' channels (the locals homes, the livtab), rebuild under
-       ; the spill policy hp with the seat table's pool, then clear every channel. a 'bad ir2
-       ; deopts: ir1 stands.
-       (regen hp st)
-        (: lh9 <st lp9 <>>st cs9 (nthr st 3)
-           pc0 (g 'pcs)                     ; the param cs grant, captured across fnreset
-           e0 (peep g 'epi epi)
-           lp2 (lp9 + filter (r9 \ member? r9 tpool && !(member? r9 lp9))   ; the granted
-                  (map (homereg * cap) pc0))   ; params' homeregs rejoin the pool
-           _ (pins (fnreset g) ; the build starts from the clean record at ir1's accumulator snapshot
-              'n n0 'strs strs0
-              'pool0 lp2 'pool lp2)
-           _ (rgset g lh9 av)
-           _ (pin g 'pcs pc0)
-           ; the callee-saved homes: one slot each past the r3 cell, stored by the
-           ; prologue (g 'cssv) and reloaded on every exit -- the epilogue PIN carries
-           ; the loads through each ret and sib splice, and unframe re-addresses them
-           ; like any slot op
-           csa (cs9 + map caup pc0)
-           _ (? (two? csa)
-                (: sv (map (\ r9 ['st 'r4 (nslot g 8) r9]) csa)
-                   _ (pin g 'cssv sv)
-                   (pin g 'epi (map (\ f9 ['ld (nthr f9 3) 'r4 (nthr f9 2)]) sv + e0)))
-                ())
-           ir2 (build (spill hp params 0 0 0 () ()))
-           _ (pins (rgreset g) 'cssv () 'epi e0)
-           ; the numbering guard: the build's forward ticks must land exactly
-           ; on alive's total, or the wrap sets keyed by statement number
-           ; landed on the wrong statements -- deopt to ir1, whole
-           (? (bad? ir2 || (two? av && !(peep g 'lsq 0 = nthr av 3)))
-              (deopt ()) ir2))
-       ; the leaf lane's ride loop: a rider whose arrival picked up a def in the code it licensed
-       ; DROPS, and the regen re-runs -- pool, locals picks and homes all recomputed for the
-       ; smaller set, so the survivors keep their arrivals and the dropped param homes like any
-       ; other. strictly shrinking (a failed check names a rider), so at most (tally ride)
-       ; re-runs; the no-shrink arm is regen's own deopt wearing through -- take ir1 and stop.
-       (leaf rd)
-        (: _ (pin g 'lrec lrec1)                    ; the retry's lpick ranks ir1's layout, never the failed regen's
-           st (seats rd (pools rd) 1)               ; the cs regs ride too -- their pair pins in regen
-           i2 (regen ['ride rd <>st] st)
-           (? (ridesound? i2 rd) i2
-              (: rs (filter (k \ rideok2 i2 (nthr (argr g) k)) rd)
-                 (#rs < #rd ? (leaf rs) (deopt ())))))
-       irf (? uni9 (ubuild av)
-           (? (bad? ir1) 'bad
-          ((hm || lh || two? ride || two? ih0) && !(g 'fesc) && !(hascall? ir1))
-           (leaf ride)
-          ; calls remain: the param cells stay CELLS (moon-ssa rung 5) and repack's
-          ; per-value chains place them -- caller-saved over call-free ranges, a cs
-          ; seat where crossings compound, the frame exactly across calls. the
-          ; fn-wide wrapped-home and cs-grant lanes below are the OLD answer, kept
-          ; under MOON_ABLATE=pcell (and the pdef/pdefcs/alloc worlds, which predate
-          ; the chains): ablating them on the rung-4 tree measured -1.6% cycles at
-          ; +2.1% insns -- the wrap pair's latency chain at every call costs more
-          ; than the forwarded slot traffic it consolidates, now that the chains
-          ; recover the call-free part. ⚠ the old lanes' own laws stand where they
-          ; run: fn-wide all or none (per-param verdicts measured BOTH ways and
-          ; lost), two pricings for pp, the whole-set seat gate for pcs.
-          (: old8 (abl? g 'pcell || abl? g 'alloc || abl? g 'pdefcs || abl? g 'pdef)
-             nc (ncalls ir1 0) nh (nhomable params 0 0)
-             nr (nreads ir1 (pslots <>sp1 ()) 0)
-             em (homefold g params 0 0
-                 (\ n2 i9 p9 (? (homable? <>p9 &&
-                                 !(id? (nthr (argr g) i9) (homereg i9))) (n2 + 1) n2)))
-             ; per invocation, nh homes at the caller-saved rate: the flat count, or the PATH
-             ; price (only the calls one path passes, plus in-loop calls at alive's weight)
-             pp (old8 && hm && (nh * rcost 'home nc < nr ||
-                        (two? av && nh * rcost 'home (pmax ir1 + nthr av 4) + em < nr)))
-             ; the cs-home grant: the homes take callee-saved seats and the per-call wraps
-             ; retire for one save + a reload per EXIT (the epilogue rides every ret) --
-             ; fn-wide, the whole set or none (the law above), seats from what lpick left
-             free9 (filter (\ r9 !(member? r9 (nthr st0 3))) (cspool g))
-             nx (: (go9 l n9) (? !(two? l) n9
-                                 (go9 >l (? (two? <l && id? <<l 'ret) (n9 + 1) n9)))
-                   (go9 ir1 0))
-             nra (nrac ir1 (pslots <>sp1 ()))
-             pcs (? (old8 && hm && !(abl? g 'pcs) && (0 < nh) && (nh <= tally free9) &&
-                     (0 < pmin ir1) &&
-                     ; per invocation, nh homes at the SEAT rate -- no wraps, one save and a
-                     ; reload per exit -- and every path must call, or the entry work earns nothing
-                     ((nh * rcost 'bor nx) + em < 2 * nra))
-                    (: pg (homefold g params 0 [() free9]
-                           (\ a2 i9 p9 (? (homable? <>p9 && two? <>a2)
-                                          [([i9 <<>a2] >< <a2) ><>a2]
-                                          a2)))
-                       <pg))
-             _ (pin g 'pcs pcs)
-             (? (two? pcs || pp || lh)
-                (regen (? (two? pcs || pp) 'shadow ()) st0) ir1))))
-       ; ⚠ deadlab and repack join unframe in the POST-CHOICE slot and must never touch the ir1
-       ; the rankers read: the dead tail's (li r0 0) is a def of r0 that BARS the ride analysis,
-       ; and the rankers price param slots BY BUILD OFFSET (nreads/nrac/pslots), so a packed ir1
-       ; misprices every grant. repack reads the WINNER's slot map (deopt restores ir1's) and
-       ; runs after deadlab (a dead region's touches would fatten the windows). this chain's
+       irf (? uni9 (ubuild (alive g f)) (build sp1))
+       ; deadlab and repack join unframe in the POST-CHOICE slot. repack runs after
+       ; deadlab (a dead region's touches would fatten the windows). this chain's
        ; order is TYPED (stage.l): each pass advances a stage die, so only this composition checks.
        ; the a64 IR sweeps join here, on the CHOSEN ir -- after the rankers priced the raw
        ; ir1, before deadlab (cfoldir's fold-throughs strand labels for it). cmpfuse stays

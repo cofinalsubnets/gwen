@@ -475,6 +475,27 @@ until rung 6.
   a cross-tree-state comparison, not a bug. Same-tree-state is now part of
   the meter's discipline.
 
+  **THE CUT RUNG LANDED 2026-08-28: the dance is deleted.** gen.l loses 578
+  lines — cgfn's two-build half (ir1, ride/hpool, hm, seats, deopt, regen,
+  leaf, the pcs/pp pricing), lpick, lalloc, rideset + the rst-* verifiers,
+  pmax/pmin/pslots/nreads/nrac, and the obuild/pcell/alloc/pdefcs/pdef knob
+  arms; spill keeps two policies (() and 'uni); uniw? itself is gone (the
+  one build is the only world; uni9 = !(sr6f || vararg)). law.l drops the
+  knob-face law blocks (x64 pcell, the arm64 stage-D section, the pdef/
+  pdefcs hull halves, the alloc round-trip) and the stale rv64-VLA refusal
+  law (three lanes now). rcost STAYS (rprice/rpays? price splice binds);
+  spill/build, repack's chains, the sweeps, sibcall, and the armed shadow
+  are the shared substrate and stay whole. THE FALSIFIERS: nine reference
+  objects (ev.c + am.c across all five targets) byte-identical pre/post;
+  the whole rv64 artifact's .text diffs ONLY in 974 auipc + 37 addi address
+  pairs chasing the smaller carried source (no semantic word differs);
+  test, test_moon, ccarm64 153, ccriscv 151, thumb1+thumb2, test_slow +
+  fixpoint all at reference. The old worlds live in git history (any
+  pre-cut commit rebuilds them); MOON_ABLATE keeps ralloc/tpool/cs as
+  pricing levers. ⚠ a whole-artifact byte or .text compare can never close
+  across a source edit — diff disassembly MNEMONICS and expect only the
+  address-formers to move.
+
   (superseded) rv64 pricing was BLOCKED before it started: the hosted cross binary
   (`make xa=riscv64 out/x-riscv64/love`) refuses in BOTH worlds on a
   pre-existing gap — "no lane for a variable-length array on rv64"
