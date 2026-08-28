@@ -365,12 +365,29 @@ until rung 6.
   test_ccarm64 153/153, test_cts_arm64 211/220 (the corpus reference),
   moon-tar/gzip-arm64 build+run+roundtrip. arm64check.sh fails on BOTH
   worlds — the local cross-gcc predates musttail (environmental, recorded).
-  THE A64 FLIP still wants dynamic pricing on silicon (pi.lan) or an explicit
-  census+gates decision like the sweeps arc took. rv64/t32 under the knob are
-  BEHAVIORALLY GREEN too (ccriscv 150/150, cts_riscv 210/220 — the corpus
-  reference — and thumb2's differential battery runs on qemu Cortex-M7), so
-  the pure-upside claim is validated, not just predicted; their calibration
-  and flips remain open.
+  rv64/t32 under the knob are BEHAVIORALLY GREEN too (ccriscv 150/150,
+  cts_riscv 210/220 — the corpus reference — and thumb2's differential
+  battery runs on qemu Cortex-M7), so the pure-upside claim is validated,
+  not just predicted; their calibration and flips remain open.
+
+  **THE A64 FLIP IS REFUSED 2026-08-28 — the qemu meter falsified the
+  census.** The instrument: a ~20-line qemu TCG plugin (scratchpad
+  r7q/insncount.c, built against /usr/include/qemu-plugin.h) counts exact
+  guest instructions; the corpus rides `LOVE_NO_IMAGE=1 qemu-aarch64
+  -plugin insncount.so lovex < corpus.l`, boot-subtracted, and repeat runs
+  agree to 5 parts in a million — no cycles lottery, no attribution
+  ambiguity. ⚠ `love seed arm64` DROPS MOON_ABLATE somewhere in its spawn
+  (both worlds seeded byte-identical); build the per-world binary with
+  `MOON_ABLATE=... make xa=aarch64 out/x-aarch64/love` instead. The verdict:
+  the one build reads +2.0% guest insns over the dance (22.90G vs 22.45G,
+  corpus minus boot) DESPITE −1391 forms and −0.58% .text — the fourth time
+  this arc's statics pointed opposite to dynamics, and the first where the
+  honest meter caught it before a flip shipped. The x64-tuned thresholds do
+  not transfer: a64's economics differ (homeregs r10–r14 sit partly on the
+  cs side, the shuttle owns r0–r3 differently, wrap and pair costs differ).
+  NEXT for a64: extend the plugin to PC-bucketed counts mapped through nm —
+  per-symbol attribution under the exact meter — and re-calibrate against
+  it the way lvm_cur's hunt calibrated x64.
 
 ## the standing constraints (read before building)
 
