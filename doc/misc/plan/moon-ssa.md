@@ -423,6 +423,19 @@ until rung 6.
   agree for the first time (forms −1391, .text −0.58%, insns −0.40%); the
   flip itself awaits the word.
 
+  **FLIPPED 2026-08-28: the one build is the a64 DEFAULT too** (uniw? now
+  bars only t32/rv until their calibration; MOON_ABLATE=obuild keeps the
+  a64 dance byte-identically in-world). Parity of the flip itself: the
+  default cross binary answers the exact meter within 5.7ppm of the
+  calibrated uni world (54.9261G vs 54.9258G), the data/bss fingerprint
+  matches the uni world exactly, and gates sit at reference (test ×3,
+  ccarm64 153/153, cts_arm64 211/220, test_slow + seed fixpoint). ⚠ a
+  byte-compare across the flip CANNOT close: MOON_ABLATE=uni opts EVERY
+  remaining ISA in, so a pre-flip uni cross binary carries rv64-uni rt
+  members where the default keeps rv64 on the dance — the embedded rt
+  archive differs and shifts every address after it. Judge parity by the
+  meter and the section fingerprint, not the file hash.
+
 ## the standing constraints (read before building)
 
 - the staging quad r0–r3 belongs to expression staging through rung 5; the
