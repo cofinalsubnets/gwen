@@ -539,7 +539,7 @@
                (: a <x b >x (?
                 (atom? b) (ana c a)
                 (a = '? ) (aco c b)
-                (a = '\ ) (? (atom? >b) (kim <b) (ana c (ala c () b 0)))
+                (a = '\ ) (? (atom? >b) (kim <b) (ana c (ala c () b 0 1)))
                 (a = ': ) (ale c <b >b)
                 (a = iop) (iap c b)
                 (a = apx) (apxh c b)
@@ -664,7 +664,7 @@
           (stki d >= 0) (? home (q #(c 'stk))
                          (c 'par ? (push c 'imp x), q #(c 'stk))))))))
   ; lambda analyzer
-  (ala c imp exp nm) (:
+  (ala c imp exp nm hq) (:
    d (sco c (init exp) imp)
    k (ana d (last exp) (k0s d))
    a (ary d)
@@ -674,7 +674,7 @@
    hk (poke -1 s e,                                  ; value[-1] = source \-expr
        trim (seek -1 e),                             ; tag head spans [src .. body]; value stays e
        gv 'natjit 0)
-   ((!hk ? e (hk e s a gv (farq c) (c 'lam) nm)) . d 'imp))
+   ((!hk ? e (hq ? (hk e s a gv (farq c) (c 'lam) nm) e)) . d 'imp))
   (farq k x) (? !k 0
                (: f (k 'far)
                   (? (tablet? f && 0 <= peep f x -1) 1 (farq (k 'par) x))))
@@ -711,7 +711,7 @@
        (push c 'stk <<ps,
         split a >ps)
       (: k <<ps
-         v (ala q () >><ps k)
+         v (ala q () >><ps 0 0)                  ; hq 0: the first-build closure is cleared and rebuilt by weave, so no creation hook
          a2 ((k . mkc v) . a)
        (push c 'stk k,
         split a2 >ps)))
@@ -740,7 +740,7 @@
     (weave nds) (? (atom? nds) id
      (: nd <nds n <nd d >nd
         d (?- d (lambp d) (: cls (assoc n lams)
-                             x (ala q >(cof cls) >d n)
+                             x (ala q >(cof cls) >d n 1)
                              ; ⚠ the import row is FROZEN here: every ref site that already
                              ; compiled applied (cup (cof cls)), so growth means those sites
                              ; under-apply -- scare, never miscompile.

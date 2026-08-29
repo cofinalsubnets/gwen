@@ -323,12 +323,12 @@
    ; restore Sp, enter e on the ORIGINAL frame (arg slots are never mutated; loop state lives in
    ; the reserved slots). a restart re-runs any call-outs already made -- the same bet the fold
    ; lanes' twins take. grammar = the probed families: fixnum/() consts, two? cap cup id? link,
-   ; + - * and comparisons (fixnum-guarded; = is TOTAL -- points and fixnums inline, the rest
+   ; + - * // % & | ^ and comparisons (fixnum-guarded; = is TOTAL -- points and fixnums inline, the rest
    ; drives the = value), ? (2- or 3-arm), ONE applied named-let (self tail-calls -> a jump,
    ; both def sugars), calls to frame/loop names, RECURSION on the closure's OWN letrec name
    ; (a saturated tail call re-enters as a loop, any other takes the direct self frame), in
    ; LOOP bodies calls to resolvable global heads, QUOTED DATA (any datum: the source node rides a nifx extras slot, and
-   ; (a = 'sym) is raw identity by the point-= law). strings, floats, //%, &|^, inner \,
+   ; (a = 'sym) is raw identity by the point-= law). strings, floats, inner \,
    ; effects, global reads in OPERAND position: DECLINE (bytecode, exactly as before). a global
    ; callee resolves via gv at compile (redefinition-stale -- the callout lanes' bet; NEVER a
    ; farq name, ala's letrec-local predicate) and rides the nifx extras chain into a reserved
@@ -340,7 +340,7 @@
    (amax a b) (? (a < b) b a)
    (adistinct l) (? !(two? l) 1  (member? <l >l) 0  (adistinct >l))
    (aconst? e) (whole? e || id? e amble-nil)
-   (aop2? op) (member? op '(+ - * < <= > >= = id? link))
+   (aop2? op) (member? op '(+ - * // % & | ^ < <= > >= = id? link))
    (acmp? op) (member? op '(< <= > >= =))
    (aquote? e) (two? e && id? <e '\ && 2 = (tally e))            ; the reader's quote: (\ X) at EXACTLY two -- a datum constant
    (aqnom? e) (aquote? e && name? <>e)                          ; a quoted NOM: a point, so (a = 'sym) is raw identity
@@ -449,7 +449,7 @@
    ; env-shadowed (a param named link must win, as it does in bytecode).
    aopv [[two? 'two?] [cap 'cap] [cup 'cup] [id? 'id?] [link 'link]
            [tally 'tally] [(+) '+] [(-) '-] [(*) '*] [(<) '<] [(<=) '<=]
-           [(>) '>] [(>=) '>=] [(=) '=]]
+           [(>) '>] [(>=) '>=] [(=) '=] [(//) '//] [(%) '%] [(&) '&] [(|) '|] [(^) '^]]
    ; a miss falls through to `opnom`, the glued lane's own value -> word map (prel), so every
    ; sigil-backed head is named here without this list having to carry all fourteen.
    (aopn x l) (? !(two? l) (opnom x)  (id? x <<l) <><l  (aopn x >l))
@@ -573,6 +573,12 @@
                   (id? op '-) ((fx2 'deopt) + [['subs T T A] ['br 'vs 'deopt] ['lea A T 1]])         ; 2(x-y) then tag
                   ((fx2 'deopt) + [['sar A 1] ['sub T T 1] ['mulo A A T SC 'deopt] ['or A A 1]]))) ; y * 2x = 2xy (mulo IS the tag-range gate) then tag
              (acmp2 op sa sb d) (abin sa sb d ((fx2 'deopt) + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]]))
+             (adm op sa sb d) (abin sa sb d                                                        ; // %: untag, /-by-0 -> twin, divir (trunc toward zero), retag
+              ((fx2 'deopt) + [['sar T 1] ['sar A 1] ['test A A] ['br 'eq 'deopt]]                 ; (the adds gate catches most-negative // -1)
+               + (divir tgt op)
+               + [['adds A A A] ['br 'vs 'deopt] ['or A A 1]]))
+             (abit op sa sb d) (abin sa sb d                                                       ; & | ride the tags whole (2x+1 op 2y+1 = tag(x op y)); ^ re-tags
+              ((fx2 'deopt) + (? (id? op '^) [['xor A A T] ['or A A 1]] [[(bitop op) A A T]])))
              ; aeq2: the GENERIC = -- total, never a deopt. equal fixnums and the same point
              ; answer 1; distinct fixnums, and a point against ANYTHING else, answer 0 (a
              ; point equals only itself); everything structural -- strings, gems (the numeric
@@ -705,6 +711,8 @@
                        (id? op '= && (lit? eqv)) (aeq2 <as <>as d)
                        (acmp? op) (acmp2 op <as <>as d)
                        (member? op '(+ - *)) (aar op <as <>as d)
+                       (member? op '(// %)) (adm op <as <>as d)
+                       (member? op '(& | ^)) (abit op <as <>as d)
                        (id? op 'tally && !(member? 'tally env) && member? 'tally gn && !(two? >as))
                         (atally <as d)                                       ; the tally fast lane (env-shadowed or multi-arg falls to the call paths)
                        (id? op '|| && !(member? op env) && two? >as) (aor as d)
