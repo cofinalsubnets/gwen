@@ -1313,6 +1313,28 @@
       (member? '(sx4 r7) ipf)                        ; f5: n rides r7, canonicalized once
       (member? '(cmp r9 r7) ipf)                     ; ...and the bound compare never opens a slot
       !(member? '(sx4 r5) idf))                      ; a read-free param earns nothing
+   ; -- the int VACATE: a hot int param that cannot ride (a quad under a dirty body -- f7's
+   ; div writes the quads) takes its positional seat with the entry cvt; read at loop depth
+   ; 2 it is hot by the blocker law (64), while f8's n, read once outside any loop, keeps its
+   ; slot. on a64 an int in the r4 arrival rides free, as a pointer does (f9: nb never opens
+   ; a slot, the inner bound compares register-register)
+   irHV (cgn "long f7(long *a, long *b, int n) { long s = 0; for (int i = 0; i < n; i++) for (int j = 0; j < n; j++) s = s + a[i] / b[j]; return s; } int main() { return 0; }")
+   hvf (fnf 'f7 <>irHV)
+   irCV (cgn "long f8(long *a, long *b, int n) { long s = a[0] / b[n]; for (int i = 0; i < 4; i++) s = s + a[i] / b[i]; return s; } int main() { return 0; }")
+   cvf (fnf 'f8 <>irCV)
+   (cgt src tgt) (: r (cparse <>(clex src)) (? (okv? r) (cgen <>r <>>r <>>>r <>>>>r () tgt) ()))
+   irR4 (cgt "long f9(long *r, long *a, int na, long *b, int nb) { long s = 0; for (int i = 0; i < na; i++) for (int j = 0; j < nb; j++) s = s + a[i] / b[j]; return s; } int main() { return 0; }" 'arm64)
+   r4f (fnf 'f9 <>irR4)
+   _ (assert
+      (two? irHV) (two? irCV) (two? irR4)
+      (member? '(mov r9 r2) hvf)                     ; f7: n vacates r2 to its positional seat...
+      (member? '(sx4 r9) hvf)                        ; ...canonicalized there once
+      (member? '(cmp r10 r9) hvf)                    ; ...and both bounds compare register-register
+      (= 0 (tally (filter (\ f (two? f && id? <f 'ld4)) hvf)))
+      (member? '(st sp 0 r2) cvf)                    ; f8: a cold n spills...
+      (member? '(ld4 r0 sp 0) cvf)                   ; ...and re-extends from its slot
+      (member? '(sx4 r4) r4f)                        ; f9: nb rides r4 on a64
+      (member? '(cmp r6 r4) r4f))                    ; ...the inner bound register-register
    ; -- d128 LOCALS home as CS PAIRS: a loop-carried __int128 local takes (lo hi) off the
    ; cs pool (callee-saved: call-safe, no wraps, and no operand-pool pressure -- the wpk
    ; park's registers stay free). reads/writes are mov pairs on the r0:r2 protocol; the

@@ -451,7 +451,8 @@ until rung 6.
   (+73.6M) where the dance homed them to x12/x14. The candidate lever — an
   int param VACATING to a home seat with its entry sxtw, the way pointers
   vacate — is a new verdict arm that would move x64 output too: a priced
-  decision on both ISAs, parked here.
+  decision on both ISAs, parked here. LANDED 2026-08-28 (moon-gauge's landed
+  lever 6): nb rides r4, mag_mul −558M on the meter, x64 identical.
 
   rv64 pricing LANDED 2026-08-28, unblocked by the VLA lane: the first
   hosted rv64 love builds and runs the full corpus in both worlds, and the

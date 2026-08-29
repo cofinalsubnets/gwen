@@ -704,9 +704,9 @@
    ; a home carries int/uint too, CANONICALLY: the register always holds the extended value
    ; (every def re-narrows through cvt; a param's entry cvt canonicalizes the arrival -- a
    ; foreign caller's high half is undefined), so reads are zero forms and 32-bit wrap holds.
-   ; ⚠ an int PARAM homes only by RIDING its arrival (no pool register, no wrap -- one entry
-   ; cvt): a pool home for a cold int param starves the d128 pair park and the hot locals
-   ; (mag_mul measured +3% corpus cycles), so a non-rideable int param keeps its slot.
+   ; an int PARAM homes by RIDING its arrival where it can (no pool register, no wrap -- one
+   ; entry cvt); only a HOT non-rideable one takes a positional seat (upar): a cold int param
+   ; in a pool seat starves the d128 pair park and the hot locals.
    (lhomable? ty) (homable? ty || member? ty '(int uint))
    ; the homable-param fold, spelled once for its three readers (pgo, upar,
    ; ubuild's grant fold): a float/sse param rides its own lane and spends no gp
@@ -7540,7 +7540,7 @@
        ; one mov to its positional seat instead) -- and every home wears the
        ; armed shadow. a hard-crossing param stays a cell (rung 5's economics).
        (upar av9 qk)
-        (: uv <>>av9 crh9 (av9 6) rdc9 (av9 7)
+        (: uv <>>av9 crh9 (av9 6) rdc9 (av9 7) rdt9 (av9 8)
            lf9 (av9 15 <= 2)                  ; leaf-SHAPED: at most two cold hard crossings (see ulloc)
            pq9 (qk && av9 16)                    ; protocol-quiet: nothing in the body writes a quad
            wd9 (av9 17 &&                      ; d128 material: the wide kit owns the file --
@@ -7571,13 +7571,23 @@
                     ; register minted) -- read at least once (a read-free param
                     ; earns nothing), never beside d128 material (the wide-pair
                     ; park owns the file: the mag_mul discipline), and only while
-                    ; the file stays deep, two left after the take
+                    ; the file stays deep, two left after the take; a64's r4
+                    ; arrival rides free, as a pointer's does
                     (ok && lhomable? pty && (0 < peep rdc9 nm 0) && !wd9 &&
-                     member? A tpool && 3 <= nv)
-                     [(gpi . <a4) <>a4 (A . a4 2) (nv - 1)]
+                     (member? A tpool && 3 <= nv || a4rider? A))
+                     [(gpi . <a4) <>a4
+                      (? (member? A tpool) (A . a4 2) (a4 2))
+                      (? (member? A tpool) (nv - 1) nv)]
                     (ok && lhomable? pty && (0 < peep rdc9 nm 0) &&
                      pq9 && member? A '(r0 r1 r2 r3))
                      [(gpi . <a4) <>a4 (a4 2) nv]
+                    ; ...and a HOT one that cannot ride (a quad under a dirty body)
+                    ; VACATES to its positional seat, entry cvt and all -- hot by
+                    ; the blocker law (a loop-weighted read count of 64: a cold int
+                    ; param drank the pool and starved the hot locals)
+                    (ok && lhomable? pty && !wd9 && 64 <= peep rdt9 nm 0 &&
+                     member? A '(r0 r1 r2 r3) && 3 <= nv)
+                     [<a4 (gpi . <>a4) (a4 2) (nv - 1)]
                     a4)))))
        ; -- the ONE build (moon-ssa rung 6): alive feeds the seats and the build
        ; runs once; the dance survives as the rare BARE fallback (a 'bad build,
