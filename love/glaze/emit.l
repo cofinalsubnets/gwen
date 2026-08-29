@@ -352,7 +352,7 @@
    (ahascall? env go e)                                                  ; does e contain a call (any non-op head)? (the bisect knob's test)
     (? (aquote? e) 0
        (two? e) (: op <e
-          ((name? op && !(id? op go) && !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
+          ((name? op && !(id? op go) && !(member? op '(? : two? cap cup + - * // % & | ^ < <= > >= = id? link)))
            || (foldl (\ a x (a || ahascall? env go x)) 0 >e)))
        0)
    ; aheads: collect the FREE call heads of e -- the global-callee candidates. within the ACCEPTED
@@ -366,7 +366,7 @@
        (two? e)
         (: op <e                                                    ; a2, not a rebind of acc: a `:` is ONE SCOPE, so `acc (.. acc ..)`
            a2 (? ((name? op) && !(id? op go) && !(member? op env) && !(member? op acc)
-                  && !(member? op '(? two? cap cup + - * < <= > >= = id? link)))
+                  && !(member? op '(? : two? cap cup + - * // % & | ^ < <= > >= = id? link)))
                  (op >< acc) acc)                                      ; reads the UNPINNED local -- a silent missing per node (help.l heard 14)
            (foldl (\ ac x (aheads env go x ac)) a2 >e))
        acc)
@@ -382,6 +382,12 @@
            (? (id? op '?) (((n = 3) || (n = 2)) && (amble-ok? env gn go k 0 <as)   ; 2-arm ?: the missing else is (), acg's amble-nil slot
                            && (amble-ok? env gn go k tl <>as)
                            && (amble-ok? env gn go k tl <>>as))
+              (id? op ':) (!((tally e) % 2)                                        ; a VALUE let: binders enter env IN ORDER, so a forward
+                           && ((: (gol l ev)                                       ; read declines (bytecode's missing, never a stale slot)
+                                (? !(two? >l) (amble-ok? ev gn go k tl <l)
+                                   ((amble-ok? ev gn go k 0 <>l)
+                                    && (gol >>l (? (id? <l '_) ev (<l >< ev))))))
+                               as env))
               (member? op '(two? cap cup)) (n = 1 && amble-ok? env gn go k 0 <as)
               (aop2? op) (n = 2 && amble-ok? env gn go k 0 <as && amble-ok? env gn go k 0 <>as)
               (id? op '|| && !(member? op env)) (2 <= n && all (\ x (amble-ok? env gn go k 0 x)) as)
@@ -398,6 +404,7 @@
        (aquote? e) 0
        (: op <e  as >e
           (? (id? op '?) (amax (amble-depth go cx <as) (amax (amble-depth go cx <>as) (amble-depth go cx <>>as)))
+             (id? op ':) (foldl (\ a x (amax a (amble-depth go cx x))) 0 as)       ; lets ride their own slots; parts run sequentially
              (member? op '(two? cap cup)) (amble-depth go cx <as)
              (id? op '||) ((tally as) + (foldl (\ a x (amax a (amble-depth go cx x))) 0 as))   ; aor needs no spills, but a SHADOWED || is a call --
                                                                                               ; the call formula covers both (over-reserve is safe)
@@ -481,6 +488,29 @@
    ; is free-LOOKING in a weave re-analysis surface, wire-resolved in truth -- never a gn candidate.
    ; lams = the scope's lambda-sibling list ((name . cell)..): a cell holds (entry . import-names),
    ; lz's frozen site.
+   ; alets: collect the value-let binders of e -- every (: p v .. body) node, the
+   ; destructuring idiom -- and validate what amble can own: an even tally (the body-less
+   ; form binds the ENCLOSING scope), name binders (a define-sugar pair is a lambda), no
+   ; rebinding anywhere (one flat namespace serves the whole body). `_` evaluates and
+   ; drops, never binds. answers the name list, or 'bad (the body declines).
+   (alets e acc)
+    (? (id? acc 'bad) 'bad
+       (aquote? e) acc
+       !(two? e) acc
+       (id? <e ':)
+        (? ((tally e) % 2) 'bad
+           ((: (gol l ac)
+               (? (id? ac 'bad) 'bad
+                  !(two? >l) (alets <l ac)
+                  (: p <l  v <>l
+                     (? !(name? p) 'bad
+                        (: a2 (alets v ac)
+                           (? (id? a2 'bad) 'bad
+                              (id? p '_) (gol >>l a2)
+                              (member? p a2) 'bad
+                              (gol >>l (p >< a2))))))))
+            >e acc))
+       (foldl (\ ac x (alets x ac)) acc e))
    ; adrv?: does e contain a DRIVER call -- a self-call or an applied frame/loop name? the
    ; non-loop cost gate: a body whose only calls go to resolvable globals is a one-shot
    ; wrapper (its compile is nearly always a waste); a body that drives a parameter (a
@@ -518,6 +548,14 @@
                !(simp = (take ni ps)) 0
                nm)
        sfq  !(id? self 0)
+       ; VALUE LETS: the destructuring idiom rides pre-allocated slots past the spills --
+       ; one flat namespace (alets declines rebinds/shadows), binders visible in order.
+       lts0 (foldl (\ ac i (alets i ac)) (alets body ()) inits)
+       lts  (? (id? lts0 'bad) 'bad
+               (foldl (\ ac p (ac || member? p env || id? p go || id? p self)) 0 lts0) 'bad
+               lts0)
+       nl   (? (id? lts 'bad) 0 (tally lts))
+       envl (? (id? lts 'bad) env (env + lts))
        ; the free-head seams: LOOP bodies, and (drok) bodies that drive a param or themselves
        ; -- the shapes that amortize the call and compile taxes. a one-shot wrapper whose only
        ; calls go to globals -- (\ t k (peep t k ())) and kin -- stays bytecode.
@@ -532,8 +570,8 @@
        ; extras slot and the call curries entry(imports.. args..). fixcaps' pour guarantees the
        ; import names sit in this frame; entry 0 (a forward/self ref, lz's backpatch case) or a
        ; stray import just isn't in cn -> amble-ok? declines that body.
-       cand (filter (\ f !(id? f self)) (foldl (\ ac i (aheads env go i ac)) (aheads env go body ()) inits))
-       drok (? lp 1 (? (two? cand) (adrv? env self body) 1))   ; the non-loop cost gate: free heads ride only a body that drives a param
+       cand (filter (\ f !(id? f self)) (foldl (\ ac i (aheads envl go i ac)) (aheads envl go body ()) inits))
+       drok (? lp 1 (? (two? cand) (adrv? envl self body) 1))  ; the non-loop cost gate: free heads ride only a body that drives a param
                                                                ; or itself -- and a declining body skips the resolution below entirely
        csx  (? drok (map (\ f [f (? (farq f)                 ; only a letrec-local can be a sibling: farq (a cheap chain peep) gates
                               (: lfd (assoc f lams)          ; the lam-list assoc. the cell READ mirrors ev.l's cof: box slot 0.
@@ -559,9 +597,9 @@
        lpok (? lp ((all name? vars) && (adistinct vars) && (k = (tally inits))
                    && !(member? go vars) && !(member? go ps)) 1)
        ok ((two? s) && (two? >s) && (all name? ps) && (adistinct ps)
-           && (a = (tally ps)) && (0 < a) && lpok && drok && (two? body)
+           && (a = (tally ps)) && (0 < a) && lpok && drok && !(id? lts 'bad) && (two? body)
            && (? (getenv "LOVE_AMBLE_NOCALL") !(ahascall? env go body) 1)              ; the call-lane bisect knob (forensics: splits call machinery from the rest)
-           && (all lit? gvals) && (nd < 48) && ((k + (tally gn) + (tally cn) + nq) < 48)   ; slots are cheap once the prologue GUARDS the room (below)
+           && (all lit? gvals) && (nd < 48) && ((k + (tally gn) + (tally cn) + nq + nl) < 48)   ; slots are cheap once the prologue GUARDS the room (below)
            && (all (\ i (amble-ok? ps kn 0 0 0 i)) inits)
            && (amble-ok? env kn go k 1 body))
        (? ok
@@ -569,13 +607,15 @@
              ng (1 + (tally gn) + (tally cn) + nq + (? (lit? eqv) 1 0))   ; extras region = [() | globals | sibling entries | quoted data | =]: () is
                                                                 ; the empty MINT (li 1 would be the charm 0-fossil), entries + quotes
                                                                 ; are HEAP values -- all ride the nifx extras chain into GC-walked slots
-             R (k + 3 + ng + nd)                            ; loopvars | Se | So | BUDGET | extras | spills
+             R (k + 3 + ng + nd + nl)                       ; loopvars | Se | So | BUDGET | extras | spills | lets
              A (greg tgt 'acc)  T (greg tgt 'tmp)  X (greg tgt 'anchor)  SC (greg tgt 'scratch)
              SP (greg tgt 'sp)  IP (greg tgt 'ip)  HP (greg tgt 'hp)
              seo (8 * k)  soo (8 * (k + 1))  budo (8 * (k + 2))  gbo (8 * (k + 3))  spo (8 * (k + 3 + ng))  fro (8 * R)
-             (voff v) (? (member? v vars) (8 * (posof v vars 0)) (fro + (8 * (posof v ps 0))))
+             (voff v) (? (member? v vars) (8 * (posof v vars 0)) (member? v lts) (lvo v) (fro + (8 * (posof v ps 0))))
              (spill d) (spo + (8 * d))
              eqo (gbo + (8 * (1 + (tally gn) + (tally cn) + nq)))   ; the = value's extras slot (past globals, siblings, quotes)
+             lto (8 * (k + 3 + ng + nd))                    ; the let region, past the spills
+             (lvo v) (lto + (8 * (posof v lts 0)))
              (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T,A fixnum, else lbl
              (abin sa sb d fin) ((acg sa d) + [['st SP (spill d) A]] + (acg sb (d + 1)) + [['ld T SP (spill d)]] + fin)   ; T = a, A = b
              (aar op sa sb d)
@@ -694,8 +734,8 @@
                  (member? f cn)                                                                             ; a SIBLING: its frozen entry takes the import names (all in the frame
                  (: sas ((cimp f) + as)  sso (gbo + (8 * (1 + (tally gn) + (posof f cn 0))))            ; by fixcaps) then the args -- lz's site, saturated when it can be
                     (? (two? >sas) (asat sas sso d) (achain sas sso d)))
-                 (: cso (? (member? f vars || member? f ps) (voff f) (gbo + (8 * (1 + (posof f gn 0)))))
-                    (? ((? lp 1 sfq) && !(two? >as) && (member? f vars || member? f ps))              ; a 1-arg frame callee can be a STRING at run time (the lexer class) --
+                 (: cso (? (member? f vars || member? f ps || member? f lts) (voff f) (gbo + (8 * (1 + (posof f gn 0)))))
+                    (? ((? lp 1 sfq) && !(two? >as) && (member? f vars || member? f ps || member? f lts))   ; a 1-arg frame callee can be a STRING at run time (the lexer class) --
                        ((acg <as d) + (astr1 cso))                                                     ; LOOPING bodies only (named-let or self-call), the same cost gate as
                        (two? >as) (asat as cso d)                                                      ; gn; multi-arg saturates when the callee's arity agrees
                        (achain as cso d))))                                                                 ; the loop, but on a one-shot recursion wrapper it taxed EVERY drive
@@ -724,11 +764,15 @@
              (acqt st sth sel d) (: le (mint 0)  ln (mint 0)                                       ; acq, tails threaded
               ((acg st d) + [['test A 1] ['br 'eq 'deopt] ['cmp A 1] ['br 'le le]]
                + (acgt sth d) + [['jmp ln] ['label le]] + (acgt sel d) + [['label ln]]))
-             (acgt e d)                                                                             ; tail-position acg: thread tails through ? so a saturated self-call jumps
+             (acgt e d)                                                                             ; tail-position acg: thread tails through ? and let bodies so a saturated self-call jumps
               (? (aquote? e) (acg e d)
                  !(two? e) (acg e d)
                  (: op <e  as >e
                     (? (id? op '?) (acqt <as <>as <>>as d)
+                       (id? op ':) ((: (gol l) (? !(two? >l) (acgt <l d)
+                                                  ((acg <>l d)
+                                                   + (? (id? <l '_) () [['st SP (lvo <l) A]])
+                                                   + (gol >>l)))) as)
                        (sfq && (id? op self) && ((tally as) = (a - ni))) (aselfgo as d)
                        (acg e d))))
              (acg e d)
@@ -737,7 +781,11 @@
                  (id? e amble-nil) [['ld A SP gbo]]
                  (aquote? e) [['ld A SP (gbo + (8 * (1 + (tally gn) + (tally cn) + (aposq e qs 0))))]]   ; a quoted datum: its extras slot (past the globals + sibling entries)
                  (: op <e  as >e
-                    (? (id? op '?) (acq <as <>as <>>as d)
+                    (? (id? op ':) ((: (gol l) (? !(two? >l) (acg <l d)                            ; a VALUE let: each binding lands in its slot, in order
+                                                  ((acg <>l d)
+                                                   + (? (id? <l '_) () [['st SP (lvo <l) A]])
+                                                   + (gol >>l)))) as)
+                       (id? op '?) (acq <as <>as <>>as d)
                        (id? op 'two?) (atwo <as d)
                        (id? op 'cap) (acap <as d 8)
                        (id? op 'cup) (acap <as d 16)

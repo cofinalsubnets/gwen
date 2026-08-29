@@ -9,6 +9,7 @@
 (? (0 < love-tco)
    (ev '(: (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
            (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z)
+           (filter p l) (? (two? l) (: m (filter p (cup l)) (? (p (cap l)) (link (cap l) m) m)))
            (revcat l acc) (? (two? l) (revcat (cup l) (link (cap l) acc)) acc)
            (assoc x l) (? (two? l) (? (= x (cap (cap l))) (cap l) (assoc x (cup l))))
            (all f l) (? (two? l) (? (f (cap l)) (all f (cup l)) 0) 1)

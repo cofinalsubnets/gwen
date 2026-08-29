@@ -53,6 +53,11 @@
        mem (ev '(: (mem x l) (? (two? l) (? (= x (cap l)) 1 (mem x (cup l))) 0) mem))
        (&& (1 = (mem 'b '(a b c))) (0 = (mem 'z '(a b c))) (1 = (mem "s" '("q" "s")))
            (1 = (mem 2.0 '(1 2 3))) (0 = (mem 2.5 '(1 2 3))) (fired? n)))
+    ; --- VALUE LETS: the destructuring idiom rides slots; order, _, and the let-bound callee
+    (: n (peep fires () 0)
+       dw (ev '(: (dw x l) (? (two? l) (: h (cap l) t (cup l) (? (= h x) 1 (dw x t))) 0) dw))
+       (&& (fired? n) (1 = (dw 'b '(a b c))) (0 = (dw 'z '(a b c))) (0 = (dw 3 ()))
+           (= (dw 2.0 '(1 2)) ((\ x l (? (two? l) (: h (cap l) t (cup l) (? (= h x) 1 (dw x t))) 0)) 2.0 '(1 2)))))
     ; --- the owned op set widens: // % & | ^ (fixnum-guarded, trunc toward zero), == interp
     (: n (peep fires () 0)
        h (ev '(: (h a b) (? (< 0 b) (+ (+ (// a b) (% a b)) (+ (& a b) (+ (| a b) (^ a b)))) 0) h))
