@@ -31,6 +31,14 @@
    ; the unsplice. (the byte-piece concat helper is `bcat` -- it must NEVER be named `holo`: this :
    ; is body-less, so its bindings leak to the `glaze` module's own book, and a `holo` binding
    ; there once clobbered the assembler.)
+   ; the assembler itself is NOT captured: holo is evaluated again under the hook after the
+   ; glaze (src/main.c), and hook.l pins that native-backed build into this cell at its own
+   ; install; a cat that reopens holo later (mooncc's copy) leaves the cell alone -- its
+   ; backend table is empty for a moment between its holo.l and its amd64.l. unpinned (the
+   ; glaze cat-loaded alone), the module's current assembler serves. the cell leads the
+   ; letrec: a value a lambda reads must precede every lambda that reaches it, or the read
+   ; compiles as a global one.
+   glazeasm {}
    (le8 n) (: u (? (n < 0) (n + 18446744073709551616) n)                            ; two's-complement; & is broken on
               ((: (go i) (? (i < 8) ((u // (i 256)) % 256 >< go (i + 1)) ())) 0))   ; a bignum >= 2^63, so use //% (n -> 8 LE bytes)
    (le4 n) ((: (go i) (? (i < 4) ((n >> (8 * i)) & 255 >< go (i + 1)) ())) 0)  ; n -> 4 LE bytes (offsets < 2^31, & ok)
@@ -58,8 +66,9 @@
    ;    client). crew/holo/ resolves the hit/miss/loop labels to rel32 -- no hand-counted je/jmp offsets, the
    ;    fragile bit. reg map: holo r0=rax, r7=x86-r8, r8=x86-r9, r9=x86-r10, r10=x86-r11. The probe wants
    ;    the MAP in rax and the TAGGED key in r11 (holo r10); it ends branched to `hit` (match) / `miss` (gap).
-   (asmx ir) (peep (assemble 'amd64 ir) 'bytes 0)                                     ; assemble neutral IR -> flat bytes, X86 (the post-egg `assemble` service, bound off the holo book above)
-   (asmt tgt ir) (peep (assemble tgt ir) 'bytes 0)                                  ; ... target-aware (the loop/float lanes that run on both arches)
+   (hasm tgt ir) (: f (peep glazeasm 'f 0) ((? (lit? f) f (from 'holo 'assemble)) tgt ir))   ; the pinned assembler, else the module's
+   (asmx ir) (peep (hasm 'amd64 ir) 'bytes 0)                                          ; assemble neutral IR -> flat bytes, X86
+   (asmt tgt ir) (peep (hasm tgt ir) 'bytes 0)                                       ; ... target-aware (the loop/float lanes that run on both arches)
    mprobe-ir ['(ld r7 r0 8) '(ld r8 r7 16) '(shr r8 1) '(dec r8) '(add r7 r7 24)    ; r8=backing; r9=cap; >>1; --(=mask); r8=&slots
       ['li 'r0 mapmix] '(imul r0 r0 r10) '(rol r0 32) '(and r0 r0 r8) '(mov r9 r0)    ; rax=rot(mix*tagkey)&mask=I -> r10
       '(label loop) '(leax r0 r9 r9 1 0) '(ldx r0 r7 r0 8 0) '(cmp r0 r10) '(br eq hit)  ; slot[I].key == tagkey? -> hit
@@ -67,7 +76,8 @@
    (mpeep-ir d) (mprobe-ir                                                          ; READ tails: MISS -> default d; HIT -> slot[I].value, untagged
       + [['label 'miss] ['li 'r0 d] '(jmp end)
          '(label hit) '(leax r0 r9 r9 1 0) '(ldx r0 r7 r0 8 8) '(sar r0 1) '(label end)])
-   (asmx-seed ir nm addr) (: t (tablet 0) _ (pin t nm addr) (peep (assemble-at 'amd64 ir t) 'bytes 0))   ; assemble with ONE pre-bound external label nm->addr (the glaze's deopt handler)
+   (asmx-seed ir nm addr) (: t (tablet 0) _ (pin t nm addr) f (peep glazeasm 'at 0)
+                             (peep ((? (lit? f) f (from 'holo 'assemble-at)) 'amd64 ir t) 'bytes 0))   ; assemble with ONE pre-bound external label nm->addr (the glaze's deopt handler)
    ; the SAME probe; WRITE tails (the correct `pin` = insert-OR-update). MISS (absent key, a GAP at slot I):
    ; guard the load factor -- if (len+1)*4 >= cap*3 a grow is due, which native can't do, so DEOPT (an
    ; EXTERNAL label the caller seeds); else INSERT (store the tagged key + spilled value, bump len). HIT:
@@ -378,6 +388,7 @@
    (amble-ok? env gn go k tl e)
     (? (name? e) (member? e env)
        (aconst? e) 1
+       (nom? e) (member? e env)                                                      ; a mint: an inlined callee's let-bound arg
        (aquote? e) 1
        (two? e)
         (: op <e  as >e  n (tally as)
@@ -494,6 +505,16 @@
           as >e
           (? (id? op 'list && 0 < (tally as) && !(member? op env))
                ((: (go l) (? (two? l) ['link (adesug env ti ta <l) (go >l)] ())) as)
+             (id? op '? && 3 < (tally as))                                            ; a cond chain nests: (? c a c2 b e) is (? c a (? c2 b e))
+               ((: (go l) (? !(two? >l) (adesug env ti ta <l)
+                             (['? (adesug env ti ta <l) (adesug env ti ta <>l)] + (? (two? >>l) [(go >>l)] ()))))
+                as)
+             (id? op 'nil? && 1 = (tally as) && !(member? op env))                    ; the negations are ?s: (nil? x) is (? x 0 1) -- opfix
+               ['? (adesug env ti ta <as) 0 1]                                        ; spells ! this way -- (atom? x) is (? (two? x) 0 1),
+             (id? op 'atom? && 1 = (tally as) && !(member? op env))                   ; (!= a b) is (? (= a b) 0 1)
+               ['? ['two? (adesug env ti ta <as)] 0 1]
+             (id? op '!= && 2 = (tally as) && !(member? op env))
+               ['? ['= (adesug env ti ta <as) (adesug env ti ta <>as)] 0 1]
              (id? op '&& && 2 <= (tally as) && !(member? op env))
                ((: (go l) (? (two? >l) ['? (adesug env ti ta <l) (go >l) ()] (adesug env ti ta <l))) as)
              ((? (id? op op0) (adesug env ti ta op0) op) >< map (\ x (adesug env ti ta x)) as))))
@@ -505,26 +526,29 @@
    ; alets: collect the value-let binders of e -- every (: p v .. body) node, the
    ; destructuring idiom -- and validate what amble can own: an even tally (the body-less
    ; form binds the ENCLOSING scope), name binders (a define-sugar pair is a lambda), no
-   ; rebinding anywhere (one flat namespace serves the whole body). `_` evaluates and
-   ; drops, never binds. answers the name list, or 'bad (the body declines).
-   (alets e acc)
+   ; shadowing (a name bound again while its slot is live above -- enc, the binders in
+   ; scope). one slot serves a name wherever it is bound, so the `(: r ..)` of one arm and
+   ; the `(: r ..)` of its sibling share it, each written before it is read. `_` evaluates
+   ; and drops, never binds. answers the name list, or 'bad (the body declines).
+   (alets e acc) (alt e acc ())
+   (alt e acc enc)
     (? (id? acc 'bad) 'bad
        (aquote? e) acc
        !(two? e) acc
        (id? <e ':)
         (? ((tally e) % 2) 'bad
-           ((: (gol l ac)
+           ((: (gol l ac en)
                (? (id? ac 'bad) 'bad
-                  !(two? >l) (alets <l ac)
+                  !(two? >l) (alt <l ac en)
                   (: p <l  v <>l
-                     (? !(name? p) 'bad
-                        (: a2 (alets v ac)
+                     (? (!(nom? p) || id? p ()) 'bad                         ; a binder is a name, or the mint an inlined callee's arg wears
+                        (: a2 (alt v ac en)
                            (? (id? a2 'bad) 'bad
-                              (id? p '_) (gol >>l a2)
-                              (member? p a2) 'bad
-                              (gol >>l (p >< a2))))))))
-            >e acc))
-       (foldl (\ ac x (alets x ac)) acc e))
+                              (id? p '_) (gol >>l a2 en)
+                              (member? p en) 'bad
+                              (gol >>l (? (member? p a2) a2 (p >< a2)) (p >< en))))))))
+            >e acc enc))
+       (foldl (\ ac x (alt x ac enc)) acc e))
    ; adrv?: does e contain a DRIVER call -- a self-call or an applied frame/loop name? the
    ; non-loop cost gate: a body whose only calls go to resolvable globals is a one-shot
    ; wrapper (its compile is nearly always a waste); a body that drives a parameter (a
@@ -535,14 +559,16 @@
           ((name? op && (id? op sf || (member? op env && two? >e)))
            || (foldl (\ a x (a || adrv? env sf x)) 0 >e)))
        0)
-   ; ainl: rewrite every inner lambda (\ q.. B) whose creation ala recorded -- inl is the
-   ; compile root's ((exp src-tail (entry . imports))..), matched by the node itself -- to
+   ; ainl: rewrite every inner lambda (\ q.. B) whose creation ala recorded -- inl is this
+   ; lambda's subtree ((exp src-tail (entry . imports))..), matched by the node itself -- to
    ; the site marker (amble-lam i n v..): entry i enters st's list, n is its arity (imports
    ; + params), v.. are the import names the site reads off the frame. an unrecorded lambda
    ; stays and declines; the inner body is never walked (its binders are its own). quoted
-   ; data is inert.
+   ; data is inert. a body with no record or no inner lambda is answered as it is, unwalked.
    (ainlr t inl) (? !(two? inl) 0  (id? t <<inl || id? t <><inl) <>><inl  (ainlr t >inl))
-   (ainl e inl st)
+   (alam? e) (? (aquote? e) 0  !(two? e) 0  (id? <e '\ && two? >e && two? >>e) 1  (foldl (\ a x (a || alam? x)) 0 e))
+   (ainl e inl st) (? (two? inl && alam? e) (ainl0 e inl st) e)
+   (ainl0 e inl st)
     (? (aquote? e) e
        !(two? e) e
        (id? <e '\ && two? >e && two? >>e)
@@ -551,7 +577,7 @@
                    _ (pin st 'l ((st 'l) + [<r]))
                    (amble-lam >< i >< ((tally >r) + (tally e) - 2) >< >r))
               e))
-       (map (\ x (ainl x inl st)) e))
+       (map (\ x (ainl0 x inl st)) e))
    (njit-amble s a e gv farq lams nm ti ta inl tgt)
     (: ps (init >s)  M (last >s)
        lp (amble-loop M)
@@ -622,11 +648,11 @@
               (filter (\ f !(farq f)) (filter (\ f !(member? f cn)) cand)))) ())
        gn   (map cap gps)
        gvals (map caup gps)
-       qs   (foldl (\ ac i (aq i ac)) (aq body ()) inits)   ; the quoted-datum constants (id?-deduped source nodes)
+       qs   (? drok (foldl (\ ac i (aq i ac)) (aq body ()) inits) ())   ; the quoted-datum constants (id?-deduped source nodes); a declined body skips the walk
        nq   (tally qs)
        eqv  (gv '= 0)                                       ; the = value: aeq2's generic lane drives it off an extras slot
        cx   (\ op (? (id? op self) ni (member? op cn) (tally (cimp op)) 0))
-       nd   (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits))
+       nd   (? drok (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits)) 0)
        kn   (? sfq (self >< (gn + cn)) (gn + cn))         ; every resolvable free head + the self name (amble-ok?'s membership test)
        lpok (? lp ((all name? vars) && (adistinct vars) && (k = (tally inits))
                    && !(member? go vars) && !(member? go ps)) 1)
@@ -831,6 +857,7 @@
               (? (name? e) [['ld A SP (voff e)]]
                  (whole? e) [['li A ((2 * e) + 1)]]
                  (id? e amble-nil) [['ld A SP gbo]]
+                 (nom? e) [['ld A SP (voff e)]]
                  (aquote? e) [['ld A SP (gbo + (8 * (1 + (tally gn) + (tally cn) + (aposq e qs 0))))]]   ; a quoted datum: its extras slot (past the globals + sibling entries)
                  (: op <e  as >e
                     (? (id? op ':) ((: (gol l) (? !(two? >l) (acg <l d)                            ; a VALUE let: each binding lands in its slot, in order
@@ -1243,7 +1270,7 @@
        ([['lea AN 'sp 0]] + (cgir tgt ps body) + [['adds A A A] '(br vs deopt) ['or A A 1] ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]] + deoptblk))
    ; jitcore: assemble coreir for tgt and install as a nat of the given arity (deopt -> interp).
    (jitcore tgt ps body deoptblk arity lam)
-    (nif (emit (peep (assemble tgt (coreir tgt ps body deoptblk)) 'bytes 0)) (ev lam) lam arity)
+    (nif (emit (asmt tgt (coreir tgt ps body deoptblk))) (ev lam) lam arity)
    ; (jitir '(\ x E) tgt) -- an arity-1 leaf. (jitnir '(\ p0 .. E) tgt) -- arity>=2 (natn curries to saturation).
    (jitir lam tgt)  (jitcore tgt [<>lam] <>>lam (deoptir tgt 0) 1 lam)
    (jitnir lam tgt) (: ps (init >lam) body (last >lam) (jitcore tgt ps body (deoptir tgt 1) (tally ps) lam))

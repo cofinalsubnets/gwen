@@ -39,6 +39,9 @@
    anat-defs (G 'anat-defs)  jgir-ok? (G 'jgir-ok?)  jitgroupirx (G 'jitgroupirx)  ; creation. + the (always-on) GROUP
    grpfix (G 'grpfix)                                                    ;   ... and the recognizer that says WHETHER (below)
    njit-amble (G 'njit-amble)                                            ;   + AMBLE, the universal boring-tier translator (the LAST lane)
+   asm (from 'holo 'assemble)                                            ; the assembler as it stands at install: holo's post-hook build,
+   _ (pin (G 'glazeasm) 'f asm)                                          ;   pinned for the glaze (a later reopen of holo -- the cat's own
+   _ (pin (G 'glazeasm) 'at (from 'holo 'assemble-at))                   ;   copy -- never moves it)
    ; lane: parse defs (anat-defs), recognize (grp-ok?), op-cover (jgir-ok?), compile PURE (jitgroupirx, e deopt).
    ; grp-ok? -- autogroup's OWN recognizer (auto.l grpfix: the descending int/value-typing fixpoint over
    ; groupok?/vok?/cok?), run here over the SAME (nameform . body) defs jitgroupirx will compile. Every def
@@ -89,7 +92,7 @@
    ; self-call seam: a tail self-call loops, any other drives the blob's own cell.
    ; ti/ta = ev.l's iop/apx tag markers (uninterned, so only ala can hand them over):
    ; a synthesized surface wears them, and adesug reads them back to plain forms.
-   ; inl = the compile root's inner-closure record ((exp src-tail (entry . imports))..):
+   ; inl = the inner-closure record under this lambda ((exp src-tail (entry . imports))..):
    ; amble finds a body's inner lambda site by the node and builds the same closure.
    ; ps = (init >s) = the frame [imps args]; body = the surface body. compile
    ; body over ps; deopt -> e. non-qualifying -> e unchanged.
@@ -103,7 +106,7 @@
                                                            ; and this is exactly the coverage the lanes had before.
           (two? s && two? >>s && exprn ps body)         ; >=1 param, a body, leaf grammar
           (: _ (pin fires () (1 + (peep fires () 0)))                  ; compile via the neutral-IR lane (coreir); deopt target = e
-             (nif (emit (peep (assemble arch (coreir arch ps body (deoptir arch (? (a = 1) 0 1)))) 'bytes 0)) e s a))
+             (nif (emit (peep (asm arch (coreir arch ps body (deoptir arch (? (a = 1) 0 1)))) 'bytes 0)) e s a))
           ; FLOAT-RESULT leaf -- (\ x <fexpr>) that BOXES a gem (auto-ev's qualfr/jitfr lane).
           ; one param only (qualfr's shape), so a captured float leaf falls through for now. deopt -> e,
           ; not (ev s): jitfr bakes (ev lam), which under the hook would re-enter ala -> so jitfrx takes e.

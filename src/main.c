@@ -422,6 +422,12 @@ static char const src_glaze[] =
   "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))"
 #include "hook.h"
 #include "walk.h"
+  // holo again, now under the hook: its layout loops (lay, plumb, resolve, revonto) compile
+  // native, hook.l pins this build's `assemble` for the glaze, and mooncc's object emission
+  // rides the same module.
+#include "holo0.h"
+#include "amd640.h"
+#include "arm640.h"
   ,
   // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
   // module book) and the natjit hook cleared. the forensics twin of LOVE_NO_IMAGE, and a

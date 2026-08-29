@@ -666,6 +666,8 @@
   ; lambda analyzer
   (ala c imp exp nm hq) (:
    d (sco c (init exp) imp)
+   ic (pin (tablet 0) 'l ())                       ; this lambda's inner-closure record, filled by the alas under it
+   _ (pin d 'inl ic)
    k (ana d (last exp) (k0s d))
    a (ary d)
    e ((a = 1 ? k (em2 lvm_cur a k)) 0)           ; entry = cell 1 (cell 0 is the spare src slot)
@@ -674,11 +676,15 @@
    hk (poke -1 s e,                                  ; value[-1] = source \-expr
        trim (seek -1 e),                             ; tag head spans [src .. body]; value stays e
        gv 'natjit 0)
-   r ((!hk ? e (hq ? (hk e s a gv (farq c) (c 'lam) nm iop apx (rootc c 'inl)) e)) . d 'imp)
-   ; inl: the root's record of every inner closure built -- (exp src-tail (entry . imports)),
-   ; keyed by the node itself -- so the hook finds a body's inner lambda SITE by identity
-   _ (? (hq && nm == 0) (push (rootc c) 'inl [exp (? (two? os) >>os 0) r]) 0)
+   r ((!hk ? e (hq ? (hk e s a gv (farq c) (c 'lam) nm iop apx (ic 'l)) e)) . d 'imp)
+   ; the record -- (exp src-tail (entry . imports)), keyed by the node itself -- rides up to
+   ; the nearest enclosing lambda's, this closure's own entry ahead of its subtree's, so a
+   ; hook finds any inner lambda SITE under its body by identity and scans nothing else
+   up (lamsco c)
+   _ (? (id? up 0) 0
+        (pin up 'l ((? (hq && nm == 0) ([exp (? (two? os) >>os 0) r] . ic 'l) (ic 'l)) + up 'l)))
    r)
+  (lamsco c) (? !c 0 (: t (peep c 'inl 0) (? (id? t 0) (lamsco (c 'par)) t)))
   (farq k x) (? !k 0
                (: f (k 'far)
                   (? (tablet? f && 0 <= peep f x -1) 1 (farq (k 'par) x))))

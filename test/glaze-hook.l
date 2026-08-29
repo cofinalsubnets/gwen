@@ -82,6 +82,18 @@
        ac (ev '(: (ac f l) (? (two? l) (link (f (\ x (+ (tally (show x)) 1))) (ac f (cup l))) ()) ac))
        cs (ac (\ g g) '(1 2))
        (&& (fired? n) ('(2 2) = (ac (\ g (g 5)) '(1 2))) (id? (cap cs) (cap (cup cs)))))
+    ; --- the negations, a cond chain, and an inlined sibling's mint-bound arg: (nil? x) is
+    ; (? x 0 1), (? c a c2 b e) nests, and cprop's (: <mint> (arg) body) binds like a name --
+    ; the shapes holo's layout loop is made of
+    (: n (peep fires () 0)
+       lay (ev '(: (pad be n) (list n n) (at l k) (? (= k 0) (cap l) (at (cup l) (- k 1)))
+                   (lay p acc) (? !(two? p) (rev acc)
+                                  (= (cap (cap p)) 'label) (: _ (pin (tablet 0) (at (cap p) 1) 0) (lay (cup p) acc))
+                                  (= (cap (cap p)) 'align) (: r (pad 0 (at (cap p) 1)) (lay (cup p) (link (cap r) acc)))
+                                  (: r (cap (cap p)) (lay (cup p) (link r acc))))
+                   lay))
+       (&& (fired? n) ('(add 4 mov) = (lay '((label a) (add) (align 4) (mov)) ()))
+           (= (lay '((x) (align 2)) ()) '(x 2))))
     ; ... and under a named-let whose loop var shadows the frame: the site's import renames with it
     (: n (peep fires () 0)
        mk (ev '(\ l ((: (go l acc) (? (two? l) (go (cup l) (link (\ y (* y (tally (show (cap l))))) acc)) acc)) l ())))
