@@ -467,10 +467,20 @@
    ; (? a .. ()) (short-circuit included; && answers the last value or the unit -- probed AND
    ; spec'd). env-shadowed names stay calls; quoted data stays inert. (|| ..) is NOT a rewrite
    ; (its value is the first truthy ARG -- a rewrite would double-eval); aor emits it.
-   (adesug env e)
+   (adesug env ti ta e)
     (? (aquote? e) e
        !(two? e) e
-       (atom? >e) (adesug env <e)                       ; the (X) singleton -- EMPTINESS, never nil?: a tail of
+       ; the analyzer's tags, worn by SYNTHESIZED surfaces (a letrec body-lambda has no
+       ; source stash): (apx n head args..) is the apply, (iop VALUE args..) carries the
+       ; vm op as a value that aopv/opnom name back. ti/ta are ev.l's own uninterned
+       ; markers (ala hands them down), so the match is exact and unforgeable; an
+       ; unmapped or env-shadowed op value stays tagged (declines).
+       (id? <e ta) (? (two? >e && whole? <>e && two? >>e) (adesug env ti ta >>e) e)
+       (id? <e ti) (? (two? >e && two? >>e)
+                      (: vn (aopn <>e aopv)
+                         (? (vn && !(member? vn env)) (adesug env ti ta (vn >< >>e)) e))
+                      e)
+       (atom? >e) (adesug env ti ta <e)                 ; the (X) singleton -- EMPTINESS, never nil?: a tail of
                                                         ; NAMELESS mints (bsub's fresh binders) NETS to 0, and the
                                                         ; net test unwrapped (\ m1 m2 m2) to bare \ -- a quote-shaped
                                                         ; wreck amble then compiled as the constant \ (miscompile)
@@ -479,10 +489,10 @@
           op (? (vn && !(member? vn env)) vn op0)
           as >e
           (? (id? op 'list && 0 < (tally as) && !(member? op env))
-               ((: (go l) (? (two? l) ['link (adesug env <l) (go >l)] ())) as)
+               ((: (go l) (? (two? l) ['link (adesug env ti ta <l) (go >l)] ())) as)
              (id? op '&& && 2 <= (tally as) && !(member? op env))
-               ((: (go l) (? (two? >l) ['? (adesug env <l) (go >l) ()] (adesug env <l))) as)
-             ((? (id? op op0) (adesug env op0) op) >< map (\ x (adesug env x)) as))))
+               ((: (go l) (? (two? >l) ['? (adesug env ti ta <l) (go >l) ()] (adesug env ti ta <l))) as)
+             ((? (id? op op0) (adesug env ti ta op0) op) >< map (\ x (adesug env ti ta x)) as))))
    ; njit-amble: the hook entry -- compile s (deopt -> e) or answer 0 (decline; the hook keeps e).
    ; farq = ala's letrec-local predicate (see hook.l): a truthy (farq nom) names a binding that
    ; is free-LOOKING in a weave re-analysis surface, wire-resolved in truth -- never a gn candidate.
@@ -521,7 +531,7 @@
           ((name? op && (id? op sf || (member? op env && two? >e)))
            || (foldl (\ a x (a || adrv? env sf x)) 0 >e)))
        0)
-   (njit-amble s a e gv farq lams nm tgt)
+   (njit-amble s a e gv farq lams nm ti ta tgt)
     (: ps (init >s)  M (last >s)
        lp (amble-loop M)
        go   (? lp <lp 0)     vars0 (? lp <>lp ())
@@ -533,8 +543,8 @@
        k    (tally vars)
        body (? lp GB M)
        env  (vars + ps)
-       body (adesug env body)                                ; own list/&& by definition (nested links / nested ?s)
-       inits (map (\ i (adesug env i)) inits)
+       body (adesug env ti ta body)                          ; own list/&& by definition (nested links / nested ?s) + untag
+       inits (map (\ i (adesug env ti ta i)) inits)
        ; SELF: the letrec name this closure is being bound to (ala's nm; 0 when anonymous).
        ; a saturated tail self-call jumps the body top on a rewritten frame (the recursion
        ; becomes a loop); any other self-call drives the blob's OWN cell (read off Ip at the
