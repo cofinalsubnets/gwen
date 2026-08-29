@@ -1509,7 +1509,7 @@
       (two? irW)
       (copyof? wf 'r6)                               ; the written param p copies OUT of a's ride...
       !(member? '(add r6 r6 1) wf)                   ; ...and a's ride is never walked
-      (member? '(cmp r7 r5) wf))                     ; lim, never written, still aliases n's ride
+      (member? '(cmp r2 r5) wf))                     ; lim, never written, reads n's ride straight (its alias copy folds after repack)
    irX (cgn "static int p9(long a, long b) { return (a += b) > 100; }\nlong run(long x, long y) { long s = 0; for (long i = 0; i < 4; i++) { if (p9(x, y)) s = s + 1; s = s + x; } return s; } int main() { return run(3, 5); }")
    xf (fnf 'run <>irX)
    _ (assert
@@ -2041,17 +2041,16 @@
 ; width at its own base rides the same chains, wearing the extension
 ; discipline -- the store canonicalizes the seat, a matching load is a plain
 ; mov, and an si def folds the extension into its li at compile time.
-(: gN {}
-   _ (pin gN 'slots '((-16 8)))
+(: (gN9 x) (: t {} _ (pin t 'slots '((-16 8))) t)    ; a fresh g per call: repack re-pins the packed map
    fsA '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
          (li r5 7) (st4 r4 -16 r5) (ldu4 r6 r4 -16) (mov r0 r6) (ret))
    fsB '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
          (si4 r4 -16 -1) (ld4 r7 r4 -16) (mov r0 r7) (ret))
    fsC '((label fn) (push r4) (mov r4 sp) (sub sp sp 16) (st r4 -8 r3)
          (si r4 -16 42) (ld r7 r4 -16) (mov r0 r7) (ret))
-   ra (repack gN fsA)
-   rb (repack gN fsB)
-   rc (repack gN fsC)
+   ra (repack (gN9 0) fsA)
+   rb (repack (gN9 0) fsB)
+   rc (repack (gN9 0) fsC)
    (assert
       !(member? '(ldu4 r6 r4 -16) ra)                ; the narrow pair left the frame
       (member? '(zx4 r5) ra)                         ; the store canonicalized its seat..

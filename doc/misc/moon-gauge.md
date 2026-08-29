@@ -245,6 +245,26 @@ and together they are the method the forward path below inherits:
    −0.40G, ~−5G = −0.33% of the corpus; the total read −0.95% with the drift. x64 .text
    −143 instructions, lvm_eq 531 → 527.
 
+9. **the copy fold once more after repack — LANDED 2026-08-28 (the G-load rows).** The
+   GVN oracle's finding, taken literally: `copyprop → stld → copyprop → deaddef → deadst`
+   runs again on the CHOSEN forms after repack, when the cs seats its chains minted exist
+   (base still r4 there; every pass is stage-preserving, so the typed chain admits it
+   ahead of coal). A slot copied through r0 from a fresh seat (a nested splice's param)
+   now forwards from the seat, and the store it fed drops. ⚠ deadst after repack read the
+   BUILD's object map while the forms spoke the packed layout — an lea's escape marked the
+   wrong object and arr[2]'s store dropped (test/cc/69-float, 40 for 42; the bake
+   segfaulted in ai_ini_0) — so repack re-pins `g 'slots` to the packed map (promoted and
+   retired objects gone, the cs save slots added). ⚠ and the bisect that "proved" every
+   subset safe was reading make's `grep Segmentation`, which the bake's own fallback
+   swallows: judge a build by booting its love (`echo '(putx 42)' | LOVE_NO_IMAGE=1 love`)
+   and by the test/cc battery through the bootstrap image, never by make's exit. Priced
+   on the arm64 exact meter, body-changed fns: lvm_link −8.1G (−7.0%), lvm_cur −5.6G
+   (−2.1%), shash −3.3G (−23%), nf_hash −0.9G, evac_data −0.6G, gcp −0.44G, ai_big_binop
+   −0.44G; corpus total 1,482.65G → **1,472.60G (−0.68%)** (lvm_qa's +10.6G is the walk
+   drift flipping back). x64 .text −1,666 instructions (−1.16%): gcp 903 → 865, p0read1
+   948 → 916. Two laws moved: repack's narrow-promotion laws take a fresh g each (the
+   re-pin is a mutation), and wv's alias copy folds after repack.
+
 ## the path forward
 
 **Codegen quality**, each lever with the evidence that prices it (largest first is not
@@ -384,7 +404,7 @@ r11/r12 by repack's chains) do not exist yet when cfoldir runs: repack sits
 post-choice, cfoldir in the build. So the fix is not a phi and not a wider lattice:
 run the copy fold once more AFTER repack (base still r4 there), or let repack's
 promotion rewrite the slot copies it just made redundant -- priced by this oracle's G
-load row, whole corpus 1,540 static. What genuinely needs
+load row, whole corpus 1,540 static. (The first is landed lever 9.) What genuinely needs
 the loop structure is L alu + L addr + L load: ~370 forms, ~10k loop-wt -- twice the
 ALU-fold residue that funded lever 5, spread thin (io.c's p0skip, inflate's
 inf_run/inf_build, snap's img_hashcons head the lists). Spot-verified in the forms:
@@ -438,7 +458,8 @@ discipline (lvm_eq's hottest line)~~ — landed lever 7, lvm_eq −38% on this i
 (and ⚠ the instrument's lesson: re-run it before/after on the SAME binary pair and check
 the body identity of every moved symbol — a byte-identical fn moving ±10% is the layout
 lottery, not the lever); ~~a clean-width fact for `set` results in rezx~~ (lever 8: the line is
-`cmp; sete; movzbq; test` now); the post-repack copy fold (the G-load rows); a look at why lvm_cur's entry constants
+`cmp; sete; movzbq; test` now); ~~the post-repack copy fold (the G-load rows)~~ (lever 9:
+−0.68% on the meter, lvm_cur −2.1%); a look at why lvm_cur's entry constants
 survive deaddef and cfoldir. Each is priced by re-running this attribution on the two
 functions it names, then the corpus row.
 

@@ -5010,7 +5010,14 @@
                                    (vapp spl (f2 . vapp csaves (rw >l (i + 1) t9)))
                                    (vapp spl (f2 . rw >l (i + 1) t9))))
                              (vapp spl (vapp p (rw >l (i + 1) t9))))))
-                   (? ((K2 < K) || two? prom) (rw fs 0 0) fs))))))
+                   ; the packed OBJECT MAP replaces the build's: a later slot reader (deadst's
+                   ; escape law) asks the layout the forms now speak. a promoted or retired
+                   ; object has no cell; the cs save slots are objects of their own
+                   slots2 (foldl (\ a2 o (: nb (peep nmap <o 'no9)
+                                            (? (charm? nb) ([nb <>o] . a2) a2)))
+                                 (map (\ r [(peep cslot r 0) 8]) csused)
+                                 slots)
+                   (? ((K2 < K) || two? prom) (: _ (pin g 'slots slots2) (rw fs 0 0)) fs))))))
 
    ; dead label regions: the sibcall rewrite splices its jump BEFORE a shared epilogue and leaves
    ; the label + epi standing for the other arms -- when no arm remains, the region is unreachable
@@ -7794,7 +7801,10 @@
                      (deaddef
                      (deadcell g
                      (cfoldir g irx))))))))))))
-       (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (coal g (repack g (deadlab (swp irf))))))))))
+       ; the copy fold once more AFTER repack: a slot copied through r0 from a seat repack
+       ; just minted (a nested splice's param) forwards from the seat now that it exists
+       (post irx) (deadst g (deaddef (copyprop (stld g (copyprop (repack g irx))))))
+       (? (bad? irf) irf (cskeep g (unhome g (jr0 (unframe g (coal g (post (deadlab (swp irf))))))))))
 
    ; the data tail: globals in declaration order, then the string table -> (dataforms nifforms
    ; imgforms extras bssforms rodataforms) | 'bad, extras being ((name forms ro?) ..), one per
