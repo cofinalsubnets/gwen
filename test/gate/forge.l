@@ -15,16 +15,20 @@
 ; everything else to the twin, so the guards are most of it: a guard that falls through where
 ; it should jump runs the fast loop over a float payload and answers confident nonsense.
 ;
-; ⚠ ZERO FITTED IS A FAILURE. A build with no glaze module and a cpu with no holo backend both
-; decline gracefully -- that is the design -- but a gate whose subject never installed reads
-; exactly like a gate that passed. Where the seam is genuinely absent the roster still has to
-; answer, so the twins are exercised either way and only the native count is required.
+; ⚠ ZERO FITTED IS A FAILURE UNLESS IT IS NAMED. A build with no glaze module, and a target
+; whose lvm ABI the kit does not spell, both decline gracefully -- that is the design -- but a
+; gate whose subject never installed reads exactly like a gate that passed. So a zero has to
+; come with a reason in `forge-why`, and a silent one is still red. Where nothing installs the
+; roster still has to answer, so the twins are exercised either way.
 (: _ (use "lib/forge.l")
    (die m) (: _ (say err ("forge-gate: " + m + "\n")) _ (flush err) (quit 1))
    fitted (forge-fit 0)
+   ; read BEFORE the roster grows a deliberately-bogus kernel below, whose own decline
+   ; would else answer for a fit that died silently
+   why0 (forge-why 0)
    _ (say out ("forge: " + show fitted + " kernel(s) fitted, "
                + show (forge-fitted? 0) + " native, arch " + love-arch + "\n"))
-   _ (? (forge-why 0) (say out ("  declines: " + show (forge-why 0) + "\n")) 0)
+   _ (? why0 (say out ("  declines: " + show why0 + "\n")) 0)
 
    ; --- the shapes ---------------------------------------------------------------------------
    ; ⚠ the empty and the all-nonzero cases are the two a loop bound can get wrong in opposite
@@ -165,9 +169,10 @@
    _ (chk1 "aall  after a decline" (want 'aall) aall zs)
    _ (say out ("  decline: named " + show (forge-why 0) + ", roster intact\n"))
 
-   ; ⚠ LAST, because everything above still had to run: the seam's absence is a legal build
-   ; (no glaze module, or a cpu with no backend) and the twins carry it. What is not legal is
-   ; a tree that thinks it forged and did not.
-   _ (? (fitted > 0) 0 (die "zero kernels fitted -- the seam, the backend or the assemble died"))
+   ; ⚠ LAST, because everything above still had to run: forging nothing is a legal build
+   ; (no glaze module, or a target the ABI kit does not spell) and the twins carry it. What
+   ; is not legal is a tree that thinks it forged and did not.
+   _ (? (fitted > 0) 0 why0 0
+        (die "zero kernels fitted, and nothing named a reason -- the seam or the assemble died"))
    _ (say out "forge: 0 failed\n")
    0)

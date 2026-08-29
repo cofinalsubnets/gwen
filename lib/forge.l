@@ -40,7 +40,9 @@
 ; the twin is the definition and the native is an optimisation, never the other way round. every
 ; guard in a kernel deopts into the twin, so a shape the IR does not say is not a bug and not a
 ; raise -- it is the twin's turn. that is what makes a kernel writable at all: it says the one
-; monomorphic lane it is fast at and hands back everything else.
+; monomorphic lane it is fast at and hands back everything else. that is also why forging only
+; where the ABI kit has a row costs nothing but speed: amd64 forges, every other target runs the
+; twins and `forge-why` says `no-abi`.
 ;
 ; mkir is a thunk because a kernel's IR carries live addresses: `forge-trayk` and friends are
 ; read out of this process with `apof`, and under ASLR they are a different number every run. so
@@ -67,6 +69,14 @@
    ; r0/r7/r8/r9/r10 are caller-saved and free; r3/r11-r14 are callee-saved and must be
    ; pushed. every guard jumps to the label `deopt`, which the epilogue below plants.
    ; guards come before any push, so the machine sp is balanced on the deopt path too.
+   ;
+   ; ⚠ THAT BINDING IS AMD64'S, AND IT IS SPELLED, not derived. the lvm ABI is each
+   ; platform's own C convention, so the four roles land in different registers per
+   ; target -- r1 is Sp here and Ip on arm64, and only Hp coincides. every guard,
+   ; epilogue and deopt tail below names them by number, and holo lowers all of it on
+   ; any backend, so an off-x64 assemble SUCCEEDS and installs a kernel reading Ip
+   ; where it means Sp. what the roles need is a row per target -- love/scan.l has one
+   ; -- and until they have it `forge-abi?` is what keeps the twins in force.
    forge-trayk (apof (iota 0))                      ; a tray's ap word, live in this process
    forge-chaink (apof '(1 2))                       ; a chain's
    (forge-guard i k)                                ; Sp[i] must be an object of kind k
@@ -140,11 +150,13 @@
    (forge-of nom) (forge-fits nom)
 
    ; --- the fit -----------------------------------------------------------------------
-   ; one door, bound once: no glaze answers (), and (() 'nif) is 1, which `lit?` declines --
-   ; so presence is the guard and a build without the module simply stays interpreted.
+   ; one door, bound once: a missing module answers (), so `nil?` on the module is the
+   ; presence test and a build without the glaze simply stays interpreted.
+   forge-glaze (from 'glaze)
    forge-seam (from 'glaze 'nif)
    forge-seamx (from 'glaze 'nifx)                  ; the same door, one extras slot wider
    forge-arch love-arch
+   forge-abi? (id? forge-arch 'amd64)               ; the targets the kit above spells
    forge-asm (from 'holo 'assemble)
    ; assemble one kernel -> its bytes | (). the deopt tail is the module's, because it is
    ; arity-determined and mechanical; the epilogue is the kernel's, because only the kernel
@@ -162,8 +174,12 @@
        (? (two? bs) bs  (id? bs 'raised) ()  (forge-no 'no-bytes nom)))
    ; the whole roster: lay every kernel, then install every kernel. the two halves are
    ; separate on purpose -- see the batch note in the header.
+   ; a decline is not a failure and never a raise: the twin is the definition, so a
+   ; missing glaze and a target with no ABI row both leave the roster interpreted and
+   ; say so by name in `forge-why`.
    (forge-fit _)
-    (? !(lit? forge-seam) (: _ (forge-no 'no-seam forge-arch) 0)
+    (? (nil? forge-glaze) (: _ (forge-no 'no-seam forge-arch) 0)
+       !forge-abi? (: _ (forge-no 'no-abi forge-arch) 0)
        (: rows (forge-roll ())
           laid (map (r \ [r (forge-lay r)]) rows)
           (foldl (\ n lr
