@@ -1326,8 +1326,16 @@
 
    ; write a piece list to a file, raw: texts pass through, byte lists pack into a
    ; CASK. an explicit left walk -- map runs its effects right-to-left.
+   ; ⚠ THE PATH IS UNLINKED FIRST, never merely truncated. a file being executed
+   ; refuses to open for writing (ETXTBSY), so relinking a binary that is running
+   ; -- this tree relinks its own love -- opens nothing and `say` to a () port is
+   ; quiet, which lays the new bytes nowhere and leaves the old ones in place. the
+   ; unlink is what a linker does for this: the live process keeps the old inode
+   ; and the new bytes land on a fresh one. it also means an output that cannot be
+   ; opened is ABSENT rather than stale, so the next build makes it again.
    (ld-write path ps)
-    (: q (open path "w")
+    (: _ (unlink path)
+       q (open path "w")
        (go l) (? !(two? l) (close q)
                  (say q (: p <l (string? p ? p (cask p))),
                   go >l))
