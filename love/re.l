@@ -206,10 +206,32 @@
                  (: _ (put o (? (rcls neg rs c) 1 0)) (go (c + 1))))
        tbl (go 0)
        (\ c (? (c <= 255) (tbl c) (rcls neg rs c))))
-   ; the PROGRAM a caller holds: the matcher, and whether the pattern can only
-   ; match at 0. the find loops read the second half -- `^` used to be asked its
-   ; one failing question at every byte of the line
-   (recomp ns) [(recompm ns) (reanch ns)]
+   ; the PROGRAM a caller holds: the matcher, whether the pattern can only match at
+   ; 0, and a SKIPPER -- the walk's way of reaching the next position that could
+   ; start a match instead of asking the matcher about every one. `^` used to be
+   ; asked its one failing question at every byte of the line, and a literal used to
+   ; be asked its first charm at every byte too
+   (recomp ns) (: c (refirst ns)
+                  [(recompm ns) (reanch ns)
+                   (? (nil? c) ()
+                      (: sc ((from 'scan 'scanner) ())      ; at COMPILE time: never at a
+                         (\ s i n (: j (sc s c i)          ; module binding, which bakes
+                                     (j < 0 ? n j)))))])
+   ; the charm a match must OPEN with, or (). only ever answered for a first node
+   ; that has to consume one -- a repeat that can take nothing answers (), so the
+   ; skip never steps over a match. ⚠ nil? is zero?, so a NUL needle reads as absent
+   ; here and simply declines the skip
+   (refirst ns)
+    (ns @ (nd >< _)
+       (nd @ ['chr c]       c
+             ['grp _ sub]   (refirst sub)
+             ['rep a lo hi] (0 < lo ? (refirst [a]) ())
+             ['alt brs]     (: cs (map refirst brs)         ; every branch, or nothing
+                               (? (any nil? cs) ()
+                                  (all (\ c (c = <cs)) cs) <cs
+                                  ()))
+             ())
+       ())
    (recompm ns)
     (ns @ (nd >< rest) (renode nd (recompm rest))
           (\ s i sp k (k i sp)))
@@ -261,9 +283,13 @@
    ; (1 j), never (j): a match ending at 0 would net blue and read as absence
    (rehasm m s)
     (: f <m n (<>m ? 0 #s)                        ; anchored: the walk ends where it starts
+       sk <>>m
        (from i) (? (f s i () (\ j sp [1 j])) 1
                    (i < n) (from (i + 1)))
-       (from 0))
+       (jump i) (: j (sk s i n)                   ; only the positions that could open
+                   (? (n <= j) ()
+                      (? (f s j () (\ e sp [1 e])) 1 (jump (j + 1)))))
+       ((nil? sk || <>m) ? (from 0) (jump 0)))
    ; the node-list faces: they compile and then match, for a caller with one text to
    ; ask about. a caller with many -- grep, sed, awk -- holds the matcher instead
    (rehas ns s) (rehasm (recomp ns) s)
@@ -279,9 +305,14 @@
    ; filter calls that line a miss where GNU calls it a hit
    (refindpm m s i p)
     (: f <m n (<>m ? i #s)                        ; anchored: the walk ends where it starts
+       sk <>>m
        (from j) (f s j () (\ e sp (p j e ? [1 e sp])) @ [_ e sp] [1 j e sp]
                   (? (j < n) (from (j + 1)) ()))
-       (from i))
+       (jump j) (: j2 (sk s j n)                  ; only the positions that could open
+                   (? (n <= j2) ()
+                      (f s j2 () (\ e sp (p j2 e ? [1 e sp])) @ [_ e sp] [1 j2 e sp]
+                        (jump (j2 + 1)))))
+       ((nil? sk || <>m) ? (from i) (jump i)))
    (refindm m s i) (refindpm m s i (\ a b 1))
    (refindp ns s i p) (refindpm (recomp ns) s i p)
    (refind ns s i) (refindm (recomp ns) s i)

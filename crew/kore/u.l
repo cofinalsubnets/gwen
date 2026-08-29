@@ -103,11 +103,12 @@
    ; the word state is a per-byte machine; a wc that was not asked for words has no
    ; reason to run it, and one that wants only bytes has none to look at them at all
    (ucount-b st s) [<st <>st <>>st (<>>>st + tally s)]
-   (ucount-l st s)
+   (ucount-l sc st s)
     (: n (tally s)
-       (go k l) (? (n <= k) l (go (k + 1) (? ((s k) = 10) (l + 1) l)))
+       (go k l) (: i (sc s 10 k) (i < 0 ? l (go (i + 1) (l + 1))))
        [<st (go 0 <>st) <>>st (<>>>st + n)])
-   (ucount-for l? w?) (? w? ucount-go (? l? ucount-l ucount-b))
+   (ucount-for l? w?)
+    (? w? ucount-go (? l? (ucount-l ((from 'scan 'scanner) ())) ucount-b))
    ucount0 [0 0 0 0]
    (ucount-say st) [<>st <>>st <>>>st]      ; the state's (lines words bytes) face
    ; text -> (lines words bytes), a word a maximal ink run (lawed in law.l)
@@ -195,7 +196,7 @@
    ; per line, so a line costs its own length instead of the tail behind it
    (urd q) (: t (tablet 0)
               _ (pin t 'q q) _ (pin t 'h "") _ (pin t 'p 0) _ (pin t 'm 0)
-              _ (pin t 'e 0)
+              _ (pin t 'e 0) _ (pin t 'sc ((from 'scan 'scanner) ()))
               t)
    (urd-drop t)                                  ; let the read-through bytes go
     (: p (peep t 'p 0)
@@ -221,8 +222,7 @@
    ; from the front every gulp, so an input with no newline costs its length squared.
    (urd-line t)
     (: h (peep t 'h "") n (tally h) p (peep t 'p 0) m (peep t 'm 0)
-       (idx k) (? (n <= k) -1 ((h k) = 10) k (idx (k + 1)))
-       i (idx (m < p ? p m))
+       i ((peep t 'sc ()) h 10 (m < p ? p m))          ; the newline, natively where it can be
        (? (0 <= i) (: _ (pin t 'p (i + 1)) _ (pin t 'm (i + 1)) [(snip h p i) 1])
           (peep t 'e 0)
            (? (p < n) (: _ (pin t 'h "") _ (pin t 'p 0) _ (pin t 'm 0)
