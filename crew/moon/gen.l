@@ -701,13 +701,14 @@
    ; the size rides r3 first (free mid-expression: the shuttle holds r0/r1, args load at the pops)
    (imby g rX sz) (? (arm? g) [['li 'r3 sz] ['imul rX rX 'r3]] [['imul rX rX sz]])   ; arm mul (a64/t32/v6-M) has no imm form
    (homable? pty) (ptr? pty || member? pty '(long ulong))       ; an 8-byte gp scalar: what a register home can carry
-   ; a home carries int/uint too, CANONICALLY: the register always holds the extended value
-   ; (every def re-narrows through cvt; a param's entry cvt canonicalizes the arrival -- a
-   ; foreign caller's high half is undefined), so reads are zero forms and 32-bit wrap holds.
-   ; an int PARAM homes by RIDING its arrival where it can (no pool register, no wrap -- one
-   ; entry cvt); only a HOT non-rideable one takes a positional seat (upar): a cold int param
-   ; in a pool seat starves the d128 pair park and the hot locals.
-   (lhomable? ty) (homable? ty || member? ty '(int uint))
+   ; a home carries every narrow gp scalar too, CANONICALLY: the register always holds the
+   ; extended value (every def re-narrows through cvt; a param's entry cvt canonicalizes the
+   ; arrival -- a foreign caller's high half is undefined), so reads are zero forms and the
+   ; narrow wrap holds; a bool home holds 0/1 (its cvt converts). a narrow PARAM homes by
+   ; RIDING its arrival where it can (no pool register, no wrap -- one entry cvt); only a HOT
+   ; non-rideable one takes a positional seat (upar): a cold narrow param in a pool seat
+   ; starves the d128 pair park and the hot locals.
+   (lhomable? ty) (homable? ty || member? ty '(int uint short ushort char uchar bool))
    ; the homable-param fold, spelled once for its three readers (pgo, upar,
    ; ubuild's grant fold): a float/sse param rides its own lane and spends no gp
    ; seat, the walk stops folding at the home limit, and hx folds each homable
@@ -3668,8 +3669,8 @@
     (? !(two? fs) fs
        (: f <fs
           (? !(two? f && member? <f ldops9 && (<>>f = 'r4)) fs
-             (: h (assoc <>f hs)
-                (? (two? h && (<>h = <>>>f)) (skiprel g >fs hs)
+             (: h (filter (h2 \ (<h2 = <>f) && (<>h2 = <>>>f)) hs)   ; a seat serves several spans: match reg AND slot
+                (? (two? h) (skiprel g >fs hs)
                    (member? <>f (peep g 'pool0 ())) (skiprel g >fs hs)
                    fs)))))
    (sibs g (f . r) lw el hs ej crf)
@@ -6233,8 +6234,9 @@
 
    ; -- alive: which homable names still matter across each call (the one build's liveness).
    ; one backward statement-grain walk over the fn body, over a universe fixed up front: homable
-   ; params + homable locals, minus any address-taken or multiply-declared name (two vars sharing
-   ; a name must not conflate -- both keep the blanket wrap). a statement whose own expressions
+   ; params + homable locals, minus any address-taken or multiply-declared name (respell spells
+   ; the autos apart; a static local can still share one, and a conflated name keeps the blanket
+   ; wrap). a statement whose own expressions
    ; call records wrapset = livein u liveout under a statement counter that ⚠ ticks EXACTLY as the
    ; build's cgstmt/cgdecl/cgsdecl entries do (stq below; a splice never ticks). the walk numbers
    ; DOWN from the prepass total, so the child-reversed backward order lands forward pre-order
@@ -6424,16 +6426,20 @@
               (spn sq >l)))
        ; nclw = the statement's IN-LOOP share of ncl (0 at depth 0): the fn total n9 'ncw feeds
        ; the payoff gate -- a depth-0 call runs at most once per invocation
-       (rec sq w ncl nclw nclh)                     ; a call-bearing statement's record
+       ; w is the WRAPSET (soundness: what the statement's calls spill); wc the names
+       ; CHARGED a crossing (economics), ncc times -- a tail call's own arguments and a
+       ; one-call statement's kills die at or are born after the call, so they pay nothing
+       (recx sq w wc ncl ncc nclw nclh)             ; a call-bearing statement's record
         (: _ (spn sq w)
          (? (ncl < 1) ()
            (: _ (pin liv sq (sun w pales))          ; the outside-universe homes ride every wrap
               _ (pin n9 'ncw (nclw + peep n9 'ncw 0))
               _ (? (0 < nclh) (pin n9 'nhc (nclh + peep n9 'nhc 0)) ())
-              (bump (a . u)) (pin crs a (ncl + peep crs a 0),
+              (bump (a . u)) (pin crs a (ncc + peep crs a 0),
                                (? (0 < nclh) (pin crh a (nclh + peep crh a 0)) 0),
                                bump u)
-            (bump w))))
+            (? (0 < ncc || 0 < nclh) (bump wc) 0))))
+       (rec sq w ncl nclw nclh) (recx sq w w ncl ncl nclw nclh)
        ; -- reads of an expression, restricted to the universe -> (set ncalls). a var WRITE is not
        ; a read (the home register takes the value directly), sizeof's operand never evaluates,
        ; and an unknown head reads EVERYTHING and counts a call (future grammar fails safe) --
@@ -6453,6 +6459,14 @@
                 ('init items) (erdi items s2 nc)
                 [(sun s2 univ) (nc + 1)]))
        (erdl l s2 nc) (? !(two? l) [s2 nc] (: r (erd <l s2 nc) (erdl >l <r <>r)))
+       ; a return value's reads, the TAIL call itself uncounted (nhcr's soft twin)
+       (erdr e s2 nc)
+        (? !(two? e) [s2 nc]
+           (e @ ('call fh as) (: r (erd fh s2 nc) (erdl as <r <>r))
+                ('comma a b) (: r (erd a s2 nc) (erdr b <r <>r))
+                ('cond c a b) (: r (erd c s2 nc) r2 (erdr a <r <>r) (erdr b <r2 <>r2))
+                ((k _ x) && member? k '(un cast)) (erdr x s2 nc)
+                (erd e s2 nc)))
        (erdi l s2 nc)                               ; init items: dfield/didx wrap their values
         (? (atom? l) [s2 nc]
            (: it <l
@@ -6506,8 +6520,10 @@
                   ; ⚠ the KILL rides the record too: a name born in a call-bearing statement is
                   ; invisible to in/out yet lives across the statement's OWN calls, and
                   ; statement-grain cannot order intra-statement events
-                  sq (tick ()) _ (rec sq (sun (sun in out) (? kv [kv] ())) (* <>r w9)
-                                      (? (1 < w9) (* <>r w9) 0) (* (nhc e9) w9))
+                  sq (tick ()) _ (recx sq (sun (sun in out) (? kv [kv] ()))
+                                       (? (kv && <>r = 1) (sun in (sdel out kv)) (sun (sun in out) (? kv [kv] ())))
+                                       (* <>r w9) (* <>r w9)
+                                       (? (1 < w9) (* <>r w9) 0) (* (nhc e9) w9))
                   in)
               ('ret . rs)
                (: rv (? (two? rs) <rs ())
@@ -6518,8 +6534,9 @@
                   ; and nothing lives after a return -- so only calls INSIDE the
                   ; head or the args harden this statement (the VM's tail-forward
                   ; dispatch fleet rides this: return (*fp)(a, b) crosses nothing)
-                  sq (tick ()) _ (rec sq <r (* <>r w9) (? (1 < w9) (* <>r w9) 0)
-                                      (* (nhcr rv mt9) w9))
+                  nct (? (two? rv) <>(erdr rv () 0) 0)    ; the crossings charged: the tail call is none
+                  sq (tick ()) _ (recx sq <r <r (* <>r w9) (* nct w9) (? (1 < w9) (* <>r w9) 0)
+                                       (* (nhcr rv mt9) w9))
                   <r)
               ('decl ps)
                (: pr (dpairs (rev ps) out 0)
@@ -6527,8 +6544,10 @@
                                    (: nm <<p9
                                       (? (member? nm univ) (nm . go >p9) (go >p9))))
                         (go ps))
-                  sq (tick ()) _ (rec sq (sun (sun <pr out) ks) (* <>pr w9)
-                                      (? (1 < w9) (* <>pr w9) 0)
+                  sq (tick ()) _ (recx sq (sun (sun <pr out) ks)
+                                       (? (<>pr = 1) (sun <pr (foldl sdel out ks)) (sun (sun <pr out) ks))
+                                       (* <>pr w9) (* <>pr w9)
+                                       (? (1 < w9) (* <>pr w9) 0)
                                       (* (: (hs l) (? !(two? l) 0 (+ (nhc <>><l) (hs >l))) (hs ps)) w9))
                   <pr)
               ('sdecl . _) (: sq (tick ()) _ (spn sq out) out)   ; statics: no runtime init, no kill
@@ -7039,6 +7058,51 @@
            (pin g 'fesc (), pin g 'strs strs0, 'no)   ; real call's arg lane wraps it, bind cannot): keep the caller lean
           (mkv rt 'r0 (<>br + ibd + [['label ilb9]]))))
 
+   ; -- the respell prepass: a name declared twice in one fn (sibling blocks, a shadow)
+   ; conflates in alive's name-keyed liveness and kprop's census, so every later decl
+   ; of a name respells unique (nm`2, nm`3 ..) and the mentions in its scope follow. C
+   ; scoping: a decl binds the rest of its block, a for-decl its for; a static local
+   ; keeps its spelling (its label) but shadows all the same; params come first. --
+   (respell f)
+    (: cnt {}
+       (fresh nm) (: k (1 + peep cnt nm 0)
+                     _ (pin cnt nm k)
+                     (? (k = 1) nm (nm + "`" + show k)))
+       (re e env)                                   ; an expression (or a type): mentions respell
+        (? (atom? e) e
+           (e @ ('var nm) (: a (assoc nm env) (? (two? a) ['var <>a] e))
+                (map (x \ re x env) e)))
+       (rps ps env acc)                             ; decl pairs -> [pairs env]
+        (? !(two? ps) [(rev acc) env]
+           (: p <ps
+              nn (fresh <p)
+              env2 ([<p nn] . env)
+              (rps >ps env2 ([nn (re <>p env2) (re <>>p env2)] . acc))))
+       (rsl items env acc)                          ; a statement run: decls extend env for their siblings
+        (? !(two? items) (rev acc)
+           (: s <items
+              (? (two? s && <s = 'decl)
+                  (: r (rps <>s env ()) (rsl >items <>r (['decl <r] . acc)))
+                 (two? s && <s = 'sdecl)
+                  (: env2 (foldl (\ a2 p ([<p <p] . a2)) env <>s)
+                     (rsl >items env2 (re s env2 . acc)))
+                 (rsl >items env (rs s env . acc)))))
+       (rs s env)
+        (? (atom? s) s
+           (s @ ('blk items) ['blk (rsl items env ())]
+                ('if cnd thn els) ['if (re cnd env) (rs thn env) (rs els env)]
+                ('if cnd thn) ['if (re cnd env) (rs thn env)]
+                ('while cnd body) ['while (re cnd env) (rs body env)]
+                ('do body cnd) ['do (rs body env) (re cnd env)]
+                ('for ini cnd stp body)
+                 (: r (? (two? ini && <ini = 'decl) (rps <>ini env ()) [() env])
+                    ini2 (? (two? <r) ['decl <r] (re ini env))
+                    env2 <>r
+                    ['for ini2 (re cnd env2) (re stp env2) (rs body env2)])
+                ('switch ce items) ['switch (re ce env) (rsl items env ())]
+                (re s env)))
+       env0 (foldl (\ a2 p (: _ (fresh <p) ([<p <p] . a2))) () <>>f)
+       [<f <>f <>>f (rs (f 3) env0)])
    ; -- AST constant propagation: the CONST bind worn by a declared local. a scalar local
    ; declared ONCE from an initializer that folds, never assigned, never &-taken, and
    ; shadowing nothing (param, global, fn) reads as its cast-coated literal everywhere --
@@ -7100,7 +7164,7 @@
         (kprop g ([<f <>f <>>f] + (['blk (sub items)] . >>>>f)))))
 
    (cgfn g f)                                       ; ('fn name params ('blk items)) -> forms | 'bad
-    (: f (kprop g f)
+    (: f (kprop g (respell f))
        params <>>f
        _ (fnreset g)                                 ; the whole per-fn pin record wiped (one roster)
        ; v6-M has no FPU registers at all: the f0/f1/f15 fiction lives in three 8-byte frame CELLS
@@ -7426,8 +7490,7 @@
        ; -- the AST-side allocator (moon-ssa rung 6), fed by alive --
        ; raw mention counts rank (the rung-4 law), the loop
        ; weight breaks ties, spans share seats. candidates are the predicted decl
-       ; sequence's UNIVERSE names only (a shadowed or &-taken name stays a cell;
-       ; the short-lived shadowed class was repack's anyway), and a name crossing
+       ; sequence's UNIVERSE names only (an &-taken name stays a cell), and a name crossing
        ; a HARD call -- one no splice can erase -- never takes a caller-saved
        ; seat; a soft crossing rides the armed shadow (the wrap fires only at a
        ; call that really emits, so a spliced call costs nothing).
@@ -7443,7 +7506,11 @@
            nsq (av9 13)
            navl (? (3 < #hp9) (#hp9 - 2) (1 < #hp9) 1 0)   ; the file already lost the param homes: keep one grantable seat while two remain
            (firstn l n) (? (atom? l || n < 1) () (<l . firstn >l (n - 1)))
-           pfile (firstn hp9 navl)
+           ; a seat on a param's untouched ARRIVAL evicts what the sweeps still forward
+           ; from it (x64's file is arrival-aligned), so those registers rank last
+           arr9 (map (\ i (argr g i)) (jot (? (#params < ngp g) #params (ngp g))))
+           hp8 (filter (\ q !(member? q arr9)) hp9 + filter (\ q (member? q arr9)) hp9)
+           pfile (firstn hp8 navl)
            kp (cspool g)
            ; touch counts key by NAME: a shadowed name's sites conflate, and a
            ; conflated total would buy every site its own seat -- average it out
@@ -7555,6 +7622,9 @@
                  ; them (mag_divmod's cells doubled the one time pointer rides were
                  ; let through). a 3-operand d128 ISA keeps its verdicts.
                  ok (lf9 && !wd9 && member? nm uv && peep crh9 nm 0 <= 2)
+                 ; a bool's entry cvt defs through `set`, which the quad re-read
+                 ; (qclob?) cannot tell from a staged clobber: a bool quad vacates
+                 qb9 (id? pty 'bool && member? A '(r0 r1 r2 r3))
                  (? (ok && homable? pty)
                     (? (id? A (homereg gpi)) [<a4 (gpi . <>a4) (a4 2) (nv - 1)]
                        (a4rider? A) [<a4 (gpi . <>a4) (a4 2) nv]
@@ -7573,12 +7643,12 @@
                     ; park owns the file: the mag_mul discipline), and only while
                     ; the file stays deep, two left after the take; a64's r4
                     ; arrival rides free, as a pointer's does
-                    (ok && lhomable? pty && (0 < peep rdc9 nm 0) && !wd9 &&
+                    (ok && lhomable? pty && !qb9 && (0 < peep rdc9 nm 0) && !wd9 &&
                      (member? A tpool && 3 <= nv || a4rider? A))
                      [(gpi . <a4) <>a4
                       (? (member? A tpool) (A . a4 2) (a4 2))
                       (? (member? A tpool) (nv - 1) nv)]
-                    (ok && lhomable? pty && (0 < peep rdc9 nm 0) &&
+                    (ok && lhomable? pty && !qb9 && (0 < peep rdc9 nm 0) &&
                      pq9 && member? A '(r0 r1 r2 r3))
                      [(gpi . <a4) <>a4 (a4 2) nv]
                     ; ...and a HOT one that cannot ride (a quad under a dirty body)
@@ -7602,7 +7672,7 @@
            (: (go l) (? !(two? l) ()
                         (: f9 <l
                            (? (!(two? f9) ||
-                               member? <f9 '(sx4 zx4 label align br jmp jmpr ret)) (go >l)
+                               member? <f9 '(sx4 zx4 sx2 zx2 sx1 zx1 label align br jmp jmpr ret)) (go >l)
                               (: rd (rdsp f9)
                                  (? (id? rd 'bar) 1
                                     (: (hit l2) (? !(two? l2) ()

@@ -1335,6 +1335,49 @@
       (member? '(ld4 r0 sp 0) cvf)                   ; ...and re-extends from its slot
       (member? '(sx4 r4) r4f)                        ; f9: nb rides r4 on a64
       (member? '(cmp r6 r4) r4f))                    ; ...the inner bound register-register
+   ; -- narrow homes: a bool/char/short local homes like an int (canonically -- a bool's
+   ; cvt converts, so the seat holds 0/1 and a read is one register compare). fa: r never
+   ; opens a byte cell. fb: a name declared TWICE (sibling blocks) is respelled ahead of
+   ; alive, so both r home -- the second born of its own call statement, which charges no
+   ; crossing. fe: char/short/uchar locals home canonical (sx1/sx2/zx1 at each def) and a
+   ; char param rides its arrival; the indexed reads stay register-resident.
+   irNA (cgn (pre9 + "long fa(long *sp, long a, long b) { if (a > 100) { _Bool r = a == b; if (sp[1] == 7) { return r ? 3 : 4; } return r ? 1 : 0; } return g(a); } int main() { return 0; }"))
+   naf (fnf 'fa <>irNA)
+   irNB (cgn (pre9 + "long fb(long *sp, long a, long b) { if (a > 100) { _Bool r = a == b; if (sp[1] == 7) { return r ? 3 : 4; } return r ? 1 : 0; } if (a > 50) { _Bool r = g(a) == b; return r ? 5 : 6; } return g(a); } int main() { return 0; }"))
+   nbf (fnf 'fb <>irNB)
+   irNE (cgn (pre9 + "long fe(long *p, char c, short h) { char d = c + 1; short e = h * 3; unsigned char u = d; return p[d] + p[e] + p[u] + g(d) + e; } int main() { return 0; }"))
+   nef (fnf 'fe <>irNE)
+   (narrowm fs) (tally (filter (\ f (two? f && member? <f '(st1 st2 ld1 ld2 ldu1 ldu2))) fs))
+   _ (assert
+      (two? irNA) (two? irNB) (two? irNE)
+      (member? '(set ne r10) naf)                    ; fa: r's def converts onto its seat...
+      (member? '(cmp r10 0) naf)                     ; ...and reads compare the seat
+      (= 0 (narrowm naf))                            ; no byte cell anywhere
+      (member? '(set ne r10) nbf)                    ; fb: the first r homes...
+      (member? '(cmp r0 r9) nbf)                     ; ...and the second compares g's answer register-register
+      (= 0 (narrowm nbf))
+      (member? '(sx1 r5) nef)                        ; fe: c rides its arrival, canonicalized once
+      (member? '(add r9 r5 1) nef)                   ; d computes off the ride...
+      (member? '(sx1 r9) nef)                        ; ...and re-narrows on its seat
+      (member? '(sx2 r10) nef)                       ; e likewise
+      (member? '(ldx r7 r6 r9 8 0) nef)              ; p[d] indexes register-resident
+      (= 1 (narrowm nef)))                           ; the one narrow load: h's quad arrival re-read
+   ; -- the crossing charge is precise at a statement's edges: a tail call's own arguments
+   ; die at it (fc: t, read only as the sibcall's argument, takes a pool seat in a fn whose
+   ; three other calls make it hard-calling), and a name born of a single-call statement is
+   ; written after that call (fd: r homes off g's answer and indexes register-resident)
+   irTC (cgn (pre9 + "long fc(long *p, long a) { long s = p[0] + a; if (a & 1) { long t = s * 3 + p[1]; return g(t); } g(s); g(a); g(s); return g(s + 1); } int main() { return 0; }"))
+   tcf (fnf 'fc <>irTC)
+   irBN (cgn (pre9 + "long fd(long *p) { g(p[0]); g(p[1]); g(p[2]); long r = g(p[3]); return p[r] + p[r + 1]; } int main() { return 0; }"))
+   bnf (fnf 'fd <>irBN)
+   _ (assert
+      (two? irTC) (two? irBN)
+      (member? '(add r9 r6 r0) tcf)                  ; fc: t lands on a pool seat...
+      (member? '(mov r6 r9) tcf)                     ; ...and hands itself to the tail call
+      (= 0 (tally (stofs tcf 'st 'r9)))              ; never a cell
+      (member? '(mov r5 r0) bnf)                     ; fd: r takes its seat from g's answer...
+      (member? '(ldx r6 r9 r5 8 0) bnf)              ; ...and p[r] indexes it
+      (= 0 (tally (stofs bnf 'st 'r5))))
    ; -- d128 LOCALS home as CS PAIRS: a loop-carried __int128 local takes (lo hi) off the
    ; cs pool (callee-saved: call-safe, no wraps, and no operand-pool pressure -- the wpk
    ; park's registers stay free). reads/writes are mov pairs on the r0:r2 protocol; the
@@ -1346,8 +1389,9 @@
       (member? '(mov r11 r0) vf)                     ; c's write lands its lo home...
       (member? '(mov r12 r2) vf)                     ; ...and its hi
       (member? '(m128r r7 r8) vf)                    ; the mul rides the parked twins -- the
-      (member? '(a128r r9 r10) vf)                   ;   machine-stack cell never opens, and the
-                                                     ;   combine reads its own park
+      (member? '(a128r r6 r5) vf)                    ;   machine-stack cell never opens, and the
+                                                     ;   combine reads its own park (the arrivals:
+                                                     ;   the file ranks them last, the locals took r9/r10)
       (= 4 (splds vf))))                             ; full-word sp loads: a's two wd9-spill reloads + the cs restores
 
 ; -- the callee-saved contract (cskeep): every cgn above already compiles under it --

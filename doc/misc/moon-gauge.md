@@ -210,6 +210,31 @@ and together they are the method the forward path below inherits:
    the arm fires once in hash.c (+8 B), the corpus reads identical instructions
    (71.238G both worlds) and the x64 battery is byte-identical. Gates at reference.
 
+7. **narrow homes + the precise crossing charge — LANDED 2026-08-28 (the attribution's
+   first lever).** `lhomable?` admits bool/char/short (and their unsigned) under the same
+   canonical-extension discipline as int: every def re-narrows through cvt, a bool's cvt
+   converts (so the seat holds 0/1), reads are zero forms. Three refusals stood between
+   the gate and lvm_eq's hot line, each found by dumping ulloc's verdicts for that fn:
+   `bool r` is declared four times in sibling blocks and the universe refuses a
+   multiply-declared name (alive's liveness is name-keyed) — a `respell` prepass ahead of
+   kprop and alive now spells later decls apart (nm`2, nm`3; C block scoping, sdecls keep
+   their label) — and the pool-seat rule's `crs = 0` charged `r` a crossing for the tail
+   call whose *argument* it was, and `r`2` one for its own initializer's call. The
+   charge is now precise at a statement's edges (`recx`: the wrapset stays the sound
+   superset, the charged set drops a tail call's arguments and a single-call statement's
+   born names); `skiprel` matches reg AND slot (a seat now serves several disjoint
+   spans); and x64's seat file ranks a param's arrival register last — a seat at the
+   arrival-aligned front evicted the untouched arrival the sweeps forward from (Ip's slot
+   loads came back the first time). A bool in a quad arrival vacates rather than rides
+   (its cvt defs through `set`, which qclob? cannot tell from a clobber). Priced: the
+   arm64 exact meter 1,507.87G → **1,496.89G (−0.73%)** on the arm64check corpus —
+   mag_mul −5.6%, lvm_aq −46%, ai_big_canon −14%, ai_net −16%, lvm_eq −4.5%, nf_hash
+   and shash −6%, hash_at −9%; the largest regression ai_big_to_flo +0.1G. x64 perf,
+   interleaved before/after on the corpus: 74,286 → 73,238 samples (−1.4%), lvm_eq
+   2,836 → 1,744 (−38%: the byte cell's store-forward round trip was the line); every
+   other per-fn move is on a byte-identical body (the layout lottery). .text −1,119
+   instructions (−0.8%). Gates green, the a128r law renamed its registers.
+
 ## the path forward
 
 **Codegen quality**, each lever with the evidence that prices it (largest first is not
@@ -398,11 +423,15 @@ from the disassemblies side by side:
 So the gap is not dispatch density and not the residency layer: it is frame and
 cs traffic on musttail exits, byte-wide locals kept in cells, repeated tag loads and
 address rematerialization, and constant folds lost across seats -- all in ten functions.
-The levers this names, cheapest first: bool/char locals homable under the canonical-ext
-discipline (lvm_eq's hottest line); a clean-width fact for `set` results in rezx; the
-post-repack copy fold (the G-load rows); a look at why lvm_cur's entry constants survive
-deaddef and cfoldir. Each is priced by re-running this attribution on the two functions
-it names, then the corpus row.
+The levers this names, cheapest first: ~~bool/char locals homable under the canonical-ext
+discipline (lvm_eq's hottest line)~~ — landed lever 7, lvm_eq −38% on this instrument
+(and ⚠ the instrument's lesson: re-run it before/after on the SAME binary pair and check
+the body identity of every moved symbol — a byte-identical fn moving ±10% is the layout
+lottery, not the lever); a clean-width fact for `set` results in rezx (the
+`sete; movzbq; test; setne; movzbq` chatter is still lvm_eq's line, now register-only);
+the post-repack copy fold (the G-load rows); a look at why lvm_cur's entry constants
+survive deaddef and cfoldir. Each is priced by re-running this attribution on the two
+functions it names, then the corpus row.
 
 ## how to measure
 

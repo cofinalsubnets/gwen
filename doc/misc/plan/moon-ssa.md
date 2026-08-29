@@ -452,7 +452,9 @@ until rung 6.
   int param VACATING to a home seat with its entry sxtw, the way pointers
   vacate — is a new verdict arm that would move x64 output too: a priced
   decision on both ISAs, parked here. LANDED 2026-08-28 (moon-gauge's landed
-  lever 6): nb rides r4, mag_mul −558M on the meter, x64 identical.
+  lever 6): nb rides r4, mag_mul −558M on the meter, x64 identical. And the
+  narrow homes + precise crossing charge (lever 7, same day): mag_mul −5.1G
+  more, the corpus −0.73% on the meter, lvm_eq −38% on x64's perf row.
 
   rv64 pricing LANDED 2026-08-28, unblocked by the VLA lane: the first
   hosted rv64 love builds and runs the full corpus in both worlds, and the
