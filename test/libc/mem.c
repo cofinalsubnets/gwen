@@ -92,5 +92,25 @@ int main(void)
 	{ unsigned char u[4]; u[0] = 1; u[1] = 0xc3; u[2] = 2; u[3] = 3;
 	  say_p("memchr.high", u, memchr(u, 0xc3, 4)); } /* the int arg is taken as unsigned char */
 
+	/* the WORD LOOP and its corners: memchr reads a word at a time, so every
+	 * alignment of the start, every length modulo the word, and a needle at each
+	 * position in it must answer what a byte walk answers -- including the needle
+	 * sitting one past the searched span, which must NOT be found. */
+	{
+		static unsigned char big[160];
+		unsigned i, off, len;
+		for (i = 0; i < sizeof big; i++) big[i] = 'a' + (i % 23);
+		for (off = 0; off < 16; off++)
+			for (len = 0; len < 40; len++) {
+				say_p("memchr.miss.sweep", big, memchr(big + off, '!', len));
+				for (i = 0; i < len + 2 && off + i < sizeof big; i++) {
+					unsigned char save = big[off + i];
+					big[off + i] = '!';
+					say_p("memchr.sweep", big, memchr(big + off, '!', len));
+					big[off + i] = save;
+				}
+			}
+	}
+
 	return 0;
 }

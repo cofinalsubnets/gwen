@@ -19,6 +19,23 @@ int main(void)
 	say_u("strlen", strlen(s));
 	say_u("strlen.empty", strlen(e));
 	say_u("strlen.one", strlen("x"));
+	/* the WORD LOOP and its corners: strlen reads a word at a time, so every
+	 * alignment of the start and every length modulo the word must answer the
+	 * same as a byte walk. one length short of the sweep never leaves the align
+	 * loop; one past it exercises the drain. */
+	{
+		static char big[160];
+		unsigned i, off;
+		for (i = 0; i < sizeof big - 1; i++) big[i] = 'a' + (i % 23);
+		for (off = 0; off < 16; off++) {
+			for (i = 0; i < 40; i++) {
+				char save = big[off + i];
+				big[off + i] = 0;
+				say_u("strlen.sweep", strlen(big + off));
+				big[off + i] = save;
+			}
+		}
+	}
 
 	/* --- strcmp / strncmp: sign only, and the length cut --- */
 	say_c("strcmp.eq", strcmp("abc", "abc"));

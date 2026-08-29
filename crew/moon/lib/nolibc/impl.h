@@ -538,6 +538,18 @@ extern long __ai_nbp202(long, long, long, long, long, long);
 #define BdD (BdN * 9)                /* every digit index the array holds */
 #define BdU (BdI * 9 - 1)            /* the index of the units place */
 
+/* the SWAR pair every word-at-a-time byte scan reads: 0x01 and 0x80 in each byte
+ * of a long, sized by the seat rather than written out. (w - AiOnes) & ~w &
+ * AiHighs is nonzero exactly when some byte of w is zero -- strlen.c and
+ * memchr.c both ride it. compile-time, so no member pays to build them. */
+/* ⚠ WRITTEN OUT, not derived. the tidy spelling is ~0UL / 255, and mooncc does
+ * not fold it -- it emits a `divq`, twice per loop iteration, and the byte scan
+ * that was supposed to get faster carries a hardware divide. a cast of an
+ * out-of-range literal is well defined modulo 2^N, so the 32-bit seats truncate
+ * to 0x01010101 / 0x80808080, which is what they want. */
+#define AiOnes  ((unsigned long) 0x0101010101010101ULL)
+#define AiHighs ((unsigned long) 0x8080808080808080ULL)
+
 extern char **environ;
 extern char const *__ai_progname;
 
