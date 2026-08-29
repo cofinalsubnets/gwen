@@ -44,6 +44,7 @@ char const ai_cat_mods[] =
 #endif
 #include "bao.h"
 #include "verbs.h"
+#include "scan.h"
 #include "re.h"
 #include "peg.h"
  ;
