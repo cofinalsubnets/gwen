@@ -158,6 +158,11 @@ intptr_t image_imm_index(word v) {
 // in the binary that dumped it. two guards reject a mismatch -> NULL -> normal
 // boot: `arch`, and `anchor` -- the gap between two of the binary's own symbols,
 // which a cross-arch or stale build lays out differently.
+// the code segment leads with [raw length, deflated?] so it describes itself: the header
+// keeps saying how many bytes are STORED, and only these two words know what they hold.
+#define CodeSegHead (2 * sizeof(uint64_t))
+extern intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
+extern intptr_t ai_deflate_raw(struct ai*, unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
 struct image_hdr {
  uint64_t magic, wordsize, nwords, arch, anchor, nroot, rsv1, nstream, next_serial, ncode;
  uint64_t root_tag[24], root_val[24];        /* symbols, tasks, then the entire v0..end region walked
@@ -782,13 +787,29 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
  for (uintptr_t i = nd; i < ImageNDict; i++) d->dict[i] = nd ? d->dict[0] : 0;   // the spare seats
  uintptr_t ns = img_stream(NULL, blob, nw, d->key, d->tk), db = ImageNDict * sizeof(word);
  H->nstream = ns;
- uintptr_t total = sizeof *H + db + ns + H->ncode;
+ // the code segment ships deflated: thousands of blobs share prologue and epilogue
+ // shapes, so it makes about a tenth of itself and the wake pays one inflate. a stream
+ // that would not shrink is stored raw under the same two words.
+ uintptr_t craw = H->ncode, cstore = 0;
+ unsigned char *cz = NULL;
+ if (craw) {
+  intptr_t got = -1;
+  if ((cz = g->alloc(g, NULL, craw)))
+   got = ai_deflate_raw(g, (unsigned char const*) cseg, craw, cz, craw);
+  if (got > 0) cstore = CodeSegHead + (uintptr_t) got;
+  else { if (cz) g->alloc(g, cz, 0); cz = NULL; cstore = CodeSegHead + craw; }
+  H->ncode = cstore; }
+ uintptr_t total = sizeof *H + db + ns + cstore;
  char *buf = g->alloc(g, NULL, total);
- if (!buf) { g->alloc(g, d, 0); return NULL; }
+ if (!buf) { if (cz) g->alloc(g, cz, 0); g->alloc(g, d, 0); return NULL; }
  memcpy(buf, H, sizeof *H);
  memcpy(buf + sizeof *H, d->dict, db);
  img_stream((unsigned char*)(buf + sizeof *H + db), blob, nw, d->key, d->tk);
- if (H->ncode) memcpy(buf + sizeof *H + db + ns, cseg, H->ncode);   // the code segment: raw bytes after the stream
+ if (craw) {
+  char *p = buf + sizeof *H + db + ns;
+  ((uint64_t*) p)[0] = craw, ((uint64_t*) p)[1] = cz ? 1 : 0;
+  memcpy(p + CodeSegHead, cz ? (char const*) cz : cseg, cstore - CodeSegHead); }
+ if (cz) g->alloc(g, cz, 0);
  g->alloc(g, d, 0);
  return *outlen = total, buf; }
 void *ai_image_save_(struct ai *g, uintptr_t *outlen, struct ai_image_guard const *guard) {
@@ -855,7 +876,20 @@ struct ai *img_wake(void const *buf, uintptr_t len,
    if (!q || q != p0 + ns) return NULL; }                          // an image consumes its stream exactly
  // the natives' code, seated before the walk names it: a chunk of the arena, sealed
  char *code = NULL;
- if (H.ncode && !(code = code_adopt(g, (char const*) buf + sizeof H + db + ns, H.ncode))) return NULL;
+ if (H.ncode) {
+  unsigned char const *p = (unsigned char const*) buf + sizeof H + db + ns;
+  uintptr_t craw;
+  if (H.ncode < CodeSegHead) return NULL;
+  craw = (uintptr_t) ((uint64_t const*) p)[0];
+  if (((uint64_t const*) p)[1]) {                        // deflated: inflate, then adopt the blobs
+   unsigned char *t = g->alloc(g, NULL, craw);
+   if (!t) return NULL;
+   if (ai_inflate_raw(p + CodeSegHead, H.ncode - CodeSegHead, t, craw) != (intptr_t) craw) {
+    g->alloc(g, t, 0); return NULL; }
+   code = code_adopt(g, (char const*) t, craw);
+   g->alloc(g, t, 0); }
+  else code = code_adopt(g, (char const*) p + CodeSegHead, craw);
+  if (!code) return NULL; }
  word const *src = base;
  for (uintptr_t off = 0; off < nw; ) {
   uintptr_t sz;

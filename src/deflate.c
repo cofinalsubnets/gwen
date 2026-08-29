@@ -301,6 +301,18 @@ static uint8_t *df_arena(struct ai *g, int *alloced) {
    if (p) *alloced = 1;
    return (uint8_t*) p; } }
 
+// the image lane: deflate raw bytes into the caller's buffer, one pass, no love stack.
+// its arena is always its own -- df_arena may hand back the major pool's spare half, and
+// a dump is walking a compacted heap that owns it.
+intptr_t ai_deflate_raw(struct ai *g, unsigned char const *in, uintptr_t n,
+                        unsigned char *out, uintptr_t cap) {
+ uint8_t *m = g->alloc(g, NULL, DF_ARENA);
+ int64_t got;
+ if (!m) return -1;
+ got = df_go(in, n, out, cap, m);
+ g->alloc(g, m, 0);
+ return (intptr_t) got; }
+
 ai_noinline static struct ai *host_deflate(struct ai *g) {
  ai_word sw = g->sp[0];
  uint8_t *m;
