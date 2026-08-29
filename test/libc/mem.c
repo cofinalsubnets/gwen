@@ -75,6 +75,20 @@ int main(void)
 		say_c("memcmp.short", memcmp(buf + off, b2 + off, 23));   /* one shy: equal */
 	}
 	say_c("memcmp.0", memcmp("a", "b", 0));       /* zero length is always equal */
+	/* ⚠ INDEPENDENT offsets. the sweep above moves both pointers together, so the
+	   two always share an alignment and the word lane always takes -- these are
+	   what reach it when they do not, and the lengths that cross its step. */
+	for (int ox = 0; ox < 9; ox++)
+		for (int oy = 0; oy < 9; oy++) {
+			fill(buf, sizeof buf, 0);
+			fill(b2, sizeof b2, 0);
+			for (size_t n = 0; n <= 20; n++) {
+				say_c("memcmp.mix.eq", memcmp(buf + ox, b2 + oy, n));
+				for (size_t d = 0; d < n; d++) {
+					b2[oy + d] ^= 0x80;           /* the high bit: unsigned ordering too */
+					say_c("memcmp.mix", memcmp(buf + ox, b2 + oy, n));
+					say_c("memcmp.mix.rev", memcmp(b2 + oy, buf + ox, n));
+					b2[oy + d] ^= 0x80; } } }
 	/* ⚠ the bytes compare as UNSIGNED char: 0x80 is ABOVE 0x7f, not below */
 	{ unsigned char hi[2], lo[2];
 	  hi[0] = 0x80; hi[1] = 0; lo[0] = 0x7f; lo[1] = 0;
