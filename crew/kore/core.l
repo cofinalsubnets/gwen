@@ -107,11 +107,12 @@
        (c3 x) <>>x
        ; a row is (name (l w b)), name () for stdin. ⚠ counted a gulp at a time --
        ; nothing here needs the text, only the three numbers off it
+       cnt (ucount-for l? w?)
        st (tablet 0) _ (pin st 'rows ()) _ (pin st 'ok 1)
        _ (ureachm (\ f (: _ (say err ("wc: cannot open " + f)) _ (put err 10)
                           _ (pin st 'ok 0) 0))
                   (\ f first rd
-                     (: (go acc) (: h (urd-gulp rd) (? (tally h) (go (ucount-go acc h)) acc))
+                     (: (go acc) (: h (urd-gulp rd) (? (tally h) (go (cnt acc h)) acc))
                         c (ucount-say (go ucount0))
                         _ (pin st 'rows ([(? (two? fs) f ()) c] >< (peep st 'rows ())))
                         1))

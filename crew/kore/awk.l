@@ -1076,6 +1076,22 @@
    ; an array argument passes its tablet, which is awk's one aliasing rule: the
    ; callee's delete and its assignments are the caller's too. a scalar is
    ; evaluated and copied, so only a name already holding an array aliases
+   ; a signal that walks out of a call has no answer-place, so it goes the old
+   ; way. `rk` below says whether any function can do this; where it cannot, not
+   ; one trap is armed for the whole run
+   (aw-esc sig)
+    (? (sig == 'nxt) (scare 'awk-next ())
+       (sig == 'brk) (scare 'awk-break ())
+       (sig == 'cnt) (scare 'awk-cont ())
+       (scare 'awk-exit <>sig))
+   (aw-exi? r) (two? r && <r == 'exi)
+   ; does any function body carry a statement that can leave it?
+   (aw-flow? x)
+    (? (two? x) (aw-flow? <x || aw-flow? >x)
+       (x == 'break || x == 'cont || x == 'next))
+   (aw-risky? fns)
+    (: (go l) (l @ (nm . u) (: f (peep fns nm ()) (aw-flow? <>f || go u)) 0)
+       (go (keys fns)))
    (aw-anarg nd)
     (<nd @ 'var (: nm <>nd f (aw-anvar nm)
                    (E \ (: cur (aw-get E nm) (tablet? cur ? cur (f E)))))
@@ -1098,10 +1114,13 @@
        _ (bind ps gs)
        old (peep E 'loc ())
        _ (pin E 'loc loc)
-       r (trap (\ _ (body E, ()))
-               ()
-               (\ a b (a == 'awk-ret ? b (pin E 'loc old, scare a b))))
+       ; a call sits in EXPRESSION position, so a signal that is not this
+       ; function's own has nowhere to go but out -- the one scare awk still needs
+       sig (body E)
        _ (pin E 'loc old)
+       r (? (sig == 0) ()
+            (two? sig && <sig == 'ret) <>sig
+            (aw-esc sig))
        ; an untyped name handed in (g(A) with A never touched) becomes an array
        ; iff the callee subscripted it -- awk decides late, so the answer only
        ; exists now. carry the tablet back to the caller's name
@@ -1145,70 +1164,96 @@
        (E \ (: _ (say (pf E) (aw-sprintf (aw-sv E (f0 E)) (map (\ g (g E)) rest)
                                          (peep (aw-g E) "CONVFMT" "%.6g")))
                0)))
-   (aw-anlist ss)
-    (: fs (map aw-ax ss)
-       (? !(two? fs) (E \ 0)
+   ; a statement ANSWERS its completion instead of throwing it: 0 falls through,
+   ; 'brk 'cnt 'nxt are the bare ones and ['ret v] ['exi c] carry a value. every
+   ; construct absorbs what it owns and hands the rest up, so a loop that cannot
+   ; break arms nothing -- a trap costs ~4.8k instructions to install and awk was
+   ; paying one per record, per iteration and per call
+   (aw-anlist rk ss)
+    (: fs (map (aw-ax rk) ss)
+       (? !(two? fs) (\ _ 0)
           !(two? >fs) <fs
-          (E \ (: (go (f . u)) (f E, go u) (go fs)))))
-   ; one turn of a loop body: 1 keep going, 0 the break came through
-   (aw-iter E b)
-    (trap (_ \ (b E, 1))
+          (E \ (: (go l) (l @ (f . u) (: r (f E) (r == 0 ? (go u) r)) 0)
+                  (go fs)))))
+   ; one turn of a loop: 1 go round again, 0 the break came through, else the
+   ; signal is not this loop's to keep
+   (aw-turn E b)
+    (: r (b E)
+       (? (r == 0) 1  (r == 'cnt) 1  (r == 'brk) 0  r))
+   ; the guarded turn, armed only where a call can throw one of these out
+   (aw-turnt E b)
+    (trap (_ \ (aw-turn E b))
           ()
           (\ a c (a @ 'awk-break  0 'awk-cont 1 (scare a c))))
-   (aw-loop E c b st)
-    (aw-bool (c E) && aw-iter E b && (st E, aw-loop E c b st))
-   (aw-forin E nm arr b)
+   (aw-loop E turn c b st)
+    (? !(aw-bool (c E)) 0
+       (: t (turn E b)
+          (? (t == 1) (: r (st E) (r == 0 ? (aw-loop E turn c b st) r))
+             (t == 0) 0
+             t)))
+   (aw-forin E turn nm arr b)
     (: a (aw-arr E arr)
-       (go (al . ul))
-        (aw-put E nm (aw-mk al),
-         aw-iter E b && go ul)
+       (go l)
+        (l @ (al . ul)
+           (: _ (aw-put E nm (aw-mk al))
+              t (turn E b)
+              (? (t == 1) (go ul)  (t == 0) 0  t))
+           0)
        (go (aw-akeys a)))
-   (aw-ax s)
-    (<s @ 'blk (aw-anlist <>s)
-          'nop (E \ 0)
+   (aw-ax rk s)
+    (: turn (rk ? aw-turnt aw-turn)
+     (<s @ 'blk (aw-anlist rk <>s)
+          'nop (\ _ 0)
           'expr (: f (aw-an <>s) (E \ (f E, 0)))
           'print (aw-anprint <>s <>>s)
           'printf (aw-anprintf <>s <>>s)
-          'if (: c (aw-an <>s) a (aw-ax <>>s)
+          'if (: c (aw-an <>s) a (aw-ax rk <>>s)
                  (aw-nil? <>>>s ? (E \ (aw-bool (c E) ? (a E) 0))
-                    (: b (aw-ax <>>>s) (E \ (aw-bool (c E) ? (a E) (b E))))))
-          'while (: c (aw-an <>s) b (aw-ax <>>s) (E \ (aw-loop E c b (\ _ 0))))
-          'do (: b (aw-ax <>s) c (aw-an <>>s)
-                 (E \ (: (again _) (aw-iter E b && aw-bool (c E) && again 0)
+                    (: b (aw-ax rk <>>>s) (E \ (aw-bool (c E) ? (a E) (b E))))))
+          'while (: c (aw-an <>s) b (aw-ax rk <>>s)
+                    (E \ (aw-loop E turn c b (\ _ 0))))
+          'do (: b (aw-ax rk <>s) c (aw-an <>>s)
+                 (E \ (: (again _)
+                          (: t (turn E b)
+                             (? (t == 1) (aw-bool (c E) ? (again 0) 0)
+                                (t == 0) 0
+                                t))
                          (again 0))))
-          'for (: ini (aw-nil? <>s ? (\ _ 0) (aw-ax <>s))
+          'for (: ini (aw-nil? <>s ? (\ _ 0) (aw-ax rk <>s))
                   c (aw-nil? <>>s ? (\ _ 1) (aw-an <>>s))
-                  st (aw-nil? <>>>s ? (\ _ 0) (aw-ax <>>>s))
-                  b (aw-ax <>>>>s)
-                  (E \ (ini E, aw-loop E c b st)))
-          'forin (: nm <>s arr <>>s b (aw-ax <>>>s) (E \ (aw-forin E nm arr b)))
-          'next (E \ (scare 'awk-next ()))
-          'break (E \ (scare 'awk-break ()))
-          'cont (E \ (scare 'awk-cont ()))
-          'exit (aw-nil? <>s ? (E \ (scare 'awk-exit ()))
+                  st (aw-nil? <>>>s ? (\ _ 0) (aw-ax rk <>>>s))
+                  b (aw-ax rk <>>>>s)
+                  (E \ (: r (ini E) (r == 0 ? (aw-loop E turn c b st) r))))
+          'forin (: nm <>s arr <>>s b (aw-ax rk <>>>s)
+                    (E \ (aw-forin E turn nm arr b)))
+          'next (\ _ 'nxt)
+          'break (\ _ 'brk)
+          'cont (\ _ 'cnt)
+          'exit (aw-nil? <>s ? (\ _ ['exi ()])
                    (: f (aw-an <>s)
-                      (E \ (scare 'awk-exit (aw-trunc (aw-numv (f E)))))))
-          'ret (aw-nil? <>s ? (E \ (scare 'awk-ret ()))
-                  (: f (aw-an <>s) (E \ (scare 'awk-ret (f E)))))
+                      (E \ ['exi (aw-trunc (aw-numv (f E)))])))
+          'ret (aw-nil? <>s ? (\ _ ['ret ()])
+                  (: f (aw-an <>s) (E \ ['ret (f E)])))
           'del (: nm <>s k (aw-ankey <>>s)
                   (E \ (pin (aw-arr E nm) (k E) 'nope, 0)))
           'delall (: nm <>s
                      (E \ (: a (aw-arr E nm)
                              (go l) (? (two? l) (: _ (pin a <l 'nope) (go >l)) 0)
-                             (go (keys a))))))
+                             (go (keys a)))))))
 
    ; -- the record loop -------------------------------------------------------
    ; an item is analysed once: ('begin f) ('end f) ('item pf af) ('range pf qf af)
-   (aw-anact b) (aw-nil? b ? (E \ (aw-do-print E [(aw-rec E)] out)) (aw-anlist b))
-   (aw-anitem it)
-    (<it @ 'begin ['begin (aw-anlist <>it)]
-            'end ['end (aw-anlist <>it)]
-            'item ['item (aw-nil? <>it ? () (aw-an <>it)) (aw-anact <>>it)]
-            ['range (aw-an <>it) (aw-an <>>it) (aw-anact <>>>it)])
-   (aw-anfns fns)
+   (aw-anact rk b)
+    (aw-nil? b ? (E \ (aw-do-print E [(aw-rec E)] out)) (aw-anlist rk b))
+   (aw-anitem rk it)
+    (<it @ 'begin ['begin (aw-anlist rk <>it)]
+            'end ['end (aw-anlist rk <>it)]
+            'item ['item (aw-nil? <>it ? () (aw-an <>it)) (aw-anact rk <>>it)]
+            ['range (aw-an <>it) (aw-an <>>it) (aw-anact rk <>>>it)])
+   (aw-anfns rk fns)
     (: (go l) (l @ (nm . u)
                 (: f (peep fns nm ())
-                   _ (pin fns nm [<f (aw-anlist <>f)])
+                   _ (pin fns nm [<f (aw-anlist rk <>f)])
                    (go u))
                 0)
        (go (keys fns)))
@@ -1224,13 +1269,19 @@
     (: _ (pins (aw-g E) "NR" (aw-nrn E "NR" + 1)
                        "FNR" (aw-nrn E "FNR" + 1),
           aw-setrec E line)
-       (go (it . u) i)
-        (it @ ['item a b]  ((aw-nil? a || aw-bool (a E)) && b E)
-              ('range . _) (aw-range E it i),
-         go u (i + 1))
+       (go l i)
+        (l @ (it . u)
+           (: r (it @ ['item a b] ((aw-nil? a || aw-bool (a E)) ? (b E) 0)
+                       ('range . _) (aw-range E it i)
+                       0)                        ; a begin/end item is not this walk's
+              (r == 0 ? (go u (i + 1)) r))
+           0)
        (go items 0))
+   ; 'nxt is the record's own; an exit walks out past the loop
    (aw-feed E items line)
-    (trap (\ _ (: _ (aw-record E items line) 0))
+    (: r (aw-record E items line) (r == 'nxt ? 0 r))
+   (aw-feedt E items line)                       ; where a call can throw one
+    (trap (\ _ (aw-feed E items line))
           ()
           (\ a b (a == 'awk-next ? 0 (scare a b))))
    (aw-cmdas? a)
@@ -1252,21 +1303,28 @@
        (fnd k) (a k = 61 ? k (fnd (k + 1)))
        i (fnd 0)
        (aw-put E (snip a 0 i) (aw-mk (aw-unesc (snip a (i + 1) n)))))
-   (aw-input E items as)
+   ; the operands ride the u-floor's line reader, a record at a time: awk never
+   ; wants the whole input, and uread + lines held four copies of it to hand over
+   ; the first one
+   (aw-input E items as feed)
     (: (one f)
-        (: t (? (f = "-") (slurp in)
-              (uread f @ [_ r] r (aw-err ("cannot open " + f))))
+        (: q (? (f = "-") in
+                (: p (open f "r") (? p p (aw-err ("cannot open " + f)))))
            _ (pin (aw-g E) "FILENAME" (? (f = "-") "" f))
            _ (pin (aw-g E) "FNR" 0)
-           (go l) (? (two? l) (: _ (aw-feed E items <l) (go >l)) 0)
-           (go (lines t)))
+           rd (urd q)
+           (go _) (: l (urd-line rd)
+                     (two? l ? (: r (feed E items <l) (r == 0 ? (go 0) r)) 0))
+           r (go 0)
+           _ (? (f = "-") 0 (close q))
+           r)
        (go l any)
         (? (atom? l) (? any 0 (one "-"))
            (aw-cmdas? <l) (aw-cmdas E <l, go >l any)
-           (one <l, go >l 1))
+           (: r (one <l) (r == 0 ? (go >l 1) r)))
        (go as 0))
    (aw-phase E items which)
-    (: (go (a . u)) (<a == which && <>a E, go u)
+    (: (go l) (l @ (a . u) (: r (<a == which ? (<>a E) 0) (r == 0 ? (go u) r)) 0)
        (go items))
    (aw-needs? items)
     (: (go (a . u)) (<a != 'begin || go u) (go items))
@@ -1298,11 +1356,14 @@
         files (? (two? pfs) rest (? (two? rest) >rest ()))
         E (aw-new fns)
         (blow m) (: _ (say err ("awk: " + m)) _ (put err 10) (uleave 2))
-        items (trap (\ _ (: is (aw-program (aw-lex src) fns ())
-                             _ (aw-anfns fns)
-                             (map aw-anitem is)))
-                    ()
-                    (\ a b (? (id? a 'awk-err) (blow b) (scare a b))))
+        anp (trap (\ _ (: is (aw-program (aw-lex src) fns ())
+                           rk (aw-risky? fns ? 1 0)
+                           _ (aw-anfns rk fns)
+                           [(map (aw-anitem rk) is) rk]))
+                  ()
+                  (\ a b (? (id? a 'awk-err) (blow b) (scare a b))))
+        items <anp
+        feed (<>anp ? aw-feedt aw-feed)
         _ (? (aw-nil? fs) 0 (pin (aw-g E) "FS" (aw-unesc fs)))
         _ (map (\ v (aw-cmdas E v)) vs)
         ; ⚠ exit outside END still runs the END rules -- POSIX, and the whole
@@ -1318,12 +1379,15 @@
             (? (aw-nil? b) 0 b))
         code
          (trap
-          (\ _ (: _ (aw-phase E items 'begin)
-                  _ (? (aw-needs? items)
-                       (: _ (pin E 'ph 'main) (aw-input E items files)) 0)
-                  _ (pin E 'ph 'end)
-                  _ (aw-phase E items 'end)
-                  0))
+          (\ _ (: r1 (aw-phase E items 'begin)
+                  (? (aw-exi? r1) (ending <>r1)
+                     (: r2 (? (aw-needs? items)
+                              (: _ (pin E 'ph 'main)
+                                 (aw-input E items files feed)) 0)
+                        (? (aw-exi? r2) (ending <>r2)
+                           (: _ (pin E 'ph 'end)
+                              r3 (aw-phase E items 'end)
+                              (aw-exi? r3 && !(aw-nil? <>r3) ? <>r3 0)))))))
           ()
           (\ a b (? (id? a 'awk-err) (blow b)
                     (id? a 'awk-exit) (ending b)

@@ -100,6 +100,14 @@
                                (go (k + 1) 1 l (? inw w (w + 1))))))
        r (go 0 <st <>st <>>st)
        [<r <>r <>>r (<>>>st + n)])
+   ; the word state is a per-byte machine; a wc that was not asked for words has no
+   ; reason to run it, and one that wants only bytes has none to look at them at all
+   (ucount-b st s) [<st <>st <>>st (<>>>st + tally s)]
+   (ucount-l st s)
+    (: n (tally s)
+       (go k l) (? (n <= k) l (go (k + 1) (? ((s k) = 10) (l + 1) l)))
+       [<st (go 0 <>st) <>>st (<>>>st + n)])
+   (ucount-for l? w?) (? w? ucount-go (? l? ucount-l ucount-b))
    ucount0 [0 0 0 0]
    (ucount-say st) [<>st <>>st <>>>st]      ; the state's (lines words bytes) face
    ; text -> (lines words bytes), a word a maximal ink run (lawed in law.l)
@@ -182,9 +190,20 @@
    ; 50 MB wanted 1.09 GB of live set. These hand it over a gulp or a line at a time.
    ; ⚠ see/unsee/chug AND NOT `swig`: kore runs in two worlds (see ucopy-bytes) and
    ; the kernel image compiles no host/*.c. The gulp door is core's, so no probe.
+   ; 'p is the unread cursor into the held bytes, 'm how far the newline scan has
+   ; looked. the read-through prefix is dropped when a fill wants the room and not
+   ; per line, so a line costs its own length instead of the tail behind it
    (urd q) (: t (tablet 0)
-              _ (pin t 'q q) _ (pin t 'h "") _ (pin t 'p 0) _ (pin t 'e 0)
+              _ (pin t 'q q) _ (pin t 'h "") _ (pin t 'p 0) _ (pin t 'm 0)
+              _ (pin t 'e 0)
               t)
+   (urd-drop t)                                  ; let the read-through bytes go
+    (: p (peep t 'p 0)
+       (? (p = 0) 0
+          (: h (peep t 'h "")
+             _ (pin t 'h (snip h p (tally h)))
+             _ (pin t 'm ((peep t 'm 0) - p))
+             (pin t 'p 0))))
    ; one gulp onto the held bytes; 1 when something arrived, 0 at the end. ⚠ the
    ; see/unsee pair is what terminates it -- `see` touches the device (chug never
    ; does) and the byte it answers is one chug must count, so a gulp is never empty.
@@ -192,21 +211,31 @@
     (: q (peep t 'q ())
        c (see q)
        (? (c = -1) (: _ (pin t 'e 1) 0)
-          (: _ (unsee q c) _ (pin t 'h ((peep t 'h "") + (chug q))) 1)))
+          (: _ (unsee q c)
+             _ (urd-drop t)
+             _ (pin t 'h ((peep t 'h "") + (chug q)))
+             1)))
    ; the next line -> [line term?], () when spent. term? is whether the SOURCE ended
    ; it with a newline -- what `nl-end?` answers on the whole-text road.
    ; ⚠ the scan mark is not an optimisation: without it the held bytes are rescanned
    ; from the front every gulp, so an input with no newline costs its length squared.
    (urd-line t)
-    (: h (peep t 'h "") n (tally h)
+    (: h (peep t 'h "") n (tally h) p (peep t 'p 0) m (peep t 'm 0)
        (idx k) (? (n <= k) -1 ((h k) = 10) k (idx (k + 1)))
-       i (idx (peep t 'p 0))
-       (? (0 <= i) (: _ (pin t 'h (snip h (i + 1) n)) _ (pin t 'p 0) [(snip h 0 i) 1])
-          (peep t 'e 0) (? n (: _ (pin t 'h "") _ (pin t 'p 0) [h 0]) ())
-          (: _ (pin t 'p n) _ (urd-fill t) (urd-line t))))
+       i (idx (m < p ? p m))
+       (? (0 <= i) (: _ (pin t 'p (i + 1)) _ (pin t 'm (i + 1)) [(snip h p i) 1])
+          (peep t 'e 0)
+           (? (p < n) (: _ (pin t 'h "") _ (pin t 'p 0) _ (pin t 'm 0)
+                         [(snip h p n) 0])
+              ())
+          (: _ (pin t 'm n) _ (urd-fill t) (urd-line t))))
    ; the gulp just read, handed over and let go; "" when the input is spent
    (urd-gulp t)
-    (? (urd-fill t) (: h (peep t 'h "") _ (pin t 'h "") _ (pin t 'p 0) h) "")
+    (? (urd-fill t)
+       (: h (peep t 'h "") p (peep t 'p 0)
+          _ (pin t 'h "") _ (pin t 'p 0) _ (pin t 'm 0)
+          (? (p = 0) h (snip h p (tally h))))
+       "")
 
    ; --- the operand walk -----------------------------------------------------
    ; each name in turn, a miss complains and costs the status without stopping the
@@ -252,6 +281,7 @@
     (: t (tablet 0)
        _ (pin t 'm miss) _ (pin t 'fs (? (two? fs) fs '("-")))
        _ (pin t 'rd ()) _ (pin t 'cl ()) _ (pin t 'bad 0) _ (pin t 'h "")
+       _ (pin t 'hp 0)
        t)
    ; open the next operand; 1 when one did, 0 when the list is spent
    (urdj-step t)
@@ -280,19 +310,29 @@
    ; the BYTE face: unprimed, because priming would eat a line. od dumps ROWS and its
    ; offsets run through the operands, which is the same join and not the same unit.
    (urdb miss fs) (urdj-box miss fs)
-   ; up to k bytes off the joined stream, "" when it is spent
+   ; up to k bytes off the joined stream, "" when it is spent. 'hp is the unread
+   ; cursor: od takes its rows in small bites, and re-copying the held tail behind
+   ; each one costs the gulp squared
+   (urdj-drop t)
+    (: p (peep t 'hp 0)
+       (? (p = 0) 0
+          (: h (peep t 'h "")
+             _ (pin t 'h (snip h p (tally h)))
+             (pin t 'hp 0))))
    (urdj-take t k)
-    (: (fill _) (? (k <= (tally (peep t 'h "")))  1
-                   (: rd (peep t 'rd ())
+    (: (fill _) (? (k <= ((tally (peep t 'h "")) - (peep t 'hp 0)))  1
+                   (: _ (urdj-drop t)
+                      rd (peep t 'rd ())
                       g (? rd (urd-gulp rd) "")
                       (? (tally g) (: _ (pin t 'h ((peep t 'h "") + g)) (fill 0))
                          (? (urdj-step t) (fill 0) 0))))
        _ (fill 0)
        h (peep t 'h "")
-       n (tally h)
-       m (? (n < k) n k)
-       _ (pin t 'h (snip h m n))
-       (snip h 0 m))
+       p (peep t 'hp 0)
+       a ((tally h) - p)
+       m (? (a < k) a k)
+       _ (pin t 'hp (p + m))
+       (snip h p (p + m)))
 
    ; dot gets (line term?), one line at a time -- every tool whose whole-text body was
    ; `(go (lines t))`. ⚠ dot answering 0 STOPS this operand, so a tool can read no
