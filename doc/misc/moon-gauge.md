@@ -235,6 +235,16 @@ and together they are the method the forward path below inherits:
    other per-fn move is on a byte-identical body (the layout lottery). .text −1,119
    instructions (−0.8%). Gates green, the a128r law renamed its registers.
 
+8. **the bool width in rezx — LANDED 2026-08-28.** A `set` (and an li of 0 or 1) leaves
+   its register clean to width 1 — a bool — so the bool re-canonicalization `cmp r 0;
+   set ne r` over it is the identity and drops (a mov carries the fact, any other def
+   dirties it, and a flags read right after keeps the pair). lvm_eq's hot line is
+   `cmp; sete; movzbq; test` now. Priced on the arm64 exact meter, body-changed fns only
+   (the corpus walk drifts between binaries — lvm_qa/lvm_aq moved ∓10G on identical
+   bodies): lvm_cond −2.70G (−4.1%), lvm_eq −1.25G (−4.9%), lvm_nilp −0.54G, lvm_argcond
+   −0.40G, ~−5G = −0.33% of the corpus; the total read −0.95% with the drift. x64 .text
+   −143 instructions, lvm_eq 531 → 527.
+
 ## the path forward
 
 **Codegen quality**, each lever with the evidence that prices it (largest first is not
@@ -427,9 +437,8 @@ The levers this names, cheapest first: ~~bool/char locals homable under the cano
 discipline (lvm_eq's hottest line)~~ — landed lever 7, lvm_eq −38% on this instrument
 (and ⚠ the instrument's lesson: re-run it before/after on the SAME binary pair and check
 the body identity of every moved symbol — a byte-identical fn moving ±10% is the layout
-lottery, not the lever); a clean-width fact for `set` results in rezx (the
-`sete; movzbq; test; setne; movzbq` chatter is still lvm_eq's line, now register-only);
-the post-repack copy fold (the G-load rows); a look at why lvm_cur's entry constants
+lottery, not the lever); ~~a clean-width fact for `set` results in rezx~~ (lever 8: the line is
+`cmp; sete; movzbq; test` now); the post-repack copy fold (the G-load rows); a look at why lvm_cur's entry constants
 survive deaddef and cfoldir. Each is priced by re-running this attribution on the two
 functions it names, then the corpus row.
 

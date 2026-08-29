@@ -5434,15 +5434,23 @@
    ; -- redundant re-extension (rezx): a zxN over a register already CLEAN to N drops.
    ; cleanliness is the producing op's contract -- the zx family and the unsigned loads,
    ; the 32-bit rotates (their dests wear the w-form on every target that has them), an
-   ; li's own value, a mov carrying its source's. everything else clears what it
-   ; defines; a bar clears the table. --
+   ; li's own value, a mov carrying its source's. a set (and an li of 0/1) is cleaner
+   ; still, width 1: a BOOL, so the bool re-canonicalization `cmp r 0; set ne r` over it
+   ; is the identity and drops too -- unless the form after it reads the flags. everything
+   ; else clears what it defines; a bar clears the table. --
    (rezx fs)
     (: (go l t acc)
         (? !(two? l) (rev acc)
            (: f <l r >l
               (? !(two? f) (go r t (f . acc))
                  (: op <f
-                    (? (member? op '(zx1 zx2 zx4))
+                    (? (op = 'cmp && (peep t <>f 0) = 1 && (<>>f = 0) &&
+                        two? r && (<r = ['set 'ne <>f]) &&
+                        !(two? >r && two? <>r && member? <<>r '(br br8 set)))
+                        (go >r t acc)
+                       (op = 'set)
+                        (: _ (pin t <>>f 1) (go r t (f . acc)))
+                       (member? op '(zx1 zx2 zx4))
                         (: w (? (op = 'zx1) 8 (op = 'zx2) 16 32)
                            c (peep t <>f 0)
                            (? ((0 < c) && (c <= w)) (go r t acc)
@@ -5457,7 +5465,7 @@
                        (op = 'li)
                         (: k <>>f
                            _ (pin t <>f (? !(charm? k) 0 (k < 0) 0
-                                           (k < 256) 8 (k < 65536) 16
+                                           (k < 2) 1 (k < 256) 8 (k < 65536) 16
                                            (k < 4294967296) 32 0))
                            (go r t (f . acc)))
                        (op = 'mov)

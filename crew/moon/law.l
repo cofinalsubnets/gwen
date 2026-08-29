@@ -1336,7 +1336,8 @@
       (member? '(sx4 r4) r4f)                        ; f9: nb rides r4 on a64
       (member? '(cmp r6 r4) r4f))                    ; ...the inner bound register-register
    ; -- narrow homes: a bool/char/short local homes like an int (canonically -- a bool's
-   ; cvt converts, so the seat holds 0/1 and a read is one register compare). fa: r never
+   ; cvt converts, so the seat holds 0/1 and a read is one register compare; over a set
+   ; the cvt is the identity and rezx drops it). fa: r never
    ; opens a byte cell. fb: a name declared TWICE (sibling blocks) is respelled ahead of
    ; alive, so both r home -- the second born of its own call statement, which charges no
    ; crossing. fe: char/short/uchar locals home canonical (sx1/sx2/zx1 at each def) and a
@@ -1350,10 +1351,10 @@
    (narrowm fs) (tally (filter (\ f (two? f && member? <f '(st1 st2 ld1 ld2 ldu1 ldu2))) fs))
    _ (assert
       (two? irNA) (two? irNB) (two? irNE)
-      (member? '(set ne r10) naf)                    ; fa: r's def converts onto its seat...
+      (member? '(set eq r10) naf)                    ; fa: r's def lands on its seat (a set is already 0/1)...
       (member? '(cmp r10 0) naf)                     ; ...and reads compare the seat
       (= 0 (narrowm naf))                            ; no byte cell anywhere
-      (member? '(set ne r10) nbf)                    ; fb: the first r homes...
+      (member? '(set eq r10) nbf)                    ; fb: the first r homes...
       (member? '(cmp r0 r9) nbf)                     ; ...and the second compares g's answer register-register
       (= 0 (narrowm nbf))
       (member? '(sx1 r5) nef)                        ; fe: c rides its arrival, canonicalized once
@@ -1606,6 +1607,13 @@
       ('((ldu1 r0 r4 40) (ret)) = (rezx '((ldu1 r0 r4 40) (zx4 r0) (ret))))
       ('((ldu4 r0 r4 40) (mov r9 r0) (ret)) = (rezx '((ldu4 r0 r4 40) (mov r9 r0) (zx4 r9) (ret))))
       (member? '(zx1 r0) (rezx '((ldu4 r0 r4 40) (zx1 r0) (ret))))
+      ; a set (or an li of 0/1) is a BOOL: the re-canonicalization over it is the identity
+      ; and drops, a copy carries the fact, a def dirties it, and a following flags read keeps it
+      ('((set eq r0) (ret)) = (rezx '((set eq r0) (cmp r0 0) (set ne r0) (ret))))
+      ('((li r0 1) (ret)) = (rezx '((li r0 1) (cmp r0 0) (set ne r0) (ret))))
+      ('((set eq r0) (mov r9 r0) (ret)) = (rezx '((set eq r0) (mov r9 r0) (cmp r9 0) (set ne r9) (ret))))
+      ('((set eq r0) (add r0 r0 1) (cmp r0 0) (set ne r0) (ret)) = (rezx '((set eq r0) (add r0 r0 1) (cmp r0 0) (set ne r0) (ret))))
+      ('((set eq r0) (cmp r0 0) (set ne r0) (br eq .x)) = (rezx '((set eq r0) (cmp r0 0) (set ne r0) (br eq .x))))
       (member? '(zx4 r0) (rezx '((ldu4 r0 r4 40) (add r0 r0 r1) (zx4 r0) (ret))))
       (member? '(zx4 r0) (rezx '((ldu4 r0 r4 40) (label .z9) (zx4 r0) (ret)))))
    ; the a64 lane: the sweeps ride fp as the base past a4ize, a cs restore is an
