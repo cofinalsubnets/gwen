@@ -285,6 +285,7 @@
             'cmp cmp-main
             'stat stat-main 'du du-main 'chown chown-main 'mktemp mktemp-main
             'expr expr-main 'date date-main 'id id-main
+            'bc bc-main
             'patch patch-main
             'grep grep-main 'sed sed-main
             'awk awk-main 'find find-main
@@ -321,6 +322,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   paste comm join split od                the record tools
   cksum | md5sum [-c] | sha256sum [-c]    the checksums (crew/kore/sum.l)
   expr EXPRESSION                         arithmetic, comparison and BRE matching
+  bc [-l] [-q] [F..]                      the calculator language (crew/kore/bc.l)
   patch [-pN] [-R] [-i F] [--dry-run]     lay a unified diff on a tree
   grep [-nvclqhaixwFEo] [-e P] [-m N] PAT [F..]   BRE, or ERE under -E (crew/kore/re.l)
   sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (s///gp, d, p, q, addresses)

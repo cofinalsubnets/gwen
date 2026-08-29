@@ -658,6 +658,117 @@
    _ (pgstep st 58) _ (pgstep st 112)
    (assert (= (st 'fi) 0) (= (st 'doe) '("a.txt"))))
 
+; --- the bc floor (crew/kore/bc.l): the number tower and every scale rule in it,
+; the base writer, the numeral reader, the grammar's shapes, and a seeded fuzz over
+; the algebra. the language itself is smoked against GNU bc ---
+(: st (bc-state 0)
+   (sho b n) (: _ (pin st 'obase b) (bc-show st n))
+   (nod s) <(bc-expr (bc-lex s))
+   (stm s) <(bc-stmt (bc-lex s))
+   (refuses? th) (trap (\ _ (: _ (th 0) 0)) () (\ a b 1))
+   (assert
+      ; THE SCALE RULES, one line each -- the table at the head of bc.l
+      (= (bn-add [15 1] [15 1]) [30 1])                      ; + and - keep the wider
+      (= (bn-add [1 0] [5 3]) [1005 3])
+      (= (bn-sub [1 0] [5 3]) [995 3])
+      (= (bn-mul 0 [2 0] [325 2]) [650 2])                   ; * min(sa+sb, max(sc,sa,sb))
+      (= (bn-mul 0 [15 1] [15 1]) [22 1])                    ; ... and it TRUNCATES
+      (= (bn-mul 5 [15 1] [15 1]) [225 2])
+      (= (bn-div 5 [1 0] [3 0]) [33333 5])                   ; / keeps scale
+      (= (bn-div 5 [-1 0] [3 0]) [-33333 5])                 ; ... toward zero, both ways
+      (= (bn-mod 0 [17 0] [5 0]) [2 0])                      ; % wears the DIVIDEND's sign
+      (= (bn-mod 0 [-17 0] [5 0]) [-2 0])
+      (= (bn-mod 0 [17 0] [-5 0]) [2 0])
+      (= (bn-mod 3 [10 0] [3 0]) [1 3])                      ; ... max(scale + sb, sa)
+      (= (bn-pow 0 [25 1] [3 0]) [156 1])                    ; ^ min(sa*b, max(sc,sa))
+      (= (bn-pow 0 [2 0] [10 0]) [1024 0])
+      (= (bn-pow 4 [2 0] [-2 0]) [2500 4])                   ; a negative power keeps scale
+      (= (bn-pow 0 [0 0] [0 0]) [1 0])                       ; 0^0 is 1, as bc says
+      (= (bn-sqrt 5 [2 0]) [141421 5])                       ; sqrt max(scale, sa)
+      (= (bn-sqrt 5 [225 2]) [150000 5])
+      ; 0 and 1 answer THEMSELVES, scale and all -- GNU's two short circuits
+      (= (bn-sqrt 5 [0 0]) [0 0]) (= (bn-sqrt 5 [1 0]) [1 0])
+      ; the significant digits, where a whole zero still owns one
+      (= (bn-len [0 0]) 1) (= (bn-len [0 3]) 3) (= (bn-len [5 1]) 1)
+      (= (bn-len [5 2]) 2) (= (bn-len [123456 3]) 6) (= (bn-len [-123 0]) 3)
+      (= (bn-len [100 0]) 3)
+      ; the fraction's digit count is the LEAST k with base^k >= 10^s, asked in whole
+      ; numbers so that no float rounding can shift it
+      (= (bc-fdigits 10 5) 5) (= (bc-fdigits 2 2) 7) (= (bc-fdigits 8 1) 2)
+      (= (bc-fdigits 16 20) 17) (= (bc-fdigits 100 2) 1) (= (bc-fdigits 100 20) 10)
+      ; the writer: no leading zero, and a base over 16 spells each digit out
+      (= (sho 10 [5 1]) ".5") (= (sho 10 [-5 1]) "-.5") (= (sho 10 [1100 3]) "1.100")
+      (= (sho 10 [0 5]) "0") (= (sho 10 [0 0]) "0")
+      (= (sho 16 [255 0]) "FF") (= (sho 16 [-255 0]) "-FF") (= (sho 16 [2555 1]) "FF.8")
+      (= (sho 2 [10 0]) "1010")
+      (= (sho 100 [1234 0]) " 12 34") (= (sho 100 [-1234 0]) "- 12 34")
+      (= (sho 100 [0 0]) "0") (= (sho 1000 [1234567 0]) " 001 234 567")
+      (= (sho 20 [33 2]) ".06 12")                  ; a fraction's first group sits bare
+      (= (sho 17 [17 0]) " 01 00")
+      ; the reader: a LONE figure is its own value whatever the base, and every other
+      ; numeral clamps a figure at or above the base to base-1
+      (= (bc-numeral "255" 10) [255 0]) (= (bc-numeral "1.100" 10) [1100 3])
+      (= (bc-numeral ".5" 10) [5 1]) (= (bc-numeral "FF" 16) [255 0])
+      (= (bc-numeral "9" 2) [9 0]) (= (bc-numeral "12" 2) [3 0])
+      (= (bc-numeral "101" 2) [5 0]) (= (bc-numeral ".8" 16) [5 1])
+      ; the lexer: a lone dot is `last`, a dot with a figure behind it opens a numeral
+      (= (bc-lex "1+2") '((num "1") (op "+") (num "2") (eof "")))
+      (= (bc-lex ".") '((kw "last") (eof "")))
+      (= (bc-lex ".5") '((num ".5") (eof "")))
+      (= (bc-lex "x1_") '((name "x1_") (eof "")))
+      (= (bc-lex "/* c */ 1 # z") '((num "1") (eof "")))
+      ; and the shapes the runner is owed. the unary minus binds TIGHTER than ^
+      (= (nod "-2^2") '(pow (neg (num "2")) (num "2")))
+      (= (nod "2^-2") '(pow (num "2") (neg (num "2"))))
+      (= (nod "2^3^2") '(pow (num "2") (pow (num "3") (num "2"))))
+      (= (nod "1+2*3") '(bin "+" (num "1") (bin "*" (num "2") (num "3"))))
+      (= (nod "1<2<3") '(cmp "<" (cmp "<" (num "1") (num "2")) (num "3")))
+      (= (nod "x=y=1") '(asgn "=" (var "x") (asgn "=" (var "y") (num "1"))))
+      (= (nod "a[1]") '(arr "a" (num "1"))) (= (nod "b[]") '(aref "b"))
+      (= (nod "scale") '(reg scale)) (= (nod "scale(x)") '(scl (var "x")))
+      (= (nod "f(1,2)") '(call "f" ((num "1") (num "2"))))
+      (= (nod "++i") '(incr 1 1 (var "i"))) (= (nod "i--") '(incr 0 -1 (var "i")))
+      (= (stm "if (1) 2") '(if (num "1") (expr (num "2")) ()))
+      (= (stm "while (1) 2") '(while (num "1") (expr (num "2"))))
+      (= (stm "for(;;)1") '(for () () () (expr (num "1"))))
+      ; POSIX spells return (E), GNU takes a bare E, and a statement's end means none
+      (= (stm "return (1)") '(ret (grp (num "1"))))
+      (= (stm "return 1*2") '(ret (bin "*" (num "1") (num "2"))))
+      (= (stm "return") '(ret ()))
+      ; ... and what it refuses
+      (refuses? (\ _ (bc-lex "@")))
+      (refuses? (\ _ (bc-expr (bc-lex "(1"))))
+      (refuses? (\ _ (bc-expr (bc-lex "1+"))))
+      (refuses? (\ _ (bc-stmt (bc-lex "while 1"))))))
+
+; --- the bc algebra over a seeded draw: the writer and the reader are inverse, the
+; sum does not care about order, the remainder is smaller than what it divided by, and
+; the root squares back inside the ulp it was truncated to ---
+(: st (bc-state 0)
+   _ (pin st 'obase 10)
+   (rnum s) (: a (random s 100000) b (random >a 5) c (random >b 2)
+               [[(? <c (0 - <a) <a) <b] >c])
+   (fz i s)
+    (? (< i 1) 'ok
+       (: p (rnum s) q (rnum <>p) g (random <>q 8)
+          a <p b <q sc <g
+          n [(abs <a) <>a]
+          bi [<b 0] ai [<a 0]
+          rt (bn-sqrt sc n)
+          up (bn-add rt [1 <>rt])
+          ok (&& (= (bn-cmp (bn-sub (bn-add a b) b) a) 0)
+                 (= (bn-cmp (bn-add a b) (bn-add b a)) 0)
+                 (= (bn-cmp (bn-mul sc a b) (bn-mul sc b a)) 0)
+                 (? (= <b 0) 1
+                    (: r0 (bn-mod 0 ai bi)
+                       (< 0 (bn-cmp [(abs <b) 0] [(abs <r0) 0]))))
+                 (! (< 0 (bn-cmp (bn-mul 99 rt rt) n)))
+                 (< 0 (bn-cmp (bn-mul 99 up up) n))
+                 (? (= <n 0) 1 (= (bc-numeral (bc-show st n) 10) n)))
+          (? ok (fz (- i 1) >g) ['broke a b sc])))
+   r (fz 300 (wheel 23))
+   (assert (= r 'ok)))
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/kore/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk and pager floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
+(say err "crew/kore/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager and bc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")

@@ -44,11 +44,11 @@ pipe() { n=$1; i=$2; shift 2
          same "$n"; }
 
 # ------------------------------------------------------------------- the laws
-echo "UTILS crew/kore/{text,core,fs,re,sed,awk,expr,less,find,diff,patch,law}.l"
+echo "UTILS crew/kore/{text,core,fs,re,sed,awk,expr,bc,less,find,diff,patch,law}.l"
 out=$ho/.test_kore.out
 # ⚠ lush's job.l + glob.l ride along because find.l captures sh-match at its define
 { cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
-      crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/proc.l crew/kore/less.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
+      crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/bc.l crew/kore/proc.l crew/kore/less.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
       crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/patch.l crew/lush/job.l crew/lush/glob.l \
       crew/kore/find.l; \
   echo "(use 'kore)"; \
@@ -935,6 +935,264 @@ korerun expr abc : 'a\(x\)c' > "$o" 2>/dev/null; b=$?
 cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore expr empty group vs GNU"
 expr '' '|' foo > "$g"; korerun expr '' '|' foo > "$o"; same "expr empty | foo"
 echo "kore: expr (36 expressions + the groups, stdout AND the 0/1/2 exit, GNU-identical) ok"
+
+# ------------------------------------------------------------------- bc
+# bc SAYS EVERYTHING ON STDOUT and complains only on stderr, so the printed run IS
+# the check. every digit under it is exact (a number is an integer over a power of
+# ten, in love's own bigints), which is why the math library can be asked for the
+# same bytes GNU prints rather than for a tolerance.
+# ⚠ THE LIBRARY IS ASKED AT SCALE 10 AND UP. below that the two part company on 29
+# of 735 sampled calls, every one of them a place where GNU's series has run out of
+# guard digits and ours has not -- ours is the correctly truncated value each time
+# (checked against GNU's own answer at scale 40), so agreeing there would be wrong.
+bcp=$ho/.kore-bc.p
+# NAME [FLAG..]: the program arrives on stdin, both bcs run it, stdout must match
+bck() { n=$1; shift; cat > "$bcp"
+        bc "$@" < "$bcp" > "$g" 2>/dev/null
+        korerun bc "$@" < "$bcp" > "$o" 2>/dev/null
+        same "$n"; }
+
+bck "bc scale rules" <<'E'
+1+1
+2-5
+3*4
+2*3.25
+1.5+1.5
+scale=5
+1/3
+-1/3
+17%5
+10%3
+scale=0
+17%5
+-17%5
+17%-5
+10/4
+2^10
+2.5^3
+2^-2
+0^0
+2^0
+0^3
+-2^2
+2^3^2
+-3%2
+scale=4
+2^-2
+sqrt(2)
+sqrt(0)
+sqrt(1)
+sqrt(4)
+sqrt(2.25)
+scale=20
+1/7
+2/7
+1/3*3
+scale=12
+1.000000000001*1.000000000001
+-123456789.123456789/987654.321
+E
+
+bck "bc length and scale" <<'E'
+length(0)
+scale(0)
+length(0.000)
+length(.5)
+length(-123)
+length(123.456)
+scale(123.456)
+length(100)
+scale(1/1)
+scale=7
+scale(1/3)
+length(1/3)
+E
+
+bck "bc the bases" <<'E'
+obase=16
+255
+-255
+255.5
+obase=2
+10
+scale=2
+1/4
+obase=8
+scale=10
+1/3
+obase=20
+scale=2
+1/3
+obase=17
+scale=0
+16
+17
+obase=100
+0
+5
+99
+100
+-1234
+scale=3
+1234.5678
+obase=1000
+1234567
+obase=10
+ibase=2
+101
+3
+12
+9
+ibase=16
+FF
+ibase=A
+11
+E
+
+bck "bc the language" <<'E'
+define f(x) { auto y; y = x*2; return(y) }
+f(21)
+define fb(x) { return x*2 }
+fb(4)
+define fn() { return }
+fn()
+print "a\zb\qc\n"
+define fac(n) { if (n<=1) return(1); return(n*fac(n-1)) }
+fac(30)
+i=0
+while (i<3) { print i, " "; i+=1 }
+print "\n"
+for (j=0;j<3;j++) { j }
+for(i=0;i<5;i++){ if(i==2) continue; if(i==4) break; i }
+1==1
+2<1
+1<2<3
+!0
+!5
+1&&0
+1||0
+define sc1() { sg = 1; return (1) }
+sg = 0
+0 && sc1()
+sg
+1 || sc1()
+sg
+"hi"
+last
+.
+i=5
+i++
+i
+++i
+i
+i--
+--i
+i
+x=10
+x+=5
+x
+x*=2
+x
+x^=2
+x
+a[0]=1
+a[5]=7
+a[0]+a[5]
+a[9]
+define sum(v[], n) { auto i, t; for (i=0; i<n; i++) t += v[i]; return (t) }
+for (i=0; i<10; i++) w[i] = i*i
+sum(w[], 10)
+w[3]
+zz
+zz+1
+xyz = 5
+xyz*2
+if (1) 5 else 6
+if (0) { 5 } else { 6 }
+1;2;3
+{4;5}
+/* a comment */ 1+1 # and the other one
+2 \
++ 3
+scale=3
+scale
+scale+1
+obase
+ibase
+2^2000
+length(2^2000)
+E
+
+bck "bc the 68-column wrap" <<'E'
+scale=200
+1/3
+scale=50
+print 1/3, 1/3
+print "\n"
+print "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", 1/3
+print "\n"
+obase=100
+scale=40
+1/3
+E
+
+bck "bc -l at scale 20" -l <<'E'
+scale
+s(1)
+c(0)
+c(1)
+a(1)
+l(2)
+e(1)
+e(-1)
+e(100)
+j(0,1)
+j(1,1)
+j(-1,.25)
+s(0)
+l(1)
+a(0)
+4*a(1)
+s(a(1))
+l(e(1))
+E
+
+bck "bc -l at scale 40" <<'E'
+scale=40
+s(.5)
+c(.5)
+a(.5)
+e(.5)
+l(.5)
+s(-2)
+c(-2)
+a(10)
+e(-10)
+l(12345)
+j(2,3)
+j(-3,8)
+E
+
+# a runtime error costs its own statement and the source walks on -- and both bcs
+# leave with 0 either way, which is GNU's reading and not POSIX's
+# ... and a frame comes back even when the body it belongs to dies partway
+printf 'x = 5\ndefine fd(x) { auto y; y = 3; return (1/0) }\ny = 99\nfd(9)\nx\ny\n' > "$bcp"
+bc < "$bcp" > "$g" 2>/dev/null
+korerun bc < "$bcp" > "$o" 2>/dev/null
+same "bc frame after a death"
+printf '1/0\n7\nsqrt(-1)\n8\n' > "$bcp"
+bc < "$bcp" > "$g" 2>/dev/null; a=$?
+korerun bc < "$bcp" > "$o" 2>/dev/null; b=$?
+cmp -s "$g" "$o" && [ $a -eq $b ] || fail "kore bc after a runtime error (gnu $a ours $b)"
+# the files come first and stdin after them, and a missing one only costs the status
+printf 'x = 6\n' > "$ho/.kore-bc1"; printf 'y = 7\n' > "$ho/.kore-bc2"
+printf 'x*y\n' | bc "$ho/.kore-bc1" "$ho/.kore-bc2" > "$g" 2>/dev/null
+printf 'x*y\n' | korerun bc "$ho/.kore-bc1" "$ho/.kore-bc2" > "$o" 2>/dev/null
+same "bc files then stdin"
+printf '' | bc "$ho/.kore-bc-nope" > /dev/null 2>&1; a=$?
+printf '' | korerun bc "$ho/.kore-bc-nope" > /dev/null 2>&1; b=$?
+[ $a -eq $b ] || fail "kore bc missing file (gnu $a ours $b)"
+echo "kore: bc (the scale rules, the bases both ways, the language, the wrap, -l, GNU-identical) ok"
 
 # ------------------------------------------------- stat, du, date, id, mktemp, chown
 # ⚠ TZ=UTC: this love has no tz database (localtime IS gmtime), so `date` and stat's

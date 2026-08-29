@@ -32,7 +32,7 @@ naming it is most of what this section is for.
 
 ## chapters 7–8, the final system
 
-Present natively — roughly **19 of ~85 chapter-8 packages**, several partial:
+Present natively — roughly **20 of ~85 chapter-8 packages**, several partial:
 
 coreutils (`kore`, 85 tools / 88 names, GNU-byte-identical smokes, `make test_kore`) ·
 bash (`lush`) · sed · grep · diffutils (diff, cmp) · make (`cook`) · tar (`lib/tar.l`,
@@ -40,7 +40,8 @@ ustar both ways, `love tar`) · gzip (`lib/gz.l`, and `crew/gz/gzcmd.l` wears GN
 as `love gzip` / `gunzip` / `zcat`) · cpio (`lib/cpio.l` newc, `love cpio`) · zlib ·
 vim (`crew/vi`) · sysvinit
 (`crew/init/boot.l` as `/init`) · openssl-ish (`crew/tls`) · nc (`tools/ain.l`) ·
-**patch** (`crew/kore/patch.l`, unified diffs) · **procps-ng** (kore's ps, free, uptime,
+**patch** (`crew/kore/patch.l`, unified diffs) · **bc** (`crew/kore/bc.l`, arbitrary
+precision over love's bigints, `-l` and all) · **procps-ng** (kore's ps, free, uptime,
 pidof, pgrep, pkill, pwdx) and psmisc's killall.
 
 The partials, stated: kore has no `df` (nothing here answers `statvfs`, so it wants a
@@ -55,7 +56,6 @@ where GNU reads a concatenation.
 - **the ./configure tax** — perl, python, m4, autoconf, automake, libtool, bison, flex,
   gettext, pkg-config. Every real LFS package demands these *before* it compiles a line.
   This, not the compiler, is what axis B actually runs into.
-- **bc** — the last of what was "the small four"; awk, find and patch are in.
 - **the rest of the shell floor** — less, xz, bzip2, file.
 - **the admin layer** — util-linux, shadow, e2fsprogs, kmod, iproute2, kbd. (procps and
   psmisc are half here: the /proc readers landed, `top`/`vmstat`/`pmap` did not.)
@@ -73,7 +73,7 @@ pipeline — and `make distro-smoke` boots it. The wart this section carried for
 
 ## the number
 
-By chapter-8 package count: **~20%**. By "can the system rebuild itself from source with
+By chapter-8 package count: **~23%**. By "can the system rebuild itself from source with
 nothing foreign underneath": **essentially all of it** — that is `make test_raw` plus the
 mooncc fixpoint, and it is green.
 
@@ -196,6 +196,46 @@ The gap between those two numbers is entirely *other people's build systems*.
     and probes for the `dial` nif at load, saying `(use 'dns)` when it is absent — which
     it is in love-raw. With no `/lib/dns.l` that scare takes the whole cat down, and the
     symptom is every applet gone rather than a quiet `nc`.
+- **rung 2b — `bc` — BUILT.** `crew/kore/bc.l`, in `make test_kore`. A number is
+  `[v s]` — the exact integer v over 10^s — so every digit is love's own bigint and
+  nothing rounds; POSIX's six scale rules sit in a table at the head of the file, and
+  they all truncate, which is what love's `//` (toward zero, never floored) already
+  does. The dialect is GNU's: POSIX bc plus multi-character names, `print`, `else`,
+  `halt`, `last`/`.`, `&& || !` and the `#` comment, with the `-l` library written in
+  bc's own language the way GNU writes it. Out of dialect and said so in the header:
+  `read()` (the program and read's answer come off one stdin), `-s`/`-w` (both only
+  refuse or complain about what we accept), and `quit` is executed rather than fired
+  at lex time. Byte-identical to GNU over the scale rules, both base directions, the
+  language and the 68-column wrap; ~7,200 lines of seeded random arithmetic across
+  bases and scales agree byte-for-byte, and the algebra (writer/reader inverse,
+  commutativity, `|a%b| < |b|`, `r² ≤ n < (r+ulp)²`) is lawed in `crew/kore/law.l`.
+  Seven things the work taught, all now comments in the tree:
+  * ⚠ **`?` SUMS what it is handed**, so it cannot ask whether a signal is there: a
+    `['ret v]` carrying a NEGATIVE v read as false and the return was dropped on the
+    floor — the function fell through and answered 0. Presence is a pattern here.
+    And ⚠ a two-clause pattern predicate does not work in a `(: ..)`: the second
+    binding simply wins. awk.l's one-clause `(aw-nil? ()) 1` is the idiom that does.
+  * ⚠ **a frame has to be put back on the ERROR path by hand**, for the same reason:
+    a divide by zero inside a function left the callee's parameters standing as
+    globals, so `x` was still 9 after `f(9)` died. The body runs under a trap that
+    restores and re-raises.
+  * ⚠ **bc's own `%` is not the integer remainder unless scale is 0** — `n % 2` at
+    scale 30 is 0, so the Bessel parity test never fired and `j(-1,x)` came back with
+    the wrong sign. The library spells `scale = 0` around every parity and truncation.
+  * **`scale` is two tokens**, the register and the function, told apart only by a
+    following `(` — ask for the register first and `scale(x)` never reads at all.
+  * **the fraction's digit count has to be asked in whole numbers**: the least k with
+    `base^k >= 10^s`. GNU reaches it through a `log` and a double, and at obase 100
+    the two spellings (`int(x)+1` and `ceil(x)`) disagree exactly where x lands on an
+    integer — which is every other scale.
+  * **`e(x)` wants guard digits proportional to the ANSWER, not the argument**: the
+    squaring phase multiplies the truncation error by the magnitude, so the working
+    scale is `scale + 10 + .44*x` (0.434 being log10 e). Without it `e(100)` is right
+    to 43 digits and wrong after them.
+  * **GNU bc is not the accuracy oracle below scale 10.** Of 735 swept library calls
+    the two differ on 29, every one at scale 1, 2 or 5, and in all 29 ours is the
+    correctly truncated value — asked of GNU itself at scale 40. The gate takes the
+    scales where both are right and says why.
 - **rung 3 — decide about the configure tax.** The genuine fork, and it is a decision,
   not a rung: grow perl/python/autotools, or keep declining them and only ever build
   packages that do not ask. Six packages so far have not asked. That is not an accident
