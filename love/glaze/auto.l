@@ -1129,12 +1129,27 @@
    ;     swallowed global (swgather's member? split), never both, so each `F_` namespace is owned once.
    ;     The chain appends a `()` body (body-less -> body-having); anat-defs drops it, the fn pairs
    ;     (helper + every F_g sub-fn) are recorded and swgather pulls them transitively.
+   ; srcreg: name -> (params . body) once lowered, or the form's shared cell {'form f} until
+   ; a pull first asks for one of its names. the lowering is autogroup's full chain, and a
+   ; crew file's forms are recorded by the thousand while the swallow pulls a handful -- so
+   ; srcrec files the raw names and swlow runs the chain at the first pull, registering the
+   ; lowered pairs (a lifted F_g included) over entries that are free or this cell's own.
    srcreg (tablet 0)
    (swfnpair? pr) (: nf <pr (two? nf && 1 < (tally nf) && (tally nf) < 6 && all name? >nf && distinctp >nf))
    (srcrec form0) (? ((two? form0) && (id? <form0 ':) && !(atom? >form0)
                     && (0 = ((tally >form0) % 2)))                                   ; body-less `:` only -> a GLOBAL-leaking define
-      (: low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix form0)))))))))))   ; autogroup's FULL lowering: church/HOF/&& + structural (lift/loops/value-lets)
-         (foldl (\ _ pr (? (swfnpair? pr) (pin srcreg <<pr (><pr >< >pr)) ())) () <(anat-defs >low))) ())
+      (: cell (pin (tablet 0) 'form form0)
+         (foldl (\ _ n (pin srcreg n cell)) () (swbnds form0))) ())
+   (swlow c) (? (peep c 'low 0) 0
+      (: _ (pin c 'low 1)
+         low (plift (lift (delet (defoliate (loopclose (autospec (debool (dehof (dechurch (fold-consts (opfix (c 'form))))))))))))   ; autogroup's FULL lowering: church/HOF/&& + structural (lift/loops/value-lets)
+         (foldl (\ _ pr (? (swfnpair? pr && (: cur (peep srcreg <<pr 0) (id? cur 0 || id? cur c)))
+                            (pin srcreg <<pr (><pr >< >pr)) ())) () <(anat-defs >low))))
+   (swsrc h) (: d (peep srcreg h 0)                                                   ; a recorded global's lowered pair, or 0
+      (? (id? d 0) 0
+         (tablet? d) (: _ (swlow d) d2 (peep srcreg h 0)
+                        (? (tablet? d2) (: _ (pin srcreg h 0) 0) d2))                   ; the name did not survive its form's lowering
+         d))
    (swuniq l) (? (atom? l) () (member? <l >l) (swuniq >l) (<l >< swuniq >l))
    (swbnds e) (map (\ p (? (two? <p) <<p <p)) <(anat-defs >e))                       ; a `:`'s binding names
    ; collect call heads (symbols); skip lambda subforms. the walk reads OPFIXED source, so an
@@ -1148,9 +1163,9 @@
    (swheads e bnd acc) (swwalk (opfix e) bnd acc)
    (swgather fns) (: names (map caap fns)                                                 ; enlarge fns with recorded globals reachable from the bodies (to fixpoint)
       heads (foldl (\ a p (swheads >p ><p a)) () fns)                                ; the fn's own params bind too
-      new (swuniq (filter (\ h (!(member? h names) && !(id? (peep srcreg h 0) 0))) heads))
+      new (swuniq (filter (\ h (!(member? h names) && !(id? (swsrc h) 0))) heads))
       (? (atom? new) fns
-         (swgather (foldr (\ h a (: d (peep srcreg h 0) (((h >< <d) >< >d) >< a))) fns new))))
+         (swgather (foldr (\ h a (: d (swsrc h) (((h >< <d) >< >d) >< a))) fns new))))
    (autogroup form0)
     (: _ (srcrec form0)                                                                  ; record global fn sources (flag-gated inside srcrec) BEFORE any decline
      (? !(two? form0) form0
