@@ -306,6 +306,35 @@
       (= (pt-seek (pt-pairs "") () -1) '(1 0))                            ; a create's -0,0
       !(pt-seek (pt-pairs "q\n") '("a") 0)))
 
+; --- the scan floor (love/scan.l): the native byte scan against its own twin ---
+; the kernel is hand-written machine code and the twin is the honest walk, so this
+; is the differential that says the two agree. it sweeps the lengths that cross the
+; align/word/tail boundaries, every start including one past the end, and charms
+; present and absent.
+;
+; ⚠ THIS IS THE ARM64 GATE. the kernel is assembled per target from one IR and the
+; ABI register roles differ (r1 is Sp on amd64 and Ip on arm64), so a port that
+; reads right and disassembles right can still be wrong. a bad one fails here
+; loudly rather than corrupting a line split somewhere quiet.
+(: sc ((from 'scan 'scanner) ())
+   tw (from 'scan 'walk)
+   (mk o n k) (? (n <= 0) (slurp o) (: _ (put o (97 + (k % 5))) (mk o (n - 1) (k * 7 + 3))))
+   (agree s c i) (= (sc s c i) (tw s c i))
+   (sweep n)                                     ; every length past the word step ...
+    (? (n > 24) 1
+       (: s (mk (jug 0) n 1)
+          (over i) (? (i > n + 1) 1              ; ... every start, one past the end too
+                      ((foldl (\ a c (? (agree s c i) a 0)) 1 '(97 98 99 100 101 122))
+                       && (over (i + 1))))
+          ((over 0) && (sweep (n + 1)))))
+   big (mk (jug 0) 5000 9)
+   (assert
+      (sweep 0)
+      (= (sc "" 97 0) -1) (= (sc "abc" 97 9) -1)               ; empty, and a start past the end
+      (= (sc "abc" 98 0) 1) (= (sc "abc" 98 2) -1)             ; found, and found no later
+      (= (sc big 122 0) (tw big 122 0))                        ; absent over 5000 bytes
+      (= (sc (big + "z") 122 0) 5000)))                        ; and present at the very last
+
 ; --- the regex floor (crew/kore/re.l): the BRE faces, held by hand ---
 (: (ok p s) (: r (rebre p) (two? r && rehas <>r s))
    (no p s) (: r (rebre p) (two? r && !(rehas <>r s)))
