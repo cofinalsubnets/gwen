@@ -52,7 +52,7 @@
    ; a blob names no address of the binary: the kind sentinels its guards compare against and the
    ; callout drives are read off g at run time (love_int.h's JkX slots, in this order), so the bytes
    ; are the same under any base and ride an image as they are
-   (jk tgt r k) ['ld r (greg tgt 'g) ((jkoff 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur
+   (jk tgt r k) ['ld r (greg tgt 'g) ((jkoff 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur 10 unc
    mapmix 0x9e3779b97f4a7c15                                                        ; the hash multiplier (= love.c's map hash mult), for the inline probe
    ; -- the map probe, via the crew/holo/ assembler SERVICE (baked into the post-egg layer; the glaze is its
    ;    client). crew/holo/ resolves the hit/miss/loop labels to rel32 -- no hand-counted je/jmp offsets, the
@@ -328,7 +328,8 @@
    ; both def sugars), calls to frame/loop names, RECURSION on the closure's OWN letrec name
    ; (a saturated tail call re-enters as a loop, any other takes the direct self frame), in
    ; LOOP bodies calls to resolvable global heads, QUOTED DATA (any datum: the source node rides a nifx extras slot, and
-   ; (a = 'sym) is raw identity by the point-= law). strings, floats, inner \,
+   ; (a = 'sym) is raw identity by the point-= law), an INNER LAMBDA in a driver body (its
+   ; entry rides an extras slot and the site curries it through the imports -- lz's site). strings, floats,
    ; effects, global reads in OPERAND position: DECLINE (bytecode, exactly as before). a global
    ; callee resolves via gv at compile (redefinition-stale -- the callout lanes' bet; NEVER a
    ; farq name, ala's letrec-local predicate) and rides the nifx extras chain into a reserved
@@ -337,6 +338,7 @@
    ; frame above it, cont at frame+8a. known limit: a ? over a HEAP test value (bare (? l ..)
    ; on a list) deopts EVERY call -- correct, just a small entry tax over pure bytecode.
    amble-nil (:)
+   amble-lam (mint 0)                                             ; the inner-lambda SITE marker: (amble-lam i n v..) -- entry i of arity n, curried through the imports v..
    (amax a b) (? (a < b) b a)
    (adistinct l) (? !(two? l) 1  (member? <l >l) 0  (adistinct >l))
    (aconst? e) (whole? e || id? e amble-nil)
@@ -391,6 +393,7 @@
               (member? op '(two? cap cup)) (n = 1 && amble-ok? env gn go k 0 <as)
               (aop2? op) (n = 2 && amble-ok? env gn go k 0 <as && amble-ok? env gn go k 0 <>as)
               (id? op '|| && !(member? op env)) (2 <= n && all (\ x (amble-ok? env gn go k 0 x)) as)
+              (id? op amble-lam) (all (\ v (member? v env)) >>as)                 ; an inner lambda site: its imports are frame reads
               (id? op go) (tl && n = k && all (\ x (amble-ok? env gn go k 0 x)) as)
               (name? op) ((0 < n) && (member? op env || member? op gn)
                           && (all (\ x (amble-ok? env gn go k 0 x)) as))
@@ -408,6 +411,7 @@
              (member? op '(two? cap cup)) (amble-depth go cx <as)
              (id? op '||) ((tally as) + (foldl (\ a x (amax a (amble-depth go cx x))) 0 as))   ; aor needs no spills, but a SHADOWED || is a call --
                                                                                               ; the call formula covers both (over-reserve is safe)
+             (id? op amble-lam) 0                                                              ; the site lays its chain straight onto the heap
              (id? op '=) (2 + (amax (amble-depth go cx <as) (1 + (amble-depth go cx <>as))))   ; aeq2's slow lane spills the partial + the operand
              (aop2? op) (amax (amble-depth go cx <as) (1 + (amble-depth go cx <>as)))
              (id? op go) ((tally as) + (foldl (\ a x (amax a (amble-depth go cx x))) 0 as))
@@ -531,7 +535,24 @@
           ((name? op && (id? op sf || (member? op env && two? >e)))
            || (foldl (\ a x (a || adrv? env sf x)) 0 >e)))
        0)
-   (njit-amble s a e gv farq lams nm ti ta tgt)
+   ; ainl: rewrite every inner lambda (\ q.. B) whose creation ala recorded -- inl is the
+   ; compile root's ((exp src-tail (entry . imports))..), matched by the node itself -- to
+   ; the site marker (amble-lam i n v..): entry i enters st's list, n is its arity (imports
+   ; + params), v.. are the import names the site reads off the frame. an unrecorded lambda
+   ; stays and declines; the inner body is never walked (its binders are its own). quoted
+   ; data is inert.
+   (ainlr t inl) (? !(two? inl) 0  (id? t <<inl || id? t <><inl) <>><inl  (ainlr t >inl))
+   (ainl e inl st)
+    (? (aquote? e) e
+       !(two? e) e
+       (id? <e '\ && two? >e && two? >>e)
+        (: r (ainlr >e inl)
+           (? r (: i (tally (st 'l))
+                   _ (pin st 'l ((st 'l) + [<r]))
+                   (amble-lam >< i >< ((tally >r) + (tally e) - 2) >< >r))
+              e))
+       (map (\ x (ainl x inl st)) e))
+   (njit-amble s a e gv farq lams nm ti ta inl tgt)
     (: ps (init >s)  M (last >s)
        lp (amble-loop M)
        go   (? lp <lp 0)     vars0 (? lp <>lp ())
@@ -539,12 +560,15 @@
        shad (filter (\ v (member? v ps)) vars0)
        ren  (map (\ v [v (afresh v (go >< vars0 + ps))]) shad)
        vars (map (\ v (: r (assoc v ren) (? r <>r v))) vars0)
-       GB   (? lp (foldl (\ b pr (asub <pr <>pr b)) GB0 ren) 0)
+       st   {}                                                 ; the inner-lambda sites: 'l = their entries, in site order (the marker's index)
+       GB   (? lp (foldl (\ b pr (asub <pr <>pr b)) (ainl GB0 inl st) ren) 0)   ; the sites first, so a shadowing loop var renames their imports too
        k    (tally vars)
-       body (? lp GB M)
+       body (? lp GB (ainl M inl st))
        env  (vars + ps)
        body (adesug env ti ta body)                          ; own list/&& by definition (nested links / nested ?s) + untag
-       inits (map (\ i (adesug env ti ta i)) inits)
+       inits (map (\ i (adesug env ti ta (ainl i inl st))) inits)
+       ins  (st 'l)
+       nin  (tally ins)
        ; SELF: the letrec name this closure is being bound to (ala's nm; 0 when anonymous).
        ; a saturated tail self-call jumps the body top on a rewritten frame (the recursion
        ; becomes a loop); any other self-call drives the blob's OWN cell (read off Ip at the
@@ -581,8 +605,8 @@
        ; import names sit in this frame; entry 0 (a forward/self ref, lz's backpatch case) or a
        ; stray import just isn't in cn -> amble-ok? declines that body.
        cand (filter (\ f !(id? f self)) (foldl (\ ac i (aheads envl go i ac)) (aheads envl go body ()) inits))
-       drok (? lp 1 (? (two? cand) (adrv? envl self body) 1))  ; the non-loop cost gate: free heads ride only a body that drives a param
-                                                               ; or itself -- and a declining body skips the resolution below entirely
+       drok (? lp 1 (? (two? cand || two? ins) (adrv? envl self body) 1))  ; the non-loop cost gate: free heads and inner lambdas ride only a body that
+                                                                           ; drives a param or itself -- and a declining body skips the resolution below entirely
        csx  (? drok (map (\ f [f (? (farq f)                 ; only a letrec-local can be a sibling: farq (a cheap chain peep) gates
                               (: lfd (assoc f lams)          ; the lam-list assoc. the cell READ mirrors ev.l's cof: box slot 0.
                                  (? (two? lfd) (peep >lfd 0 0) 0))
@@ -609,13 +633,13 @@
        ok ((two? s) && (two? >s) && (all name? ps) && (adistinct ps)
            && (a = (tally ps)) && (0 < a) && lpok && drok && !(id? lts 'bad) && (two? body)
            && (? (getenv "LOVE_AMBLE_NOCALL") !(ahascall? env go body) 1)              ; the call-lane bisect knob (forensics: splits call machinery from the rest)
-           && (all lit? gvals) && (nd < 48) && ((k + (tally gn) + (tally cn) + nq + nl) < 48)   ; slots are cheap once the prologue GUARDS the room (below)
+           && (all lit? gvals) && (nd < 48) && ((k + (tally gn) + (tally cn) + nq + nin + nl) < 48)   ; slots are cheap once the prologue GUARDS the room (below)
            && (all (\ i (amble-ok? ps kn 0 0 0 i)) inits)
            && (amble-ok? env kn go k 1 body))
        (? ok
           (: _ (? (getenv "LOVE_AMBLE_TRACE") (puts ("amble: " + (show s) + "\n")) 0)   ; the compile trace (forensics: names every ambled source)
-             ng (1 + (tally gn) + (tally cn) + nq + (? (lit? eqv) 1 0))   ; extras region = [() | globals | sibling entries | quoted data | =]: () is
-                                                                ; the empty MINT (li 1 would be the charm 0-fossil), entries + quotes
+             ng (1 + (tally gn) + (tally cn) + nq + (? (lit? eqv) 1 0) + nin)   ; extras region = [() | globals | sibling entries | quoted data | = | inner entries]:
+                                                                ; () is the empty MINT (li 1 would be the charm 0-fossil), entries + quotes
                                                                 ; are HEAP values -- all ride the nifx extras chain into GC-walked slots
              R (k + 3 + ng + nd + nl)                       ; loopvars | Se | So | BUDGET | extras | spills | lets
              A (greg tgt 'acc)  T (greg tgt 'tmp)  X (greg tgt 'anchor)  SC (greg tgt 'scratch)
@@ -624,6 +648,7 @@
              (voff v) (? (member? v vars) (8 * (posof v vars 0)) (member? v lts) (lvo v) (fro + (8 * (posof v ps 0))))
              (spill d) (spo + (8 * d))
              eqo (gbo + (8 * (1 + (tally gn) + (tally cn) + nq)))   ; the = value's extras slot (past globals, siblings, quotes)
+             ino (eqo + (8 * (? (lit? eqv) 1 0)))                    ; the inner entries' slots (past =)
              lto (8 * (k + 3 + ng + nd))                    ; the let region, past the spills
              (lvo v) (lto + (8 * (posof v lts 0)))
              (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T,A fixnum, else lbl
@@ -693,6 +718,23 @@
                                   ((acg <as d) + (adrive cso))
                                   ((acg <as d) + (adrive cso) + [['st SP (spill d) A]]
                                    + (achain >as (spill d) (d + 1))))                                  ; partial -> spill -> next arg (currying)
+             ; asite: an inner lambda (amble-lam i n v..) -- entry i (arity n) curried through the
+             ; imports v.., the closure lz's site builds: lvm_cur's own partial cells, laid straight
+             ; onto the heap under one room guard -- [cur n-1 unc arg cont tag] while the rest
+             ; still curries, [unc arg cont tag] for the last -- cont = the callee cell + 2, tag =
+             ; the cell's address | 2. a fresh chain per evaluation; a closed lambda is its cell.
+             (asite as d) (: so (ino + (8 * <as))  n <>as  vs >>as
+                             (acur v a) (? (a > 2)
+                                           [(jk tgt X 9) ['st HP 0 X] ['li X ((2 * a) - 1)] ['st HP 8 X]
+                                            (jk tgt X 10) ['st HP 16 X] ['ld X SP (voff v)] ['st HP 24 X] ['lea X T 16] ['st HP 32 X]
+                                            ['mov X HP] ['or X X 2] ['st HP 40 X] ['mov T HP] ['add HP HP 48]]
+                                           [(jk tgt X 10) ['st HP 0 X] ['ld X SP (voff v)] ['st HP 8 X] ['lea X T 16] ['st HP 16 X]
+                                            ['mov X HP] ['or X X 2] ['st HP 24 X] ['mov T HP] ['add HP HP 32]])
+                             (gov l a) (? (two? l) ((acur <l a) + (gov >l (a - 1))) ())
+                             (? (two? vs)
+                                ([['lea X HP (64 + (48 * (tally vs)))] ['cmp SP X] ['br 'below 'deopt] ['ld T SP so]]
+                                 + (gov vs n) + [['mov A T]])
+                                [['ld A SP so]]))
              (astr1 cso) (: ld (mint 0) ok (mint 0) en (mint 0)                                             ; the STRING fast lane at a 1-arg frame-callee site: (s i) with s a
               ([['ld T SP cso] ['test T 1] ['br 'ne ld]                                             ; text and i a charm is a byte index: in range, the unsigned byte,
                   ['ld X T 0] (jk tgt SC 1) ['cmp X SC] ['br 'ne ld]                             ; native. EVERYTHING ELSE falls to the DRIVE (never a deopt -- a
@@ -811,6 +853,7 @@
                        (id? op 'tally && !(member? 'tally env) && member? 'tally gn && !(two? >as))
                         (atally <as d)                                       ; the tally fast lane (env-shadowed or multi-arg falls to the call paths)
                        (id? op '|| && !(member? op env) && two? >as) (aor as d)
+                       (id? op amble-lam) (asite as d)
                        (id? op go) (ago as d)
                        (acall op as d))))
              initR (: (goi j) (? (j < R) ([['st SP (8 * j) T]] + (goi (j + 1))) ())
@@ -839,7 +882,7 @@
                                                                                                             ; -> the twin runs it whole; a perma-deopting native heals to bytecode)
                    + initR + unpk + bodyir + epi + dpt
                    + ['(label d0) ['ld T IP 8]] + (? (a = 1) [['mov IP T]] [['lea IP T 16]]) + [['ld T IP 0] ['jmpr T]])
-             (nifx (emit (asmt tgt prog)) e s a (8 >< (amble-nil >< gvals + cvals + (map (\ q <>q) qs) + (? (lit? eqv) [eqv] ())))))
+             (nifx (emit (asmt tgt prog)) e s a (8 >< (amble-nil >< gvals + cvals + (map (\ q <>q) qs) + (? (lit? eqv) [eqv] ()) + ins))))
           0))
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in

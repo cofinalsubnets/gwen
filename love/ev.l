@@ -674,7 +674,11 @@
    hk (poke -1 s e,                                  ; value[-1] = source \-expr
        trim (seek -1 e),                             ; tag head spans [src .. body]; value stays e
        gv 'natjit 0)
-   ((!hk ? e (hq ? (hk e s a gv (farq c) (c 'lam) nm iop apx) e)) . d 'imp))
+   r ((!hk ? e (hq ? (hk e s a gv (farq c) (c 'lam) nm iop apx (rootc c 'inl)) e)) . d 'imp)
+   ; inl: the root's record of every inner closure built -- (exp src-tail (entry . imports)),
+   ; keyed by the node itself -- so the hook finds a body's inner lambda SITE by identity
+   _ (? (hq && nm == 0) (push (rootc c) 'inl [exp (? (two? os) >>os 0) r]) 0)
+   r)
   (farq k x) (? !k 0
                (: f (k 'far)
                   (? (tablet? f && 0 <= peep f x -1) 1 (farq (k 'par) x))))

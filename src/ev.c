@@ -784,7 +784,7 @@ void jk_ini(struct ai *g) {
  g->jk[JkChain] = (word) lvm_chain, g->jk[JkStr] = (word) lvm_str, g->jk[JkMap] = (word) lvm_map_lookup;
  g->jk[JkNom] = (word) lvm_nom, g->jk[JkMint] = (word) lvm_sym, g->jk[JkGem] = (word) lvm_gembox;
  g->jk[JkCask] = (word) lvm_cask, g->jk[JkDrive] = (word) callout_drive, g->jk[JkResume] = (word) callout_resume;
- g->jk[JkCur] = (word) lvm_cur; }
+ g->jk[JkCur] = (word) lvm_cur, g->jk[JkUnc] = (word) lvm_unc; }
 
 // ============================================================================
 // the lisp help calling convention

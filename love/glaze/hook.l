@@ -89,9 +89,11 @@
    ; self-call seam: a tail self-call loops, any other drives the blob's own cell.
    ; ti/ta = ev.l's iop/apx tag markers (uninterned, so only ala can hand them over):
    ; a synthesized surface wears them, and adesug reads them back to plain forms.
+   ; inl = the compile root's inner-closure record ((exp src-tail (entry . imports))..):
+   ; amble finds a body's inner lambda site by the node and builds the same closure.
    ; ps = (init >s) = the frame [imps args]; body = the surface body. compile
    ; body over ps; deopt -> e. non-qualifying -> e unchanged.
-   (natjit e s a gv farq lams nm ti ta)
+   (natjit e s a gv farq lams nm ti ta inl)
     (: ps (init >s)  body (last >s)
        (? !(all name? ps) e                                ; a NAMELESS (mint) frame -- bsub's fresh binders, boxfix's
                                                            ; cells -- declines every lane. mints only reach emission at
@@ -166,7 +168,7 @@
                             (: _ (pin fires () (1 + (peep fires () 0))) (jitgroupirx agdefs osym arch e s))
                             ; AMBLE lane (LAST): the universal boring-tier translation -- tagged values, Sp-slot
                             ; temporaries, drive call-outs, restart deopt. njit-amble answers 0 on decline.
-                            (: aj (njit-amble s a e gv farq lams nm ti ta arch)
+                            (: aj (njit-amble s a e gv farq lams nm ti ta inl arch)
                                (? aj (: _ (pin fires () (1 + (peep fires () 0))) aj)
                                   (: _ (? (getenv "LOVE_AMBLE_TRACE2") (puts ("amble-DECLINE: " + (show s) + "\n")) 0) e)))))))))))))))   ; the decline trace (forensics: what the last lane passed on)
       natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope

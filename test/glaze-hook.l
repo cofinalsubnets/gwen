@@ -68,6 +68,24 @@
        h (ev '(: (h a b) (? (< 0 b) (+ (+ (// a b) (% a b)) (+ (& a b) (+ (| a b) (^ a b)))) 0) h))
        i (\ a b (+ (+ (// a b) (% a b)) (+ (& a b) (+ (| a b) (^ a b)))))
        (&& (fired? n) (= (h 17 5) (i 17 5)) (= (h -17 8) (i -17 8)) (0 = (h 17 0))))
+    ; --- an INNER LAMBDA in a driver body: the site builds the closure natively (lz's chain
+    ; over the frame's imports), fresh per evaluation, = the interpreter's instance; a
+    ; closed one is the shared cell. the inner bodies here decline every lane (a show call
+    ; in a one-shot body), so the fire is the driver's own.
+    (: n (peep fires () 0)
+       ad (ev '(: (ad f l) (? (two? l) (link (f (\ x (+ (tally (show x)) (cap l)))) (ad f (cup l))) ()) ad))
+       cs (ad (\ g g) '(1 2))
+       (&& (fired? n) ('(4 5 6) = (ad (\ g (g 100)) '(1 2 3)))
+           !(id? (cap cs) (cap (cup cs)))
+           (= (cap cs) ((\ l (\ x (+ (tally (show x)) (cap l)))) '(1 2)))))
+    (: n (peep fires () 0)
+       ac (ev '(: (ac f l) (? (two? l) (link (f (\ x (+ (tally (show x)) 1))) (ac f (cup l))) ()) ac))
+       cs (ac (\ g g) '(1 2))
+       (&& (fired? n) ('(2 2) = (ac (\ g (g 5)) '(1 2))) (id? (cap cs) (cap (cup cs)))))
+    ; ... and under a named-let whose loop var shadows the frame: the site's import renames with it
+    (: n (peep fires () 0)
+       mk (ev '(\ l ((: (go l acc) (? (two? l) (go (cup l) (link (\ y (* y (tally (show (cap l))))) acc)) acc)) l ())))
+       (&& (fired? n) ('(2 2 2) = (map (\ c (c 2)) (mk '(1 2 3)))) ('(4 2) = (map (\ c (c 2)) (mk '(1 10))))))
    )
 (: _ (puts "glaze-hook: ok -- the natjit creation hook (leaf, float, loop, capture, self, =, transparency)
 ") 0)
