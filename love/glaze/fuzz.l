@@ -39,10 +39,10 @@
                               1 [(op 0) (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
                               2 ['? ['< (xpr (d - 1) lf op) 3] (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
                               ['+ (xpr (d - 1) lf op) (lf 0)]))
-   ; thirteen shapes, one per lane the hook offers, each lane probed not assumed: 9 reaches
+   ; fourteen shapes, one per lane the hook offers, each lane probed not assumed: 9 reaches
    ; calloutinfo with every earlier lane declining, 10 calloutinfo-frame, 11 loopinfo
    (shape i)
-    (i % 13 @ 0 ['\ 'x (xpr 2 ileaf iop)]                                             ; leaf
+    (i % 14 @ 0 ['\ 'x (xpr 2 ileaf iop)]                                             ; leaf
                1 ['\ 'x 'y (xpr 2 ileaf iop)]                                          ; n-ary leaf
                2 ['\ 'x (xpr 2 fleaf fop)]                                             ; float-result leaf (qualfr)
                3 ['\ 'n [': ['go 'k 'acc] ['? '(< k 1) 'acc ['go '(- k 1) (xpr 2 bleaf iop)]] '(go n 0)]]
@@ -56,8 +56,9 @@
                9 ['\ 'n [[': ['go 'i 'a] ['? '(< i n) ['go '(+ i 1) ['+ 'a [(gfn 0) 'i]]] 'a]] 0 0]]           ; call-out over a resolvable global
                10 ['\ 'f 'n [[': ['go 'i 'a] ['? '(< i n) ['go '(+ i 1) ['+ 'a '(f i)]] 'a]] 0 0]]             ; call-out with f a frame param
                11 ['\ 'n [[': ['go 'i 'a] ['? '(< i n) ['go '(+ i 1) ['+ 'a (xpr 1 bleaf iop)]] 'a]] 0 0]]          ; counted loop (loopinfo)
+               12 ['\ 'x [(iop 0) 'x (pick '(1 2)) (pick '(1 2))]]                                 ; three operands: the tower ((op x k) k), which every arithmetic lane must decline
                ['\ 'x ['? '(< x 1) (bleaf 0) (xpr 2 bleaf iop)]])                                  ; branchy fall-through
-   (try f i a) (i % 13 @ 1 (f a a) 10 (f gfz0 a) (f a))   ; apply fully: two ints for the n-ary leaf, (f n) for the frame call-out, else one
+   (try f i a) (i % 14 @ 1 (f a a) 10 (f gfz0 a) (f a))   ; apply fully: two ints for the n-ary leaf, (f n) for the frame call-out, else one
    n0 (peep fires () 0)
    (run i) (: s (shape i)  f (ev s)
               (puts (show i + " " + show s + " => " + show (try f i 0) + " | " + show (try f i 1) + " | " + show (try f i 4) + "\n")))

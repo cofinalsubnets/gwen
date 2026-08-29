@@ -94,6 +94,9 @@
                    lay))
        (&& (fired? n) ('(add 4 mov) = (lay '((label a) (add) (align 4) (mov)) ()))
            (= (lay '((x) (align 2)) ()) '(x 2))))
+    ; --- the leaf grammar is exact-arity: (+ x 1 2) is the tower ((+ x 1) 2), never x + 1
+    (: f (ev '(\ x (+ x 1 2)))  g (\ x (+ x 1 2))
+       (&& (16 = (f 3)) (= (f 3) (g 3)) (= (f 5) (g 5))))
     ; ... and under a named-let whose loop var shadows the frame: the site's import renames with it
     (: n (peep fires () 0)
        mk (ev '(\ l ((: (go l acc) (? (two? l) (go (cup l) (link (\ y (* y (tally (show (cap l))))) acc)) acc)) l ())))
