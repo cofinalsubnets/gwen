@@ -14,7 +14,8 @@
 ; are bare in both. (rebre p) and (reere p) are its two doors.
 ;
 ; the surface: literals, `.`, `*`, `+`, `?`, `{n,m}` intervals, `|` alternation,
-; `^` and `$` (in BRE anchors only at the head and the tail, in ERE anywhere),
+; `^` and `$` (anchors anywhere in ERE; in BRE where nothing is read yet or left,
+; which is GNU's rule -- see `bol?` and `eol?`),
 ; ( ) groups, and [..] classes with ranges, ^-negation, and the twelve POSIX
 ; [:name:] classes (a first `]` is literal, an edge `-` is literal). out of
 ; scope, refused by the parser in both dialects: backrefs (\1..\9).
@@ -88,6 +89,15 @@
                                     (clo (j + 1) ? [lo () (j + 1 + bw)])))))
        ; can a repeat land? nothing repeats an anchor or an empty head
        (repable acc) (two? acc && !(member? <<acc '(bol eol)))
+       ; WHERE A SIGIL IS AN ANCHOR. POSIX leaves BRE's answer undefined outside
+       ; the head and the tail; GNU and busybox both read `^` wherever nothing has
+       ; been read yet -- the head, or just past `\(` or `\|`, which is exactly an
+       ; empty acc, since a group and a branch each open a fresh pseq -- and `$`
+       ; wherever nothing is left to read: the tail, or a `\)` or `\|` next. that
+       ; is purely syntactic, so `\(a$\)b` anchors and then cannot match. anywhere
+       ; else the sigil is ink. ERE anchors anywhere, so ere? short-circuits both
+       (bol? acc) (ere? || !(two? acc))
+       (eol? i) (ere? || (i + 1 = n) || (esc? (i + 1) 41) || (esc? (i + 1) 124))
        ; where it cannot: BRE keeps the sigil as a literal charm, ERE drops it
        (nofit i acc lvl gi c w)
         (? ere? (pseq (i + w) acc lvl gi)
@@ -129,8 +139,8 @@
                              (pseq (i + 1) (['rep <acc 0 ()] . >acc) lvl gi)
                              (nofit i acc lvl gi 42 1))
                  (c = 46) (pseq (i + 1) ('(any) >< acc) lvl gi)
-                 (c = 94 && (ere? || i = 0)) (pseq (i + 1) ('(bol) . acc) lvl gi)
-                 (c = 36 && (ere? || i + 1 = n)) (pseq (i + 1) ('(eol) . acc) lvl gi)
+                 (c = 94 && bol? acc) (pseq (i + 1) ('(bol) . acc) lvl gi)
+                 (c = 36 && eol? i) (pseq (i + 1) ('(eol) . acc) lvl gi)
                  (c = 91)
                   (: j (i + 1)
                      neg (j < n && p j = 94)

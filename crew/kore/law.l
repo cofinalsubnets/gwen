@@ -317,6 +317,15 @@
       (ok "^ab" "abc") (no "^b" "abc")                         ; ^ anchors the head ...
       (ok "c$" "abc") (no "b$" "abc")                          ; ... $ the tail
       (ok "^abc$" "abc") (no "^abc$" "abcd") (ok "a^b" "a^b")  ; elsewhere they are ink
+      ; GNU's BRE positions: ^ also just past \( or \|, $ just before \) or \|
+      (ok "\\(^a\\)b" "ab") (no "\\(^a\\)b" "xab")             ; ^ past \(
+      (ok "\\(\\(^a\\)\\)" "ab") (no "\\(\\(^a\\)\\)" "xa")    ; ... however deep
+      (ok "x\\|^a" "ab") (ok "x\\|^a" "zx") (no "x\\|^a" "za") ; ^ past \|
+      (ok "\\(a^b\\)" "a^b")                                   ; but not past a read atom
+      (ok "\\(ab$\\)" "xab") (no "\\(ab$\\)" "abx")            ; $ before \)
+      (ok "a$\\|y" "za") (ok "a$\\|y" "yz") (no "a$\\|y" "az") ; $ before \|
+      (ok "\\(a$b\\)" "a$b")                                   ; but not with more to read
+      (no "\\(a$\\)b" "ab")                                    ; syntactic: anchored, so unmatchable
       (ok "ab*c" "ac") (ok "ab*c" "abbbc") (no "ab*c" "adc")
       (ok "ab\\+c" "abc") (no "ab\\+c" "ac")                   ; the GNU \+ and \?
       (ok "ab\\?c" "ac") (ok "ab\\?c" "abc") (no "ab\\?c" "abbc")
