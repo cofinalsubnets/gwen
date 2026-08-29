@@ -95,11 +95,19 @@
 
    ; -- wc: lines, words, bytes (flags pick; bare wc reads all three) --
    (wc-main as)
-    (: (fl a l w c) (? !(two? a) [l w c a]
-                       (<a = "-l") (fl >a 1 w c)
-                       (<a = "-w") (fl >a l 1 c)
-                       (<a = "-c") (fl >a l w 1)
-                       [l w c a])
+    ; the flags CLUSTER, as GNU's do: -lw is the two of them and not a filename
+    (: (fl a l w c)
+        (? !(two? a) [l w c a]
+           (: g <a n (tally g)
+              (? (!(2 <= n) || !(g 0 = 45)) [l w c a]
+                 (: (cl k L W C)
+                     (? (n <= k) (fl >a L W C)
+                        (: ch (g k)
+                           (? (ch = 108) (cl (k + 1) 1 W C)
+                              (ch = 119) (cl (k + 1) L 1 C)
+                              (ch = 99) (cl (k + 1) L W 1)
+                              [l w c a])))     ; an unknown charm: the word is not ours
+                    (cl 1 l w c)))))
        p (fl as 0 0 0)
        none !(<p || <>p || <>>p)
        l? (? none 1 <p) w? (? none 1 <>p) c? (? none 1 <>>p)
