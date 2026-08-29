@@ -73,6 +73,8 @@ i = (0 ~ 1)                  ; a ~ b = (twin a b), the complex builder
 ;   in the same (: ..) raises "missing X" (the forward-binding trap)
 ; - a mid-letrec assert binds to _, or it becomes define-sugar and never runs
 ; - in a catted module file `name value` builds at bake, `(name args)` defers
+; - juxtaposition binds tighter than infix: `u + M u` is `(+ u (M u))`, and
+;   applying a number is the tower -- write `(u + M) u`
 
 ; the working vocabulary (verified in-tree)
 ; - (show x) prints-to-string; puts/putc write; putx prints a form

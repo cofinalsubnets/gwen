@@ -182,27 +182,47 @@ and together they are the method the forward path below inherits:
    chased this (the vmap) priced negative and is deleted; the pare plan's answer is the
    flat.l valve — a hand kernel in holo's neutral IR, built on demand, not another
    thousand lines of gen.l.
+5. **cfoldir's 64-bit knowns + fold table — LANDED 2026-08-28 (the SSA oracle's coda).**
+   A known is the word's signed value now (love's fixnum is exactly s64, so the bit ops
+   read straight and the arithmetic wraps), and the table covers what the oracle named:
+   the immediate shifts and rotates (`ror4` low-32, `rol` as `ror W-k`), the unops (neg,
+   not, the sx/zx family), xor, and a cmp decided by its cc's signedness. The fixnum tag
+   `li 2; sx4; shl 1; or 1` is one li; LONG_MIN's three ops are one. The a64 lane prices
+   an li by its movz/movk lanes (a fold answers a li up to two lanes, a copy of a known
+   becomes its li only at one — x64's reg-reg mov vanishes at rename, the lea lesson, so
+   there the mov stands). ⚠ the old arm for the unops and variable shifts invalidated
+   r0–r3 instead of the op's own dest: `li r9 5; neg r9; add r0 r9 1` folded to `li r0 6`
+   — a latent miscompile, reachable only once a non-r0 register carried a known into a
+   unop; the table's exact folds retire it, and `imma` now gates x64's imul on imm32
+   (a 2^40 known would have ridden the three-operand form). Priced: ccnif .text hash.c
+   −48 B, deflate.c −478 B (−4.9%), inflate.c −54 B, every clock inside the band;
+   the arm64 battery 117,627 → 115,160 instructions (**−2.10%**, 132 of 153 programs
+   changed). test_cts 212/220 and cts_arm64 211/220 unchanged, fixpoint byte-identical.
+6. **int-vacate — LANDED 2026-08-28.** Two verdict arms in `upar`: an int param in a64's
+   r4 arrival rides free with its entry cvt, as a pointer does (`a4rider?` — the pool test
+   had refused it), and a HOT int param that cannot ride (a quad under a dirty body)
+   vacates to its positional seat, `mov` + cvt — hot by the blocker law (loop-weighted
+   read count ≥ 64); a cold one keeps its slot, which is what the +3.4% refusal in git
+   history was about. mag_mul's inner bound is register-register now: the exact meter
+   reads mag_mul 92.16G → 91.60G (−558M) on the arm64check corpus, mag_add tighter by
+   the same shape, 48 a64 fns changed; the whole-corpus total is flat (+0.005%) under the
+   cross-binary walk drift (how-to-measure). x64: r6/r5/r7/r8 arrivals already rode, so
+   the arm fires once in hash.c (+8 B), the corpus reads identical instructions
+   (71.238G both worlds) and the x64 battery is byte-identical. Gates at reference.
 
 ## the path forward
 
 **Codegen quality**, each lever with the evidence that prices it (largest first is not
 the order — cheapest-instrument-first is):
 
-1. **cfoldir's 64-bit knowns + fold table** — the SSA oracle's residue: ~476 foldable
-   ALU ops and ~405 li-able movs corpus-wide, 100%/99% reachable by a LINEAR pass in
-   cfoldir's own shape (the "SSA question" section). The one funded coda item.
-2. **the int-vacate lever** — an int param taking a home seat with its entry sxtw/cvt,
-   the way pointers vacate. Prices on BOTH ISAs (it moves x64 output): a64's mag_mul
-   pays +73.6M exact insns today for its refused length params (the ldrsw per trip);
-   x64's int-heavy fleet is unexplored. The moon-ssa ledger carries the mechanism sketch.
-3. **the x64 rung-6 residuals**, recorded in the moon-ssa ledger: the gcp-class
+1. **the x64 rung-6 residuals**, recorded in the moon-ssa ledger: the gcp-class
    path-frequency miss (~0.8% insns — the classifier's path maximum is static, and a
    cold-if fn whose hot path never calls still refuses rides), the dead-home-def sweep,
    the arg-seat aim declining onto armed homes, and the quad-vacate mov in tail fns.
-4. **the rv64 sweep port** — riscv is the one ELF target whose CHOSEN ir is unswept;
+2. **the rv64 sweep port** — riscv is the one ELF target whose CHOSEN ir is unswept;
    its rezx wants a producer table of its own (`rorw` SIGN-extends, the a64 table is
    wrong as-is). Priced by the exact meter, which rv64 now has.
-5. **the flat.l valve** for the array-kernel shapes (chacha's 16-word state) — the
+3. **the flat.l valve** for the array-kernel shapes (chacha's 16-word state) — the
    standing answer whenever a shape cannot be closed without another thousand lines.
 
 **Internal design**, the questions the cut left open:
@@ -210,12 +230,14 @@ the order — cheapest-instrument-first is):
 - **sweeps inside the arm build?** The post-choice seam was held by the deleted
   rankers; only the fp-settling reason remains. Moving the a64 sweeps in-build would
   simplify the pipeline to ONE sweep seam — priced by the exact meter, expect near-zero.
-- **alive's numbering discipline** — the livtab keys on statement ticks that must match
-  the build's walk exactly (the drift guards bare the build when they don't). A
-  structural key (the statement node itself) would retire the guard; cheap to try, easy
-  to falsify.
+- **alive's numbering discipline — answered NO (2026-08-28).** A tablet keys
+  STRUCTURALLY (`(pin t '(x 1) 7)` is found by a second `'(x 1)`), so the statement node
+  cannot key the livtab: two `i++;` in one fn would share a wrapset. `id?` is the identity,
+  but an identity-keyed list is O(n) a lookup, n² a fn. The tick and its guard stay.
 - **repack's chains beyond x64** — a64/rv64 get tailst's straight-line peel but not the
-  per-def promotion; the exact meter prices whether the general chains pay there.
+  per-def promotion; the exact meter prices whether the general chains pay there. ⚠ not a
+  flip: repack declines the whole arm family at its head (`arm? g`) because its frame
+  model is x64's (`pro4?`, the `sub sp sp K` at form 3) — the price is the port.
 - **the wasm relooper** (doc/misc/plan/moon-wasm.md) — its own plan; the one build
   removed nothing it needs and the residency story it must NOT pay for is now one
   mechanism instead of five.
@@ -293,15 +315,54 @@ per-def windows instead of the convex hull. **The second lever is LANDED**: the
 SSA arc's rungs 1-3 gave repack per-def chains (full-word, narrow, and cs
 seats), and the arc went on to replace the whole two-build dance with the one
 build (doc/misc/plan/moon-ssa.md, closed 2026-08-28). The first lever --
-cfoldir's 64-bit knowns and fold table -- is still the open coda, priced at
-~476 folds + ~405 movs corpus-wide by this oracle.
+cfoldir's 64-bit knowns and fold table -- landed the same day (landed lever 5).
+
+## the GVN/LICM question, measured (2026-08-28)
+
+The same method as the SSA question, for the two passes that would actually need
+phis: `doc/misc/proto/ssagap/gvn.tpl.l` (love, riding val.l's CFG) value-numbers
+every fn's FINAL forms to a fixpoint over the CFG (a join keeps only what every edge
+agrees on) and counts computations whose value already sits in a register (G), and
+walks each back-edge span for loop-invariant computations in SSA's view -- every read
+either unwritten in the span or reaching from an invariant def, register reuse
+ignored (L). 86 TUs, floors throughout; LINEAR = every label starts empty.
+
+| residual                    | static | loop-wt | linear (in-block) |
+|-----------------------------|-------:|--------:|------------------:|
+| G load (slot reload, value in a reg) | 1,540 | 15,092 | 995 / 11,796 |
+| G alu (repeated ALU/shift/unop)      |   270 |  2,482 | 223 / 2,239 |
+| G addr (repeated lea/leax)           |    61 |  3,624 |  54 / 3,596 |
+| L alu (invariant ALU in a loop)      |   210 |  5,264 | -- |
+| L addr (invariant address)           |    91 |  3,248 | -- |
+| L load (invariant load, store-free loop) | 72 | 1,808 | -- |
+| L li (a constant materialized in a loop) | 515 | 15,376 | (free on x64: no lever) |
+
+The reading: **the CFG buys little** -- 78% of the redundant loads' loop weight and
+~90% of the ALU/addr rows are in-block, a linear pass's territory. The shipped forms
+still carry `mov r0 r11; st sp 136 r0; … ld r5 sp 136`, and cfoldir's input for
+p0read1 says why (2026-08-28): the inliner materializes a nested splice's params slot
+to slot through r0 (`ld r0 [g]; st [g2] r0; … ld r0 [g2]; st [g3] r0`), and cfoldir's
+lattice names only constants and copies-of-a-register -- a loaded unknown has no
+name, so the record "g2 holds a copy of r0" dies the moment r0 is reused two forms
+later. The registers that would make those loads movs (g and d promoted to cs seats
+r11/r12 by repack's chains) do not exist yet when cfoldir runs: repack sits
+post-choice, cfoldir in the build. So the fix is not a phi and not a wider lattice:
+run the copy fold once more AFTER repack (base still r4 there), or let repack's
+promotion rewrite the slot copies it just made redundant -- priced by this oracle's G
+load row, whole corpus 1,540 static. What genuinely needs
+the loop structure is L alu + L addr + L load: ~370 forms, ~10k loop-wt -- twice the
+ALU-fold residue that funded lever 5, spread thin (io.c's p0skip, inflate's
+inf_run/inf_build, snap's img_hashcons head the lists). Spot-verified in the forms:
+`and r10 r6 -8` under a loop head with r6 unwritten in the span; `imul r0 r5 8`
+likewise. Neither needs SSA either: a span-local invariance pass over the flat forms
+is the same shape as this oracle.
 
 ## how to measure
 
 - `make -C bench ccnif` per gen.l edit (~20 s, no runtime in the loop); one quiet
   `make -C bench ccbench` fill per rung. Both cipher rows and the corpus, never one row.
-- **the exact meter (a64/rv64)**: a ~40-line qemu TCG plugin counts guest instructions
-  per translation block (inline adds into chunked scoreboards; PC→symbol through nm and
+- **the exact meter (a64/rv64)**: a ~40-line qemu TCG plugin (doc/misc/proto/insnpc/)
+  counts guest instructions per translation block (inline adds into chunked scoreboards; PC→symbol through nm and
   the PIE bias from `qemu_plugin_entry_code()`), deterministic to ~5ppm — no cycles
   lottery, no sampling skid. `LOVE_NO_IMAGE=1 qemu-<arch> -plugin insnpc.so love <
   corpus.l`, per-world binaries via `MOON_ABLATE=... make xa=<arch> out/x-<arch>/love`
@@ -309,7 +370,10 @@ cfoldir's 64-bit knowns and fold table -- is still the open coda, priced at
   no mtimes). It refused the first a64 flip that forms and .text had approved, and its
   per-symbol attribution put the whole regression in two functions. ⚠ pin the TREE
   STATE: a binary built before a merge wears different semantics, and the mask it wears
-  is a miscompile's. ⚠ a whole-artifact byte or .text compare can never close across a
+  is a miscompile's. ⚠ across two BINARIES the corpus walks differently (address-keyed
+  tables, unsorted keys): lvm_qa read +2.2G with byte-identical code, so a per-symbol
+  delta counts only beside a mnemonic diff of that symbol, and the whole total wears
+  the same drift. ⚠ a whole-artifact byte or .text compare can never close across a
   source edit (the carried source moves every address) — diff disassembly MNEMONICS and
   expect only the address-formers to move.
 - ⚠ ±4% is the floor on a ccbench wall-clock ratio, and **cross-fill clocks lie past it**:
@@ -344,6 +408,9 @@ cfoldir's 64-bit knowns and fold table -- is still the open coda, priced at
 - ⚠ the mooncc ccbench lane races the ARTIFACT (its baked image keys as `"<baked>"`, so
   the archive cache survives intermediate rebuilds); a stale bake reads as a slow egg
   boot, never a wrong compiler.
+- ⚠ holo's static binaries pad .text to the page (the section ends where .rodata's page
+  begins), so a battery's .text total moves in 4,096 B steps and reads a 208 B fn as
+  −4 KiB or as nothing. Count instructions (`llvm-objdump -d | wc -l`), not section bytes.
 - ⚠ `crew/moon/law.l` goldens pin register identities and residency counts; a lane change
   churns them. That is not breakage — `test_cts` and the fixpoint are the behavioural
   instruments.
