@@ -376,8 +376,9 @@
       (rotv "unsigned long f(unsigned long x, int n){ return (x >> n) | (x << (64 - n)); } int main(){ return f(9ul, 3) & 63; }" 'rorv)
       ; the splice's CONST bind: a literal count substitutes into the inlined body, so
       ; the call site rides the immediate beside the standalone body's register form
-      (rotn "unsigned f(unsigned x, int n){ return (x >> n) | (x << (32 - n)); } int main(){ return f(9u, 3) & 63; }" 'ror4 3)
-      (rotn "unsigned f(unsigned x, int n){ return (x << n) | (x >> (32 - n)); } int main(){ return f(9u, 3) & 63; }" 'ror4 29)
+      ; (x arrives live -- a constant x folds the whole rotate to its value)
+      (rotn "unsigned f(unsigned x, int n){ return (x >> n) | (x << (32 - n)); } int main(int c, char **v){ return f((unsigned)c, 3) & 63; }" 'ror4 3)
+      (rotn "unsigned f(unsigned x, int n){ return (x << n) | (x >> (32 - n)); } int main(int c, char **v){ return f((unsigned)c, 3) & 63; }" 'ror4 29)
       !(two? (rots "int f(int x){ return (x >> 3) | (x << 29); } int main(){ return f(9) & 63; }"))
       !(two? (rots "unsigned f(unsigned x, unsigned y){ return (x >> 5) | (y << 27); } int main(){ return f(9u, 2u) & 63; }"))
       !(two? (rots "unsigned f(unsigned x){ return (x >> 5) | (x << 26); } int main(){ return f(9u) & 63; }"))))
@@ -1608,9 +1609,39 @@
       (= (cp '((mov r5 r9) (li r9 3) (add r0 r5 r9) (ret)))
          '((mov r5 r9) (li r9 3) (add r0 r5 r9) (ret))))
    ; cfoldir's root-restore drop rides past reads; the epilogue sp restore stands
-   (assert
+   _ (assert
       (= (cfoldir gP '((mov r9 r6) (test r9 1) (mov r6 r9) (ret))) '((mov r9 r6) (test r9 1) (ret)))
-      (member? '(mov sp r4) (cfoldir gP '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret))))))
+      (member? '(mov sp r4) (cfoldir gP '((mov r4 sp) (sub sp sp 16) (mov sp r4) (ret)))))
+   ; the fold table: knowns are the word's signed value, so the shifts, rotates and unops fold
+   ; exactly at 64 bits, a compare decides by its cc's signedness, and a wrap is a wrap
+   (cf l) (cfoldir gP l)
+   _ (assert
+      (= (cf '((li r9 5) (neg r9) (add r0 r9 1) (ret))) '((li r9 5) (li r9 -5) (li r0 -4) (ret)))   ; a unop on a known outside r0..r3
+      (= (cf '((li r9 200) (sx1 r9) (add r0 r9 1) (ret))) '((li r9 200) (li r9 -56) (li r0 -55) (ret)))
+      (= (cf '((li r0 2) (sx4 r0) (shl r0 1) (or r0 r0 1) (ret))) '((li r0 2) (li r0 4) (li r0 5) (ret)))   ; the fixnum tag
+      (= (cf '((li r0 9223372036854775807) (neg r0) (sub r0 r0 1) (ret)))
+         '((li r0 9223372036854775807) (li r0 -9223372036854775807) (li r0 -9223372036854775808) (ret)))
+      (= (cf '((li r0 -1) (shr r0 60) (ret))) '((li r0 -1) (li r0 15) (ret)))
+      (= (cf '((li r0 -16) (sar r0 2) (ret))) '((li r0 -16) (li r0 -4) (ret)))
+      (= (cf '((li r0 1) (ror4 r0 1) (ret))) '((li r0 1) (li r0 2147483648) (ret)))
+      (= (cf '((li r0 1) (ror r0 1) (ret))) '((li r0 1) (li r0 -9223372036854775808) (ret)))
+      (= (cf '((li r0 6) (li r1 3) (xor r0 r0 r1) (ret))) '((li r0 6) (li r1 3) (li r0 5) (ret)))
+      (= (cf '((li r0 4611686018427387904) (li r1 4) (imul r0 r0 r1) (ret))) '((li r0 4611686018427387904) (li r1 4) (li r0 0) (ret)))
+      (= (cf '((li r0 -1) (li r1 1) (cmp r0 r1) (br below .x) (li r0 7) (label .x) (ret))) '((li r0 -1) (li r1 1) (li r0 7) (label .x) (ret)))
+      (= (cf '((li r0 -1) (li r1 1) (cmp r0 r1) (br lt .x) (li r0 7) (label .x) (ret))) '((li r0 -1) (li r1 1) (label .x) (ret)))
+      (= (cf '((li r0 -1) (li r0 18446744073709551615) (ret))) '((li r0 18446744073709551615) (ret)))
+      ; a variable shift's known dest dies with the op; a flag cc is not a cmp's to decide
+      (member? '(add r0 r9 1) (cf '((li r9 5) (shlv r9 r1) (add r0 r9 1) (ret))))
+      (member? '(br vs .x) (cf '((li r0 1) (li r1 1) (cmp r0 r1) (br vs .x) (li r0 7) (label .x) (ret)))))
+   ; ...and the a64 lane prices an li by its lanes: a copy of a one-lane known is the li,
+   ; a two-lane known folds, past that the ld and the mov stand; x64's mov is free and stays
+   gA {'tgt 'arm64}
+   (assert
+      (= (cfoldir gA '((li r9 5) (mov r0 r9) (ret))) '((li r9 5) (li r0 5) (ret)))
+      (= (cfoldir gA '((li r9 1099511627777) (mov r0 r9) (ret))) '((li r9 1099511627777) (mov r0 r9) (ret)))
+      (member? '(li r1 1099511627776) (cfoldir gA '((li r0 1099511627776) (st fp -16 r0) (ld r1 fp -16) (ret))))
+      (member? '(ld r1 fp -16) (cfoldir gA '((li r0 281479271743489) (st fp -16 r0) (ld r1 fp -16) (ret))))
+      (= (cfoldir gP '((li r9 5) (mov r0 r9) (ret))) '((li r9 5) (mov r0 r9) (ret)))))
 
 ; -- THE EXHAUSTION: the rename relation is FINITE -- one shape per op rdsp knows, at most two
 ; read positions each, fifteen registers in the gp file -- so "can this pass hand holo a form the

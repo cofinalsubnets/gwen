@@ -520,7 +520,7 @@
        (fits32? n))
    ; the fold side of the gate: may this op take n as its immediate here? (the
    ; sweeps ask before rewriting a reg-reg form -- a decline keeps the register)
-   (imma g op n) (op @ 'imul !(arm? g)
+   (imma g op n) (op @ 'imul (!(arm? g) && fits32? n)   ; x64's three-operand imul takes an imm32
                        ('add || 'sub) (immok g 'addsub n)
                        'cmp (immok g 'cmp n)
                        (immok g 'log n))
@@ -3865,18 +3865,26 @@
              (<fs . (? vs (['sub 'sp 'sp K9] . rw body2 0) (rw body2 0))))))
 
    ; -- IR constant propagation (cfoldir): a straight-line abstract pass over a function's final
-   ; forms. it tracks known small constants in registers, frame slots and machine-stack cells,
-   ; folds ALU ops on them back to li's, turns reg-reg ALU with a known source into the imm form,
-   ; folds loads of known slots, and evaluates known cmp+br / cmp+set pairs (a constant ternary
-   ; drops its dead arm) -- so the sizeof/Width/Have arithmetic the inliner exposes collapses.
-   ; knowns stay in [0, 2^30] (compare signedness and shifts agree there); labels and calls
-   ; invalidate values; anything unrecognized invalidates EVERYTHING (new ops stay safe). --
-   kmax 1073741824
-   (kok? v) (0 <= v && v < kmax)
+   ; forms. it tracks known constants in registers, frame slots and machine-stack cells, folds
+   ; ALU ops, immediate shifts/rotates and the unops on them back to li's, turns reg-reg ALU with
+   ; a known source into the imm form, folds loads of known slots, and evaluates known cmp+br /
+   ; cmp+set pairs (a constant ternary drops its dead arm) -- so the sizeof/Width/Have arithmetic
+   ; the inliner exposes collapses. a known is the word's SIGNED value (love's fixnum is exactly
+   ; s64, so the bit ops read straight and the arithmetic wraps back through wrap); labels and
+   ; calls invalidate values; anything unrecognized invalidates EVERYTHING (new ops stay safe). --
    (cfoldir g fs0)
     (: fb (fbase g)                         ; the frame-slot base (r4, or fp past a4ize)
        (fresh z9) {}                        ; reg/slot/cell -> (1 K) const | (2 rX) copy-of-register | ()
-       blunt9 (vshops + unops)                      ; folded bluntly (see their arm below)
+       W (8 * wsize g) M (W 2) H (M // 2)   ; the word: its bits, 2^W, 2^(W-1)
+       (wrap v) (: u (v % M) u2 (u < 0 ? (u + M) u) (u2 < H ? u2 (u2 - M)))   ; two's complement, signed
+       (uns v) (v < 0 ? (v + M) v)            ; ...and unsigned, for the below/above ccs and the logical shifts
+       ; what an li of k costs the target: a64 spells it movz + a movk per further nonzero 16-bit
+       ; lane, x64 one mov whatever the width -- a fold answers a li only up to two, a mov only one
+       (licost k) (? !(a64? g) 1
+                     (: (go u n) (? (u = 0) (n < 1 ? 1 n)
+                                   (go (u // 65536) (0 = (u % 65536) ? n (n + 1))))
+                        (go (uns k) 0)))
+       (fold? k) (licost k <= 2)
        (rv t k) (t k)
        (rset t k v) (pin t k v)
        (kn? v) (two? v && <v = 1)            ; a known CONSTANT (never let a copy reach arithmetic)
@@ -3915,13 +3923,29 @@
                                             (pin t2 k1 va))
                                        (go1 >ks)))
                         (go1 (keys ta)))
-       (alu op a b) (op @ 'add (a + b) 'sub (a - b) 'imul (a * b)
-                          'and (a & b) (a | b))  ; xor stays unfolded (imm-converted only)
+       (alu op a b) (wrap (op @ 'add (a + b) 'sub (a - b) 'imul (a * b)
+                                'and (a & b) 'or (a | b) (a ^ b)))
+       ; the immediate shifts and rotates, count in [0, W) (ror4 rotates the low 32 and zero-extends)
+       (shf op v k) (op @ 'shl (wrap (v * (k 2)))
+                          'shr (wrap (uns v // (k 2)))
+                          'sar (v >> k)
+                          'ror4 (: u (uns v % 4294967296) p (k 2)
+                                   ((u // p) + ((u % p) * ((32 - k) 2))))
+                          (: k2 (op = 'rol ? ((W - k) % W) k) u (uns v) p (k2 2)   ; ror, rol = ror W-k
+                             (wrap ((u // p) + ((u % p) * ((W - k2) 2))))))
+       (shk? op k) (charm? k && 0 <= k && k < (op = 'ror4 ? 32 W))
+       ; the one-register rewrites: negate, complement, the sign/zero extensions from 8/16/32
+       (unop op v) (op @ 'neg (wrap -v) 'not (-v - 1)
+                         (: n (op @ ('sx1 || 'zx1) 8 ('sx2 || 'zx2) 16 32)
+                            u (uns v % (n 2))
+                            (? (member? op '(zx1 zx2 zx4)) u
+                               (u < ((n - 1) 2)) u
+                               (u - (n 2)))))
+       ccs9 '(eq ne lt le gt ge below be above ae)   ; the ccs a cmp decides (flag ccs stay)
        (ccev cc a b) (cc @ 'eq (a = b) 'ne !(a = b)
-                           ('lt || 'below) (a < b)
-                           ('le || 'be) (a <= b)
-                           ('gt || 'above) (b < a)
-                           (b <= a))                    ; ge / ae
+                           'lt (a < b) 'le (a <= b) 'gt (b < a) 'ge (b <= a)
+                           'below (uns a < uns b) 'be (uns a <= uns b)
+                           'above (uns b < uns a) (uns b <= uns a))   ; ae
        ; after an unconditional transfer, everything to the next label is DEAD
        ; (a jump can only land on a label) -- a folded ternary drops its arm
        (swallow fs) (? !(two? fs) ()
@@ -3979,12 +4003,12 @@
                   (: nx (? (two? r) <r ())
                      (? (two? nx && member? <nx '(li mov) && <>nx = <>f)
                         (go r 1 cur rg sl ce ci acc)    ; the very next form rewrites this register: dead li
-                        (: k <>>f
+                        (: k (constellation? <>>f ? (wrap <>>f) 'no)   ; a big rides too (charm? is the fixnum)
                            old (rv rg <>f)
                            (? (kn? old && <>old = k)
                               (go r 1 cur rg sl ce ci acc)   ; the register already holds this value
                               (: _ (defr ci rg sl ce <>f)
-                                 _ (rset rg <>f (? (kok? k) [1 k] ()))
+                                 _ (rset rg <>f (constellation? k ? [1 k] ()))
                                  (go r 1 cur rg sl ce ci (f . acc)))))))
                  (op = 'mov)
                   (? (id? <>f <>>f) (go r 1 cur rg sl ce ci acc)   ; a self-mov says nothing
@@ -3999,7 +4023,12 @@
                            (: _ (defr ci rg sl ce <>f)
                               _ (rset rg <>f v)
                               _ (crec ci v 'g <>f)
-                              (go r 1 cur rg sl ce ci (f . acc))))))
+                              ; a copy of a known is the li, where the li is one instruction and
+                              ; the copy is not free -- a64 only: x64's reg-reg mov vanishes at
+                              ; rename (the lea lesson) while its li would be a real uop
+                              (? (kn? v && a64? g && licost <>v = 1)
+                                 (go r 1 cur rg sl ce ci (['li <>f <>v] . acc))
+                                 (go r 1 cur rg sl ce ci (f . acc)))))))
                  (member? op '(add sub and or xor imul))
                   (? (<>f = 'sp)                ; sp arithmetic: the cell cursor moves
                       (: n <>>>f
@@ -4007,28 +4036,38 @@
                      (: d <>f a <>>f b <>>>f
                         ; b is a register SYMBOL or a charm immediate -- never confuse
                         ; the two (a symbol in arithmetic church-explodes)
-                        bk (? (charm? b) (? (kok? b) [1 b] ()) (rv rg b))
+                        bk (? (charm? b) [1 (wrap b)] (rv rg b))
                         ak (rv rg a)
-                        (? (!(op = 'xor) && kn? ak && kn? bk)           ; both known: the op folds to a li
+                        (? (kn? ak && kn? bk)           ; both known: the op folds to a li
                             (: k (alu op <>ak <>bk)
                                _ (defr ci rg sl ce d)
-                               (? (kok? k)
-                                  (: _ (rset rg d [1 k])
-                                     (go r 1 cur rg sl ce ci (['li d k] . acc)))
+                               _ (rset rg d [1 k])
+                               (? (fold? k)
+                                  (go r 1 cur rg sl ce ci (['li d k] . acc))
                                   (go r 1 cur rg sl ce ci (f . acc))))
                            (!(charm? b) && kn? bk && imma g op <>bk)   ; known reg source -> the imm form
                             (: _ (defr ci rg sl ce d)
                                (go r 1 cur rg sl ce ci ([op d a <>bk] . acc)))
                            (: _ (defr ci rg sl ce d)
                               (go r 1 cur rg sl ce ci (f . acc))))))
-                 (member? op '(shl shr sar))         ; the 2-operand immediate shifts
+                 (member? op '(shl shr sar rol ror ror4))   ; the 2-operand immediate shifts/rotates
                   (: d <>f k <>>f dk (rv rg d)
                      _ (defr ci rg sl ce d)
-                     (? (kn? dk && charm? k)
-                         (: v (? (op = 'shl) (* <>dk (k 2)) (<>dk >> k))
-                            (? (kok? v)
-                               (: _ (rset rg d [1 v])
-                                  (go r 1 cur rg sl ce ci (['li d v] . acc)))
+                     (? (kn? dk && shk? op k)
+                         (: v (shf op <>dk k)
+                            _ (rset rg d [1 v])
+                            (? (v = <>dk) (go r 1 cur rg sl ce ci acc)   ; the op left the value alone
+                               (fold? v) (go r 1 cur rg sl ce ci (['li d v] . acc))
+                               (go r 1 cur rg sl ce ci (f . acc))))
+                        (go r 1 cur rg sl ce ci (f . acc))))
+                 (member? op unops)
+                  (: d <>f dk (rv rg d)
+                     _ (defr ci rg sl ce d)
+                     (? (kn? dk)
+                         (: v (unop op <>dk)
+                            _ (rset rg d [1 v])
+                            (? (v = <>dk) (go r 1 cur rg sl ce ci acc)   ; the op left the value alone
+                               (fold? v) (go r 1 cur rg sl ce ci (['li d v] . acc))
                                (go r 1 cur rg sl ce ci (f . acc))))
                         (go r 1 cur rg sl ce ci (f . acc))))
                  (op = 'st)
@@ -4047,7 +4086,9 @@
                      (? (kn? kv)
                         (: _ (defr ci rg sl ce d)
                            _ (rset rg d kv)
-                           (go r 1 cur rg sl ce ci (['li d <>kv] . acc)))
+                           (? (fold? <>kv)
+                              (go r 1 cur rg sl ce ci (['li d <>kv] . acc))
+                              (go r 1 cur rg sl ce ci (f . acc))))
                         (two? kv && (<kv = 2))     ; the memory holds a live COPY: read the register
                          (? (id? <>kv d)
                             (go r 1 cur rg sl ce ci acc)   ; ... and it IS this register: the load says nothing
@@ -4074,16 +4115,11 @@
                       (: _ (? (<>f = fb) (rset sl <>>f ()) (rset ce cur ()))
                          (go r 1 cur rg sl ce ci (f . acc)))
                      (go r 1 cur rg (fresh 0) ce ci (f . acc)))
-                 (member? op blunt9)                 ; DELIBERATELY blunter than rdsp's write set:
-                  ; the r0..r3 clamp stays as-is -- widening it is a precision change
-                  (: _ (defr ci rg sl ce 'r0) _ (defr ci rg sl ce 'r1) _ (defr ci rg sl ce 'r2) _ (defr ci rg sl ce 'r3)
-                     (go r 1 cur rg sl ce ci (f . acc)))
                  (op = 'cmp)                         ; paired with its br/set consumer
                   (: a (rv rg <>f)
-                     b (? (charm? <>>f) (? (kok? <>>f) [1 <>>f] ())
-                          (rv rg <>>f))
+                     b (? (charm? <>>f) [1 (wrap <>>f)] (rv rg <>>f))
                      nx (? (two? r) <r ())
-                     (? (kn? a && kn? b && two? nx && member? <nx '(br set))
+                     (? (kn? a && kn? b && two? nx && member? <nx '(br set) && member? <>nx ccs9)
                          (: tv (ccev <>nx <>a <>b)
                             (? (<nx = 'br)
                                (? tv (: r2 (swallow >r)
