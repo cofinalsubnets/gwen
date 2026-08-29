@@ -52,7 +52,7 @@
    ; a blob names no address of the binary: the kind sentinels its guards compare against and the
    ; callout drives are read off g at run time (love_int.h's JkX slots, in this order), so the bytes
    ; are the same under any base and ride an image as they are
-   (jk tgt r k) ['ld r (greg tgt 'g) ((jkoff 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume
+   (jk tgt r k) ['ld r (greg tgt 'g) ((jkoff 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume 9 cur
    mapmix 0x9e3779b97f4a7c15                                                        ; the hash multiplier (= love.c's map hash mult), for the inline probe
    ; -- the map probe, via the crew/holo/ assembler SERVICE (baked into the post-egg layer; the glaze is its
    ;    client). crew/holo/ resolves the hit/miss/loop labels to rel32 -- no hand-counted je/jmp offsets, the
@@ -527,8 +527,7 @@
                               (: lfd (assoc f lams)          ; the lam-list assoc. the cell READ mirrors ev.l's cof: box slot 0.
                                  (? (two? lfd) (peep >lfd 0 0) 0))
                               0)])
-                 cand)   ; only a letrec-local can be a sibling: farq (a cheap chain peep) gates
-                                                             ; the lam-list assoc, so global candidates never pay it (compile cost)
+                 cand)
        cgood (filter (\ p (: cc <>p                     ; import names must be FRAME params (ps, where fixcaps pours them) --
                              (two? cc && <cc && all (\ x (member? x ps)) >cc))) csx)   ; never loop vars (bytecode reads the propagated capture)
        cn    (map cap cgood)
@@ -651,16 +650,42 @@
                     ['label ld]]
                + (adrive (gbo + (8 * (1 + (posof 'tally gn 0)))))
                + [['label en]]))
+             ; asat: a SATURATED n-ary call site (n >= 2). if the callee is a cur cell of arity
+             ; exactly n (bytecode closures, natives, and the nifs share the [cur arity body..]
+             ; layout), lay the apn frame [args cont tag base] and enter its body at cell+2
+             ; directly -- one call, no curry chain, no partials. any other callee -- a partial,
+             ; an over-application, arity 1, data -- takes the drive chain over the SAME spilled
+             ; args (evaluated once, either way).
+             (asat as cso d) (: bb (mint 0)  sw (mint 0)  dn (mint 0)  n (tally as)  w (n + 3)
+              ((agous as 0 d)
+               + [['ld X SP cso] ['test X 1] ['br 'ne sw]
+                  ['ld T X 0] (jk tgt SC 9) ['cmp T SC] ['br 'ne sw]                               ; entry = lvm_cur?
+                  ['ld T X 8] ['cmp T ((2 * n) + 1)] ['br 'ne sw]]                                 ; arity = n?
+               + (: (gsl j) (? (j < n) ([['ld A SP (spill (d + j))] ['st SP ((8 * j) - (8 * w)) A]] + (gsl (j + 1))) ()) (gsl 0))
+               + [(jk tgt T 8) ['add T T 8] ['st SP ((8 * n) - (8 * w)) T]                         ; cont = &resume[1]
+                  ['lar T bb] ['lar A 'entry0] ['subs T T A] ['leax T T T 1 1] ['st SP ((8 * (n + 1)) - (8 * w)) T]
+                  ['st SP ((8 * (n + 2)) - (8 * w)) A]
+                  ['lea IP X 16] ['sub SP SP (8 * w)] ['ld T IP 0] ['jmpr T]                      ; enter the body at cell+2
+                  ['label bb] ['ld A SP 0] ['add SP SP 8] ['jmp dn]
+                  ['label sw]]
+               + (: (goj j so) (? (j < n)                                                          ; the chain, from the spills: each partial rolls through spill d
+                                  ([['ld A SP (spill (d + j))]] + (adrive so)
+                                   + (? (j < (n - 1)) [['st SP (spill d) A]] ())
+                                   + (goj (j + 1) (spill d)))
+                                  ()) (goj 0 cso))
+               + [['label dn]]))
              (acall f as d)
               (? (id? f self)                                                                               ; SELF: saturated -> the direct frame jump; partial/over-applied ->
                  (? ((tally as) = (a - ni))                                                                 ; curry the own cell through its imports, then the args (a saturated
                     (aselfcall as d)                                                                        ; TAIL self-call took sgo instead)
                     (achain (simp + as) soo d))
-                 (member? f cn)                                                                             ; a SIBLING: curry the frozen entry through its import names (all in
-                 (achain ((cimp f) + as) (gbo + (8 * (1 + (tally gn) + (posof f cn 0)))) d)             ; the frame by fixcaps) then the args -- lz's site, drive-compiled
+                 (member? f cn)                                                                             ; a SIBLING: its frozen entry takes the import names (all in the frame
+                 (: sas ((cimp f) + as)  sso (gbo + (8 * (1 + (tally gn) + (posof f cn 0))))            ; by fixcaps) then the args -- lz's site, saturated when it can be
+                    (? (two? >sas) (asat sas sso d) (achain sas sso d)))
                  (: cso (? (member? f vars || member? f ps) (voff f) (gbo + (8 * (1 + (posof f gn 0)))))
                     (? ((? lp 1 sfq) && !(two? >as) && (member? f vars || member? f ps))              ; a 1-arg frame callee can be a STRING at run time (the lexer class) --
                        ((acg <as d) + (astr1 cso))                                                     ; LOOPING bodies only (named-let or self-call), the same cost gate as
+                       (two? >as) (asat as cso d)                                                      ; gn; multi-arg saturates when the callee's arity agrees
                        (achain as cso d))))                                                                 ; the loop, but on a one-shot recursion wrapper it taxed EVERY drive
                                                                                                             ; (~7 insns x ~400M mooncc calls = +19%). a gn or sibling callee is
                                                                                                             ; never a string (lit?-gated / a woven entry), so those keep the bare drive.
@@ -738,7 +763,7 @@
                   + (? (a = 1) [['mov IP T]] [['lea IP T 16]])                                      ; a=1: re-apply e; else: enter e's body on the saturated frame
                   + [['ld T IP 0] ['jmpr T]])
              prog (['(label entry0)                                                                       ; entry0 = the resume-offset anchor (any shared label works; the blob's first byte)
-                      ['lea X HP (40 + (8 * (R + 4 + a)))] ['cmp SP X] ['br 'below 'd0]              ; ROOM guard: the reservation + the widest call frame (a drive's, or a self jump's a+3) + floor must fit Sp-Hp,
+                      ['lea X HP (40 + (8 * (R + 4 + (amax a nd))))] ['cmp SP X] ['br 'below 'd0]    ; ROOM guard: the reservation + the widest call frame (nd bounds any site's arg count) + floor must fit Sp-Hp,
                       ['ld T IP 32] ['ld X T 8] ['cmp X 1] ['br 'le 'd0]                            ; the DEOPT BUDGET (extras link 0, a charm): spent -> the native is
                       ['sub SP SP fro]]                                                                   ; RETIRED, every call takes d0 straight to the twin (frame untouched
                                                                                                             ; -> the twin runs it whole; a perma-deopting native heals to bytecode)
