@@ -13,13 +13,17 @@
 ; the needle" into "is this byte zero". a hit inside a word falls to the byte loop,
 ; which is at most eight more steps.
 ;
-; ⚠ NOTHING IS BAKED -- neither the bytes nor the install, for two separate reasons.
-; the install cannot be: a native cell does not serialize (src/snap.c writes a pointer
-; as a heap offset, an lvm-table index or an immortal, and emitted code is none of the
-; three), so a baked one wakes reverted to the twin -- correct, 364x slow, announced
-; nowhere. the bytes could have been, but this module's text is evaluated inside the
-; boot's registry, before the boot says (use 'holo), so there is no assembler yet.
-; one holo run and one mmap per process, on the first scan, and never again.
+; ⚠ BUILT ON FIRST USE, not at a module binding -- and the reason is the REGISTRY,
+; not the bake. this module's text is evaluated inside the boot's own module registry
+; (src/cats.c), which runs before the boot says (use 'holo): assembling there takes
+; the whole registry down with it, and the symptom is a bare ";; no-module bao", the
+; first module anyone asks for afterwards. so the assemble and the install both wait
+; for a caller. one holo run and one arena blob per process, and never again.
+;
+; ⚠ AND THE BLOB NAMES NO ADDRESS OF THE BINARY. natives ride the image now, so this
+; kernel can be carried into a bake and woken under another base -- which is sound
+; only because the string-kind guard LOADS its sentinel from g's jk table rather than
+; wearing an li of (apof ""). that is emit.l's `jk` law and it binds here too.
 ;
 ; ⚠ amd64 only for now, and not because the IR is x86: holo's IR is neutral. it is
 ; that the lvm ABI's register binding here (Sp=r1, Ip=r5) is the amd64 one, and
@@ -44,9 +48,13 @@
    ; r13 = highs, r14 = ~w. the guards deopt BEFORE any push, so the machine sp is
    ; balanced on every way out
    (scan-ir _)
-    (: strk (apof "")                            ; the string kind word, as emit.l's astr1 reads it
-       ([['ld 'r0 'r1 0] '(test r0 1) '(br ne deopt)              ; Sp[0] a pointer ...
-          '(ld r7 r0 0) ['li 'r8 strk] '(cmp r7 r8) '(br ne deopt)]      ; ... of string kind
+    (: ([['ld 'r0 'r1 0] '(test r0 1) '(br ne deopt)             ; Sp[0] a pointer ...
+          '(ld r7 r0 0)
+          ; the string kind off g's jk table (slot 1), never an li of (apof ""):
+          ; that is a C code address, and a blob that names one is not the same
+          ; bytes under another base. emit.l's `jk` law, and the same reason
+          ['ld 'r8 'r6 ((jkoff 0) + 8)]
+          '(cmp r7 r8) '(br ne deopt)]                                   ; ... of string kind
         + [['ld 'r0 'r1 8] '(test r0 1) '(br eq deopt)]           ; Sp[1] a charm
         + [['ld 'r0 'r1 16] '(test r0 1) '(br eq deopt)]          ; Sp[2] a charm
         + '((ld r9 r1 0) (ld r10 r9 8) (lea r9 r9 16)             ; the bytes, and n
