@@ -1,11 +1,9 @@
 ; walk -- re-declare the prel list walkers through the glazed compiler. the prel
-; originals are egg-baked pre-glaze (pure interp); these compile under the live natjit,
-; so the amble driver owns their self-recursion (a tail call loops, any other rides the
-; direct self frame), an applied param takes the drive, and the generic = keeps symbol
-; and string keys native. bodies verbatim from love/prel.l (caap spelled through cap --
-; a free accessor head declines). loads after hook.l (the hook must be live); a
-; trampoline build stays interp. egg-baked consumers keep the closures they folded;
-; post-boot streams -- the crew bake, every cat -- fold these.
+; originals are egg-baked pre-glaze; these compile under the live natjit, so amble owns
+; their self-recursion, an applied param takes the drive, and the generic = keeps symbol
+; and string keys native. bodies verbatim from love/prel.l, caap spelled through cap (a
+; free accessor head declines). loads after hook.l; egg-baked consumers keep the closures
+; they folded, every post-boot stream folds these.
 (? (0 < love-tco)
    (ev '(: (foldl f z l) (? (two? l) (foldl f (f z (cap l)) (cup l)) z)
            (foldr f z l) (? (two? l) (f (cap l) (foldr f z (cup l))) z)
