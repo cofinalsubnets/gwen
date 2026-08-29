@@ -186,7 +186,9 @@ lvm_t lvm_kcall,
  lvm_litp, lvm_hotp,
  lvm_nif,         // codegen backend: emitted bytes -> applicable native value (1-arg / multi-arg)
  lvm_nifx,        // ... with an extras word (value[3]+8 = Ip+32): refs a native needs beyond the twin (the callout's clos, amble's ()/globals) ride a GC-walked cell slot, so value[1] stays the plain twin and the image revert (img_nif_interp) never dereferences a pack
- lvm_calloutdrive, lvm_calloutresume;   // the drive addresses as fixnums (the glaze emitter bakes them as `li Ip` immediates)
+ lvm_calloutdrive, lvm_calloutresume,   // the drive addresses as fixnums (probes; a native reads them off g->jk)
+ lvm_jkoff,       // (jkoff x): g->jk's byte offset, what the emitter's `jk` law loads from
+ lvm_natp;        // (nat? f): is f a native closure -- its code in the arena
 // ⚠ THE ATTRIBUTES ARE THE DECLARATION: `lvm(n)` is `ai_noinline ai_noicf _lvm(n)`, so these
 // cannot fold into the plain lvm_t list above without shedding both. ai_noicf is noipa, and the
 // data sentinels below are what it is for -- see their note.
@@ -676,7 +678,12 @@ extern uintptr_t const ai_def1_n;
 extern union u const callout_drive[];
 extern union u const yield_c[];
 struct ai_bio *bio_of(struct ai *g, struct ai_io *i);
-size_t code_maplen(size_t codelen);
+char *code_install(struct ai *g, char const *src, size_t n), *code_adopt(struct ai *g, char const *src, size_t n);
+void code_free(struct ai *g, char *code), jk_ini(struct ai *g);
+int code_in(struct ai *g, uintptr_t v);
+size_t code_len(char *code);
+// the jk slots (g->jk): what a native reads off g -- the emitter's `jk` law names them the same
+enum { JkChain, JkStr, JkMap, JkNom, JkMint, JkGem, JkCask, JkDrive, JkResume };
 union u *fn_base(union u *k, int *nargs);
 struct ai
  *ai_eval_(struct ai *g),

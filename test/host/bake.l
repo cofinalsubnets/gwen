@@ -20,6 +20,10 @@
    bake-dedup-c1 (cask 4)
    bake-dedup-c2 (cask 4))
 
+; a native rides the bake: its code is bytes in the image's segment, woken as arena text,
+; so the child runs it without a compile
+(: bake-native (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a i)) a)) 0 0))))
+
 (: img "out/.bake-nif-smoke.image"
    drv "out/.bake-nif-drive.l"
    _ (unlink img) _ (unlink drv)                    ; a clean slate, tolerated if absent
@@ -42,6 +46,14 @@
         (close p))
    r2 (hark ["out/host/love" "wake" img drv])
    _ (assert (two? r2) (<r2 = 0) (>r2 = "1"))
+
+   ; ..and the native: still native in the child, and the same answer
+   _ (assert (nat? bake-native) ((bake-native 100000) = 4999950000))
+   _ (: p (open drv "w")
+        _ (say p "(: _ (putn (? (nat? bake-native) (bake-native 100000) -1)) (quit 0))")
+        (close p))
+   r3 (hark ["out/host/love" "wake" img drv])
+   _ (assert (two? r3) (<r3 = 0) (>r3 = "4999950000"))
 
    _ (unlink img) _ (unlink drv)
    _ (test_fin ())

@@ -425,12 +425,9 @@ static char const src_glaze[] =
   // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
   // module book) and the natjit hook cleared. the forensics twin of LOVE_NO_IMAGE, and a
   // session knob: it governs a run, never the baked artifact.
-  glaze_off[] = "(: ev (from 'glaze 'base-ev) natjit ())",
-  // auto.l's self-tests fill `memo` with native closures whose ap is a W^X mmap address,
-  // and those cannot serialize. empty it, so a woken runtime re-JITs lazily.
-  glaze_cache[] = "(: c (from 'glaze 'cache) (map (\\ k (pull c k 0)) (keys c)))";
+  glaze_off[] = "(: ev (from 'glaze 'base-ev) natjit ())";
 #else
-static char const src_glaze[] = "", glaze_off[] = "", glaze_cache[] = "";
+static char const src_glaze[] = "", glaze_off[] = "";
 #endif
 
 // the session layer: boot is over, and from here the base (prel/ev, the nifs, every
@@ -532,7 +529,6 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     // session-layer eval it replaces did. pure definition: cli-line reads argv and the
     // verb registry when CALLED, so nothing of this session is folded in.
     g = ai_evals_(g, cli);
-    g = ai_evals_(g, glaze_cache);
     int rc = *bake ? image_dump(g, bake) : image_bake(g);
     if (rc) fprintf(stderr, "love: bake failed (rc=%d)\n", rc);
     exit(rc ? 1 : 0); }

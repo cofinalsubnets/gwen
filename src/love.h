@@ -169,8 +169,17 @@ struct ai {
  struct ai_r { ai_word *x; struct ai_r *n; } *root; // gc roots list
  struct ai_fz { // finalizers
   union u *p;
-  void (*fn)(void *);
+  void (*fn)(struct ai*, void *);
   struct ai_fz *next; } *fz;
+ // the native code arena (love.c): chunks of pages the glaze installs into, RX between
+ // installs; cfree holds the blobs whose closures died. an image carries the live blobs
+ // and wakes them as a chunk of their own.
+ struct ai_code *code;
+ struct ai_cfree *cfree;
+ // what a native reads off g instead of carrying: the kind sentinels and the callout
+ // drives are addresses of this binary, and a blob that held one could not ride an
+ // image. jk_ini fills it; the emitter's `jk` law names the slots.
+ ai_word jk[12];
  void *(*alloc)(struct ai*, void*, size_t); // alloc(g,p,n): n>0 reserve n bytes (p ignored), n==0 free p; -> block or NULL
  uintptr_t n_gc, max_len, max_heap, // gc instrumentation (cycles, peak pool len, peak live heap; words)
            n_seen, n_evac;          // Σ per collection: occupancy entering / survivors copied.

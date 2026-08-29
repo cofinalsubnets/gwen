@@ -49,18 +49,10 @@
    (jitn lam) (jitnir lam 'amd64)
    (jit2 lam) (jitn lam)                                                  ; arity-2 alias (self-test/auto.l)
    (gfind p l) (? (atom? l) () (p <l) <l (gfind p >l))     ; first elt matching p
-   ; the kind sentinels are C CODE ADDRESSES -- they must be read LIVE at every compile
-   ; ((chainkind 0), a call), NEVER captured at module load: the glaze bakes into the image,
-   ; and a load-time capture serializes the BAKE-TIME address as a plain number -- the final
-   ; binary's text sits elsewhere (the image embed relinks it), so every image-booted native
-   ; stamps/tests a stale pointer (alink built cells whose ap pointed 3.7MB off; uu answered
-   ; anonymous cells for (U l) and the certifier scared uu-not-a-type). layout LUCK hid this
-   ; for as long as the two links happened to agree -- calloutresume always did it right.
-   (chainkind _) (apof (0 >< 0))                                                  ; lvm_chain's ap sentinel, for the inline two?/cap/cup kind test
-   (strkind _) (apof "")                                                            ; lvm_str's ap sentinel, for amble's string index/tally fast lanes
-   (mapkind _) (apof (tablet 0))                                                    ; lvm_map_lookup's sentinel, for the map-param entry guard + the (mpeep ..) probe
-   (nomkind _) (apof 'nomk)                                                         ; lvm_nom's sentinel, for the point-param entry guard
-   (mintkind _) (apof (nom 0))                                                      ; lvm_sym's (a mint's) sentinel, ditto -- () is a mint too
+   ; a blob names no address of the binary: the kind sentinels its guards compare against and the
+   ; callout drives are read off g at run time (love_int.h's JkX slots, in this order), so the bytes
+   ; are the same under any base and ride an image as they are
+   (jk tgt r k) ['ld r (greg tgt 'g) ((jkoff 0) + (8 * k))]   ; 0 chain 1 str 2 map 3 nom 4 mint 5 gem 6 cask 7 drive 8 resume
    mapmix 0x9e3779b97f4a7c15                                                        ; the hash multiplier (= love.c's map hash mult), for the inline probe
    ; -- the map probe, via the crew/holo/ assembler SERVICE (baked into the post-egg layer; the glaze is its
    ;    client). crew/holo/ resolves the hit/miss/loop labels to rel32 -- no hand-counted je/jmp offsets, the
@@ -244,7 +236,7 @@
            ['lar T 'bb] ['ld U SP 32] ['subs T T U]          ; F[2] = tag(&bb - base): an ODD CHARM, GC-walk-clean
            ['leax T T T 1 1] ['st SP -16 T]
            ['st SP -8 U]                                       ; F[3] = base (out-of-pool -- the walk returns it unharmed)
-           ['li IP (calloutresume 0)] ['sub SP SP 32]         ; Ip = callout_resume ; Sp = frame
+           (jk tgt IP 8) ['sub SP SP 32]         ; Ip = callout_resume ; Sp = frame
            ['ld T IP 0] ['jmpr T]]                            ; Continue -> lvm_ap -> clos -> lvm_resume -> bb
         + ['(label bb)
            ['ld A SP 0]                                        ; A = result (Sp[0] on resume, Sp = R-8 -- same landing as the retired retB path)
@@ -299,7 +291,7 @@
            ['lar T 'bb] ['ld U SP 32] ['subs T T U]          ; F[2] = tag(&bb - base)
            ['leax T T T 1 1] ['st SP -16 T]
            ['st SP -8 U]                                       ; F[3] = base
-           ['li IP (calloutresume 0)] ['sub SP SP 32]         ; Ip = callout_resume ; Sp = frame
+           (jk tgt IP 8) ['sub SP SP 32]         ; Ip = callout_resume ; Sp = frame
            ['ld T IP 0] ['jmpr T]]                            ; Continue -> lvm_ap -> F -> lvm_resume -> bb
         + ['(label bb)
            ['ld A SP 0] ['test A 1] ['br 'eq 'codeopt]]      ; GATE 1: non-fixnum result -> deopt
@@ -566,13 +558,13 @@
              (aid sa sb d) (abin sa sb d [['cmp T A] ['set 'eq A] ['leax A A A 1 1]])                ; raw word identity: total, no guard
              (atwo sx d) (: ln (mint 0)
               ((acg sx d) + [['li T 1] ['test A 1] ['br 'ne ln]
-                              ['ld X A 0] ['li A (chainkind 0)] ['cmp X A] ['br 'ne ln]
+                              ['ld X A 0] (jk tgt A 0) ['cmp X A] ['br 'ne ln]
                               ['li T 3] ['label ln] ['mov A T]]))
              (acap sx d off) ((acg sx d) + [['test A 1] ['br 'ne 'deopt]
-                                             ['ld X A 0] ['li T (chainkind 0)] ['cmp X T] ['br 'ne 'deopt]
+                                             ['ld X A 0] (jk tgt T 0) ['cmp X T] ['br 'ne 'deopt]
                                              ['ld A A off]])
              (alink sa sb d) (abin sa sb d [['lea X HP 88] ['cmp SP X] ['br 'below 'deopt]          ; room for 3w + floor, else deopt (no GC mid-native)
-                                              ['li X (chainkind 0)] ['st HP 0 X] ['st HP 8 T] ['st HP 16 A]
+                                              (jk tgt X 0) ['st HP 0 X] ['st HP 8 T] ['st HP 16 A]
                                               ['mov A HP] ['add HP HP 24]])
              (acq st sth sel d) (: le (mint 0)  ln (mint 0)
               ((acg st d) + [['test A 1] ['br 'eq 'deopt] ['cmp A 1] ['br 'le le]]                 ; heap truth -> net -> twin; tag(x)<=1 <=> x<=0
@@ -587,7 +579,7 @@
               [['st SP -32 A] ['ld T SP cso] ['st SP -24 T]                                         ; frame [arg, callee, tag(bb-entry0), entry0] -- an odd charm + an out-of-
                  ['lar T bb] ['lar X 'entry0] ['subs T T X] ['leax T T T 1 1]                       ; pool code base, so a GC with the call pending walks it clean (no retB)
                  ['st SP -16 T] ['st SP -8 X]
-                 ['li IP (calloutresume 0)] ['sub SP SP 32] ['ld T IP 0] ['jmpr T]                  ; -> lvm_ap -> callee -> lvm_resume -> bb
+                 (jk tgt IP 8) ['sub SP SP 32] ['ld T IP 0] ['jmpr T]                  ; -> lvm_ap -> callee -> lvm_resume -> bb
                  ['label bb] ['ld A SP 0] ['add SP SP 8]])                                            ; resume: result at Sp[0], pop it
              (achain as cso d) (? !(two? >as)
                                   ((acg <as d) + (adrive cso))
@@ -595,7 +587,7 @@
                                    + (achain >as (spill d) (d + 1))))                                  ; partial -> spill -> next arg (currying)
              (astr1 cso) (: ld (mint 0) ok (mint 0) en (mint 0)                                             ; the STRING fast lane at a 1-arg frame-callee site: (s i) with s a
               ([['ld T SP cso] ['test T 1] ['br 'ne ld]                                             ; text and i a charm is a byte index: in range, the unsigned byte,
-                  ['ld X T 0] ['li SC (strkind 0)] ['cmp X SC] ['br 'ne ld]                             ; native. EVERYTHING ELSE falls to the DRIVE (never a deopt -- a
+                  ['ld X T 0] (jk tgt SC 1) ['cmp X SC] ['br 'ne ld]                             ; native. EVERYTHING ELSE falls to the DRIVE (never a deopt -- a
                   ['test A 1] ['br 'eq ld]                                                              ; mixed-type call site keeps its closure speed): another callee or
                   ['mov X A] ['sar X 1] ['ld SC T 8]                                                  ; index kind, and -- since the one unsigned compare wraps a negative
                   ['cmp X SC] ['br 'below ok]                                                           ; huge -- BOTH the from-the-end read and the out-of-range (). so the
@@ -607,7 +599,7 @@
              (atally sx d) (: ld (mint 0) en (mint 0)                                                       ; (tally X) with X a text: A = tag(len at [X+8]); anything else
               ((acg sx d)                                                                                   ; DRIVES the tally global through its gn slot (a chain tally is a
                + [['test A 1] ['br 'ne ld]                                                            ; walk -- C's, not a deopt storm)
-                    ['ld X A 0] ['li SC (strkind 0)] ['cmp X SC] ['br 'ne ld]
+                    ['ld X A 0] (jk tgt SC 1) ['cmp X SC] ['br 'ne ld]
                     ['ld X A 8] ['leax A X X 1 1] ['jmp en]
                     ['label ld]]
                + (adrive (gbo + (8 * (1 + (posof 'tally gn 0)))))
@@ -744,7 +736,7 @@
    ; the lane never allocates because it can't GC (its raw regs aren't roots) -- so it does the alloc
    ; twin of the overflow guard: a ROOM GUARD (Sp - Hp >= gem_req+floor words) DEOPTS to interp when
    ; the heap is too full to fit the box, exactly as `jo` deopts when a fixnum result leaves range.
-   ; fast path (room proven): write [Hp]=lvm_gembox (apof's kind const, ASLR-captured at emit like the
+   ; fast path (room proven): write [Hp]=lvm_gembox (the jk gem slot, read off g like the
    ; string guard), the double at [Hp+8] with NaN->0 (mk_gem's law), return Hp UNTAGGED (an even heap
    ; ptr IS the gem), bump Hp by gem_req. the epilogue stores the POINTER (NO putfix) and threads the
    ; advanced Hp on through Continue, so the box is live to the next op and the GC at the next safepoint.
@@ -759,14 +751,14 @@
    ; creation hook (love/glaze/hook.l) calls it DIRECTLY with `e`, the bytecode twin ala already built --
    ; re-interpreting lam there would re-enter ala -> natjit -> ... (the leaf lane's `e`-deopt law).
    (jitfrx lam tgt interp)
-    (: v <>lam  kind (apof 1.5)                                 ; lvm_gembox's address, captured now (code never moves)
+    (: v <>lam
        A (greg tgt 'acc) S (greg tgt 'sp) HP (greg tgt 'hp) IP (greg tgt 'ip) T (greg tgt 'tmp) ok (mint 0)
        ; neutral crew/holo/ IR (both targets): the room-guard skips the deopt by LABEL; the box store is `stsd`;
        ; the deopt is deoptbody (no pending spills here -- cgf balances its own); nanc is arch-aware.
        (nif (emit (asmt tgt ((cgf tgt v <>>lam 0)
           + [['lea A HP 80] ['cmp S A] ['br 'ae ok]]                  ; cmp Sp,Hp+10w ; room? skip deopt
           + (deoptbody tgt 0) + [['label ok]] + (nanc tgt)             ; heap-full -> deopt ; NaN -> 0.0
-          + [['li T kind] ['st HP 0 T]                                 ; [Hp] = lvm_gembox (box header)
+          + [(jk tgt T 5) ['st HP 0 T]                                  ; [Hp] = lvm_gembox (box header)
               ['stsd HP 8 'f0]                                           ; [Hp+8] = the double
               ['mov A HP] ['add HP HP 16]                               ; acc = Hp (the gem ptr) ; Hp += 16
               ['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]])))   ; [Sp] = gem ; Continue (NO putfix: acc IS the gem)
@@ -1156,9 +1148,9 @@
                (id? op 'mpin) (: R (argregir tgt (argix a ps 0)) val <>>>e lp (mint 0) ht (mint 0) ms (mint 0) en (mint 0)   ; (mpin MAP k v): probe + UPDATE-in-place; a grow-due MISS -> OVF (full unwind+deopt); returns MAP
                   (bcat [(cggir tgt syms ps val) [['push A]] (cggir tgt syms ps b) [['leax 'r10 A A 1 1] ['mov A R]] (relabel mpin-ir lp ht ms en 'OVF) [['mov A R]]]))   ; v -> acc, push (spill); k -> acc; r10=tag(k); acc=MAP; probe+store (the `(pop r8)` tail pops v); acc=MAP (threaded)
                (id? op 'two?) (: z (mint 0) en (mint 0)                                       ; (two? E): is E a chain? -> 1/0, TOTAL (no deopt -- a non-chain reads 0)
-                  (bcat [(cggir tgt syms ps a) [['test A 1] ['br 'ne z] ['ld T A 0] ['li 'r8 (chainkind 0)] ['cmp T 'r8] ['br 'ne z] ['li A 1] ['jmp en] ['label z] ['li A 0] ['label en]]]))
-               (id? op 'cap) (bcat [(cggir tgt syms ps a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] ['li 'r8 (chainkind 0)] ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A 8]]])    ; <E: chain-guard -> OVF (non-chain deopts; always under two?), then acc=[E+8]
-               (id? op 'cup) (bcat [(cggir tgt syms ps a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] ['li 'r8 (chainkind 0)] ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A 16]]])   ; >E: chain-guard, then acc=[E+16]
+                  (bcat [(cggir tgt syms ps a) [['test A 1] ['br 'ne z] ['ld T A 0] (jk tgt 'r8 0) ['cmp T 'r8] ['br 'ne z] ['li A 1] ['jmp en] ['label z] ['li A 0] ['label en]]]))
+               (id? op 'cap) (bcat [(cggir tgt syms ps a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] (jk tgt 'r8 0) ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A 8]]])    ; <E: chain-guard -> OVF (non-chain deopts; always under two?), then acc=[E+8]
+               (id? op 'cup) (bcat [(cggir tgt syms ps a) [['test A 1] ['br 'ne 'OVF] ['ld T A 0] (jk tgt 'r8 0) ['cmp T 'r8] ['br 'ne 'OVF] ['ld A A 16]]])   ; >E: chain-guard, then acc=[E+16]
                ()))
          ()))
    (gargsir tgt syms ps as) (? (atom? as) () (bcat [(cggir tgt syms ps <as) [['push (greg tgt 'acc)]] (gargsir tgt syms ps >as)]))
@@ -1167,12 +1159,12 @@
    ; assemble without label collisions.
    (relabel ir lp ht ms en dp) (map (\ f (map (\ x (? (id? x 'loop) lp (id? x 'hit) ht (id? x 'miss) ms (id? x 'end) en (id? x 'deopt) dp x)) f)) ir)
    ; consir: build a chain cell (cons) on the heap -> acc. ROOM-GUARD first (Sp - Hp >= 3w + floor, else
-   ;   br OVF -> deopt, so no GC fires mid-native), then [Hp]=(chainkind 0), [Hp+8]=cap(=tmp), [Hp+16]=cup(=acc),
+   ;   br OVF -> deopt, so no GC fires mid-native), then [Hp]=the chain kind (jk), [Hp+8]=cap(=tmp), [Hp+16]=cup(=acc),
    ;   acc=Hp (an even ptr IS the value, no putfix), Hp+=3w. r9/r10 are
    ;   free scratch in the group ABI (args r3/r12-r14, anchor r11, acc r0, tmp r7, sp r1, hp r2, ip r5).
    (consir tgt) (: A (greg tgt 'acc) T (greg tgt 'tmp) S (greg tgt 'sp) HP (greg tgt 'hp)
       [['lea 'r9 HP 88] ['cmp S 'r9] '(br below OVF)                             ; room for 3w+floor; Sp < Hp+88 -> heap full -> deopt
-        ['li 'r10 (chainkind 0)] ['st HP 0 'r10]                                      ; [Hp] = chain header
+        (jk tgt 'r10 0) ['st HP 0 'r10]                                      ; [Hp] = chain header
         ['st HP 8 T] ['st HP 16 A]                                               ; [Hp+8] = cap (the popped a); [Hp+16] = cup (b)
         ['mov A HP] ['add HP HP 24]])                                            ; acc = Hp (result ptr); bump Hp by 3 words
    ; cggvir -- VALUE-mode codegen: e yields an AI VALUE (heap ptr or tagged scalar) in acc, NOT a raw int.
@@ -1216,17 +1208,17 @@
    ; H_entry; pop args; restore; putfix + Continue; OVF (mov sp,anchor -> abandon frames; restore) -> DEOPT.
    (mkouterir tgt k entry arity valt smask mmask bufmask cmask pmask)              ; valt: VALUE-typed entry (heap ptr / tagged scalar) -> store acc AS-IS, no putfix. the masks
     (: A (greg tgt 'acc) S (greg tgt 'sp) IP (greg tgt 'ip) T (greg tgt 'tmp) OVFR (govf tgt) ss (slotsz tgt)   ; partition the entry's EXTERNAL args: int (sar) / string|map|cask (kind-guard, raw) / chain (raw, no guard) / point (nom|mint-guard, raw)
-       strk (apof "") mapk (mapkind 0) bufk (apof (cask 1))                            ; the kind sentinels the raw-param guards check against
+       strk 1 mapk 2 bufk 6                                                            ; the jk slots of the kind sentinels the raw-param guards check against
        (pusharg1 i) (: o (8 * i)                                                   ; one external arg: load Sp[i] -> acc, guard by type, push
           (? (member? i cmask) [['ld A S o] ['push A]]                          ; chain: raw, NO guard (two? total; cap/cup deopt a non-chain inline)
              (member? i smask || (member? i mmask || member? i bufmask))     ; string/map/cask: a fixnum can't be a heap obj (-> OVF), and [arg]'s kind must match (-> OVF); push RAW
                (: kind (? (member? i mmask) mapk (member? i bufmask) bufk strk)
-                  [['ld A S o] ['test A 1] '(br ne OVF) ['ld T A 0] ['li 'r8 kind] ['cmp T 'r8] '(br ne OVF) ['push A]])   ; a FIXNUM (odd, br ne) deopts; then the kind word must match (br ne)
+                  [['ld A S o] ['test A 1] '(br ne OVF) ['ld T A 0] (jk tgt 'r8 kind) ['cmp T 'r8] '(br ne OVF) ['push A]])   ; a FIXNUM (odd, br ne) deopts; then the kind word must match (br ne)
              (member? i pmask)                                                     ; point key: nom OR mint, pushed RAW -- word identity IS its whole equality;
                (: pok (mint 0)                                                     ;   a charm deopts (only interp knows the numeric bridges, (2 = 2.0))
                   [['ld A S o] ['test A 1] '(br ne OVF)
-                    ['ld T A 0] ['li 'r8 (nomkind 0)] ['cmp T 'r8] ['br 'eq pok]
-                    ['li 'r8 (mintkind 0)] ['cmp T 'r8] '(br ne OVF) ['label pok] ['push A]])
+                    ['ld T A 0] (jk tgt 'r8 3) ['cmp T 'r8] ['br 'eq pok]
+                    (jk tgt 'r8 4) ['cmp T 'r8] '(br ne OVF) ['label pok] ['push A]])
              [['ld A S o] ['test A 1] '(br eq OVF) ['sar A 1] ['push A]]))    ; int: fixnum-guard (non-fixnum -> OVF), untag (sar), push
        pushargs (foldl (\ a i (bcat [a (pusharg1 i)])) () (rangeL 0 k))
        epi (? valt [['st S 0 A] ['add IP IP 16] ['ld T IP 0] ['jmpr T]]                                  ; VALUE: store acc as-is; Continue (no putfix)

@@ -38,7 +38,7 @@ static struct ai*ioputn(struct ai *g, intptr_t n, uint8_t b);
 static struct ai_bio *rbio_of(struct ai *g, struct ai_io *i);
 static uintptr_t ci_athand(struct ai *g, uintptr_t n);
 static union u *fn_unc0(union u *k);
-static void io_close(void *p);
+static void io_close(struct ai *g, void *p);
 static void p0pop(struct ai *g, uintptr_t d);
 static word *p0cur(struct ai *g, uintptr_t d);
 // ============================================================================
@@ -603,7 +603,8 @@ lvm(lvm_fungetc) {
 
 // heap-port finalizer: runs inside GC (from-space readable); fd < 0 means
 // already closed or a non-OS fd
-void io_close(void *p) {
+void io_close(struct ai *g, void *p) {
+ (void) g;
  struct ai_bio *b = p;                         // every finalized port is a bio (ai_io_alloc made it)
  intptr_t fd = ai_io_fd(&b->f.io);
  if (fd < 0) return;

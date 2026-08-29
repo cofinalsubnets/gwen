@@ -141,6 +141,8 @@
       (nif_dieof         "die-of"        1 lvm_dieof)
       (nif_coinp         "coin?"         1 lvm_coinp)
       (nif_calloutdrive  "calloutdrive"  1 lvm_calloutdrive)
+      (nif_jkoff         "jkoff"         1 lvm_jkoff)
+      (nif_natp          "nat?"          1 lvm_natp)
       (nif_calloutresume "calloutresume" 1 lvm_calloutresume)
       )
 

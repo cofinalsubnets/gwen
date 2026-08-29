@@ -1,6 +1,7 @@
 // love.c -- g, stack, gc, sys, str, sym, chain, tray. one translation unit of the runtime;
 // the shared layouts and the cross-TU seam are src/love_int.h.
 #include "love_int.h"
+#include <stddef.h>
 struct ai_chain;
 // this file's own, forward-declared so order within it does not matter.
 static bool ai_major_cell(struct ai *g, word *c);
@@ -93,7 +94,7 @@ const struct ai_mint ai_mint_zero = { .ap = lvm_sym, .code = 0 };
 enum ai_status ai_fin(struct ai *g) {
  enum ai_status s = ai_code_of(g);
  if ((g = ai_core_of(g))) {
-   for (struct ai_fz *fz = g->fz; fz; fz->fn(fz->p), fz = fz->next); // run finalizers
+   for (struct ai_fz *fz = g->fz; fz; fz->fn(g, fz->p), fz = fz->next); // run finalizers
    // the rem set and the major pool are ai_ini_0's own g->alloc calls, not room inside
    // the nursery -- a frontend that exits never misses them, one that fins to make room
    // for the next runtime gets nothing back without this.
@@ -178,6 +179,7 @@ static struct ai *ai_ini_0(struct ai*g, uintptr_t len0, void *(*al)(struct ai*, 
  g->major_base = g->major_hp = g->major_pool, g->budget = ai_budget;
  g->minor0 = ai_minor0, g->major0 = ai_major0, g->ratio = ai_gc_ratio;   // the live knobs; `tune` moves them
  g->next_wait_events = ai_wait_in;
+ jk_ini(g);
  // book + macro maps (lookup-lambdas) then the main task thread.
  if (ai_ok(g = map_new(g)) && ai_ok(g = map_new(g)) && ai_ok(g = ai_have(g, 9))) {
   union u *M = bump(g, 9);            // sp[0]=macro, sp[1]=book (no GC since ai_have)
@@ -449,7 +451,7 @@ static void major_run_finalizers(struct ai *g, struct ai_gcx *X) {
   if (lamp(fwd) && X->to_lo <= ptr(fwd) && ptr(fwd) < X->to_hi) {
    struct ai_fz *nn = bump(g, Width(struct ai_fz));
    nn->p = cell(fwd), nn->fn = fz->fn, nn->next = new_fz, new_fz = nn;
-  } else fz->fn(fz->p); }
+  } else fz->fn(g, fz->p); }
  g->fz = new_fz; }
 
 // AiGcStress's two numbers: an even poison, so a stale read faults at an address
@@ -908,6 +910,13 @@ static lvm(lvm_apof) {
  Ip += 1;
  ai_musttail return Continue(); }
 
+// (jkoff x) -> the byte offset of g->jk, so the emitter's `jk` law reads a slot as `ld r g off`
+lvm(lvm_jkoff) { ai_musttail return Answer(putcharm((intptr_t) offsetof(struct ai, jk))); }
+// (nat? f) -> 1 when f is a native closure: its cell's head is a code address of the arena
+lvm(lvm_natp) {
+ word x = Sp[0];
+ ai_musttail return Answer(putcharm(lamp(x) && code_in(g, (uintptr_t) cell(x)->ap))); }
+
 // default fd-keyed waits, conservative (all fds always-ready; multi-source wait
 // collapses to sleep) so non-multitasking frontends link without impls
 __attribute__((weak)) bool ai_ready(int fd, int events) { (void) fd, (void) events; return true; }
@@ -1008,12 +1017,15 @@ static lvm(lvm_casknew) {
  tagthread(k, Width(struct ai_cask));
  ai_musttail return Answer(word(k)); }
 
-// the W^X code arena: hosted, the malloc heap is NX, so `nat` copies emitted
-// bytes into a W^X mapping -- mmap RW, write, mprotect R+X, never write again;
-// the code address lives outside the GC pool and nat_unmap frees it when the
-// native closure dies. on inle -- one hosted-compiled binary, so the question
-// is asked at RUN TIME, a negative __ai_osv -- and on a freestanding seat,
-// RAM is executable and a heap copy runs, with no finalizer owed.
+// the native code arena: hosted, the malloc heap is NX, so the glaze installs into
+// chunks of pages of its own. a chunk is RX; an install opens just the blob's pages,
+// writes, and seals them again (W^X, never both at once). a blob is [len, pad, code..],
+// 16-aligned, so the code address is what the closure cell holds and the length word
+// behind it answers a free. the code addresses live outside the GC pool; a native
+// closure's finalizer hands its blob to the free list, and the next install of that
+// size takes it. on inle -- one hosted-compiled binary, so the question is asked at
+// RUN TIME, a negative __ai_osv -- and on a freestanding seat, RAM is executable and
+// a heap copy runs, with no finalizer owed.
 #if __STDC_HOSTED__
 // which kernel underneath: nolibc's os.c defines it (0 unprobed; 1..3 the
 // hosted kernels; negative = we ARE the kernel). weak for seats with no
@@ -1023,9 +1035,84 @@ __attribute__((weak)) long __ai_osv;
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
-size_t code_maplen(size_t codelen) {   // round the arena up to a page; glibc's sysconf is a cached auxv load, not a syscall
- long q = sysconf(_SC_PAGESIZE); size_t ps = q > 0 ? (size_t) q : 4096, need = sizeof(struct ai_str) + codelen + 1;
- return (need + ps - 1) & ~(ps - 1); }
+struct ai_code { char *base; size_t len, used; struct ai_code *next; };   // one chunk; used is its bump
+struct ai_cfree { char *p; size_t n; struct ai_cfree *next; };           // a freed blob (its whole span)
+#define CodeChunk ((size_t) 1 << 20)
+#define CodeHead (2 * sizeof(uintptr_t))
+static size_t code_round(size_t n) { return (n + 15) & ~(size_t) 15; }
+static size_t code_page(void) { long q = sysconf(_SC_PAGESIZE); return q > 0 ? (size_t) q : 4096; }   // glibc's sysconf is a cached auxv load, not a syscall
+// open [p, p+n) for writing, or seal it; page-granular, so neighbours ride along -- nothing
+// runs while an install writes, so that costs no one anything
+static int code_open(char *p, size_t n, int prot) {
+ size_t ps = code_page();
+ uintptr_t lo = (uintptr_t) p & ~(ps - 1), hi = ((uintptr_t) p + n + ps - 1) & ~(ps - 1);
+ return mprotect((void*) lo, hi - lo, prot); }
+static struct ai_code *code_chunk(struct ai *g, size_t need) {
+ size_t ps = code_page(), len = (need > CodeChunk ? need : CodeChunk);
+ len = (len + ps - 1) & ~(ps - 1);
+ void *b = mmap(0, len, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+ if (b == MAP_FAILED) return NULL;
+ struct ai_code *c = g->alloc(g, NULL, sizeof *c);
+ if (!c) { munmap(b, len); return NULL; }
+ c->base = b, c->len = len, c->used = 0, c->next = g->code, g->code = c;
+ return c; }
+// (code_install g src n): n bytes of code -> their executable address, NULL when no seat can hold them
+char *code_install(struct ai *g, char const *src, size_t n) {
+ size_t need = code_round(CodeHead + n + 1);
+ char *p = NULL;
+ for (struct ai_cfree **l = &g->cfree; *l; l = &(*l)->next)     // first fit off the free list
+  if ((*l)->n >= need) {
+   struct ai_cfree *f = *l; p = f->p;
+   if (f->n - need >= 32) f->p += need, f->n -= need;
+   else *l = f->next, g->alloc(g, f, 0);
+   break; }
+ if (!p) {
+  struct ai_code *c = g->code;
+  if (!c || c->len - c->used < need) c = code_chunk(g, need);
+  if (!c) return NULL;
+  p = c->base + c->used, c->used += need; }
+ if (code_open(p, need, PROT_READ | PROT_WRITE)) return NULL;
+ ((uintptr_t*) p)[0] = n, ((uintptr_t*) p)[1] = 0;
+ memcpy(p + CodeHead, src, n);
+ p[CodeHead + n] = 0;
+ if (code_open(p, need, PROT_READ | PROT_EXEC)) return NULL;
+#ifndef __wasm__                                                  // emscripten's clang has no clear_cache (and wasm declines before this)
+ __builtin___clear_cache(p + CodeHead, p + CodeHead + n);   // AArch64: the I-cache is not coherent with the fresh D-cache (no-op on x86)
+#endif
+ return p + CodeHead; }
+void code_free(struct ai *g, char *code) {
+ char *p = code - CodeHead;
+ struct ai_cfree *f = g->alloc(g, NULL, sizeof *f);
+ if (!f) return;                                                  // no node: the blob stays, unreachable
+ f->p = p, f->n = code_round(CodeHead + ((uintptr_t*) p)[0] + 1), f->next = g->cfree, g->cfree = f; }
+int code_in(struct ai *g, uintptr_t v) {                          // a code address of this session's arena?
+ for (struct ai_code *c = g->code; c; c = c->next)
+  if (v >= (uintptr_t) c->base && v < (uintptr_t) c->base + c->used) return 1;
+ return 0; }
+size_t code_len(char *code) { return ((uintptr_t*) code)[-2]; }
+// the image lane: a packed segment of blobs becomes a chunk of its own, sealed for the
+// session -- image code is text, nothing frees it
+char *code_adopt(struct ai *g, char const *src, size_t n) {
+ size_t ps = code_page(), len = (n + ps - 1) & ~(ps - 1);
+ void *b = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+ if (b == MAP_FAILED) return NULL;
+ memcpy(b, src, n);
+ if (mprotect(b, len, PROT_READ | PROT_EXEC)) { munmap(b, len); return NULL; }
+#ifndef __wasm__
+ __builtin___clear_cache((char*) b, (char*) b + n);
+#endif
+ struct ai_code *c = g->alloc(g, NULL, sizeof *c);
+ if (!c) { munmap(b, len); return NULL; }
+ c->base = b, c->len = len, c->used = len, c->next = g->code, g->code = c;   // used = len: the tail is nobody's
+ return b; }
+#else
+// freestanding: RAM runs as it is; blobs live in the heap (lvm_nif) and an image's segment in the allocator
+int code_in(struct ai *g, uintptr_t v) { (void) g, (void) v; return 0; }
+void code_free(struct ai *g, char *code) { (void) g, (void) code; }
+char *code_adopt(struct ai *g, char const *src, size_t n) {
+ char *b = g->alloc(g, NULL, n);
+ if (b) memcpy(b, src, n), __builtin___clear_cache(b, b + n);
+ return b; }
 #endif
 
 // ============================================================================

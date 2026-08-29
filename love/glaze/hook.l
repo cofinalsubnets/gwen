@@ -167,14 +167,3 @@
                                   (: _ (? (getenv "LOVE_AMBLE_TRACE2") (puts ("amble-DECLINE: " + (show s) + "\n")) 0) e)))))))))))))))   ; the decline trace (forensics: what the last lane passed on)
       natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope
    (fired? n) (n < (peep fires () 0)))                ; did the hook fire since count n? (outer, leaked with natjit/fires)
-
-; `bake` is a NIF (src/image.c). Wrap it so the glaze's memo cache -- native closures whose ap
-; is a W^X mmap address, which cannot serialize -- empties before the snapshot. The cache is the
-; glaze's, so the wrapper is the glaze's: it closes over the tablet DIRECTLY and reads no `book`,
-; which is what lets it ride into a baked image (where `book` is sealed) and still flush. The
-; the bake VERB has its own flush in src/main.c on the way past; this is the door for love code
-; calling (bake p) -- the image recipes in crew/build.mk, test/gate/fixpoint.sh, test/host/bake.l.
-; ⚠ its own top-level form, so the sequence law gives `b0` the NIF: inside the leaking `:` above,
-; `bake` would be the enclosing letrec's own unfilled binding.
-(: bake (: c ((from 'glaze) 'cache) b0 bake
-            (\ p (: _ (map (\ k (pull c k 0)) (keys c)) (b0 p)))))

@@ -770,8 +770,7 @@ union u const numap_drive[] = { {lvm_ap}, {.ap = ap_next}, {.ap = lvm_ret0} };
 // point, so control returns entirely through Continue() tail-jumps -- no C frame is
 // pinned across the sub-run, so a deep callee grows the VM stack, never the C stack.
 union u const callout_drive[] = { {lvm_ap}, {.ap = lvm_ret0} };
-// (calloutdrive x) -> the drive's address as a fixnum: a data-segment const, so the
-// glaze emitter's baked `li Ip` immediate survives an image reload (unlike a W^X pointer)
+// (calloutdrive x) -> the drive's address as a fixnum (a probe; a native reads it off g->jk)
 lvm(lvm_calloutdrive) { ai_musttail return Answer(putcharm((intptr_t) callout_drive)); }
 // the walkable resume: v1's RET was a stack-interior pointer, which a collection
 // with a call-out pending fed to gcp. here the frame is [arg, clos, tag(bb - entry),
@@ -779,6 +778,12 @@ lvm(lvm_calloutdrive) { ai_musttail return Answer(putcharm((intptr_t) callout_dr
 // blob's raw out-of-pool base, and lvm_resume jumps base+offset. relocation-safe.
 static union u const callout_resume[] = { {lvm_ap}, {.ap = lvm_resume} };
 lvm(lvm_calloutresume) { ai_musttail return Answer(putcharm((intptr_t) callout_resume)); }
+// the addresses a native reads off g (love_int.h's JkX): the kind sentinels its guards
+// compare against and the two drives -- a blob carries none of them, so it rides an image
+void jk_ini(struct ai *g) {
+ g->jk[JkChain] = (word) lvm_chain, g->jk[JkStr] = (word) lvm_str, g->jk[JkMap] = (word) lvm_map_lookup;
+ g->jk[JkNom] = (word) lvm_nom, g->jk[JkMint] = (word) lvm_sym, g->jk[JkGem] = (word) lvm_gembox;
+ g->jk[JkCask] = (word) lvm_cask, g->jk[JkDrive] = (word) callout_drive, g->jk[JkResume] = (word) callout_resume; }
 
 // ============================================================================
 // the lisp help calling convention

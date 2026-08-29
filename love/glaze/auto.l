@@ -1303,7 +1303,7 @@
    ; they are =). The transparent form of a hot-trigger: an execution-count trigger
    ; would need a counting wrapper, but a wrapper is not =/show its source; so the
    ; trigger is "compile on first request, cached after". Loops stay eager (their
-   ; one application is internally hot). ⚠ pins natives (W^X + arenas) for the run.
+   ; one application is internally hot). pins natives for the run.
    cache (tablet 0)
    (memo e mk) (: g (peep cache e 0) (? g g (: h (mk e) _ (pin cache e h) h)))
    ; auto-ev: a WHOLE-FORM lambda -> native (cached), else the base interpreter. (The

@@ -239,9 +239,8 @@ int image_bake(struct ai *g) {
   struct ai_image_guard gd = image_guard(&segs);
   uintptr_t len = 0;
   void *buf = ai_image_save(g, &len, &gd);
-  // the codec silently reverts any would-be-dead native reference to the bytecode
-  // twin the cell carries (ai_image_redir); the bake stays correct, so there is
-  // nothing to announce. only a refused bake (below) is worth a word.
+  // the natives ride: their code is a segment of the image, woken as a chunk of the
+  // arena. only a refused bake (below) is worth a word.
   if (!buf) return -2;
   // ai_baked_image_len is patched by FILE offset, and the offset comes from the running
   // program's own phdrs (dl_iterate_phdr, first object) -- the one place a live address
@@ -275,9 +274,7 @@ int image_bake(struct ai *g) {
 // stack's objects ride into the blob as wake-unreachable ballast and the load side
 // resets sp/ip, so `love wake path prog.l ..` boots a session carrying every global
 // this one had pinned (an app baked warm: the mooncc image erases its per-run load).
-// natives cannot serialize -- the glaze's own bake wrapper (love/glaze/hook.l) empties its cache
-// first (they re-JIT lazily in the woken session); any other live native closure at
-// bake time is on the caller. answers 1 | ().
+// a live native closure rides too -- its code is bytes the image carries. answers 1 | ().
 // the frame-heavy body lives in a plain helper: path[4096] + &len escape (to
 // fopen / ai_image_save_) and pin the frame, which would defeat the lvm_ ap's
 // tail-jump (make vmret). the helper runs after Pack(g), on g->sp; the wrapper

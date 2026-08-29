@@ -27,13 +27,17 @@ relocation tables. Every pointer-bearing word is RANGE-encoded in place:
 - **heap pointer** → a byte offset into the blob;
 - **an `lvm_` ap** → `hb + 2·idx`;
 - **an immortal** → `hb + 2·NLVM + 2·ii`;
+- **a native's code** → `CodeBase + 2·offset`, its place in the code segment;
 - **a binary pointer** → absolute, ≥ TBOUND.
 
 Even-vs-odd separates pointer from fixnum, so the load re-derives relocation by re-walking.
 Thread sizing at load scans the encoded terminator (`off·8+2`, unique since object starts are
 8-aligned), not `ttag`.
 
-File = header + dictionary + **token stream**. The encoded words are wildly repetitive — half an
+File = header + dictionary + **token stream** + the **code segment**: the live natives' blobs
+packed in walk order, mapped executable at wake as a chunk of the code arena before the decode
+walk names them. A blob holds no address of the binary — the kind sentinels and the callout
+drives it needs are read off `g->jk` — so the bytes are the same under any base. The encoded words are wildly repetitive — half an
 image is 25 distinct words, and the commonest single one is `lvm_chain`'s index at 23%, the `ap`
 every pair wears — so each rides as one byte naming one of the 248 commonest, or as an escape
 naming its own width. 3.8x off the file; the wake expands into the pool and then decodes there in
@@ -109,8 +113,8 @@ same law from the other side: a bake pins neither, so their bare reads cannot fo
 
 The glaze bake is the corpus eval, not a split assert-free lib: `bake` evals the glaze
 (emit.l+auto.l) before dumping, and the asserts' transient natives die in `gen_major`. emit.l's
-self-test fixtures are local (they would otherwise leak as globals) and auto.l's `memo` cache is
-cleared pre-dump.
+self-test fixtures are local (they would otherwise leak as globals); what survives, `memo`'s
+natives included, rides the image as code.
 
 ## the live bake
 
@@ -133,10 +137,8 @@ Three seams make mid-eval dumping honest where the boot bake could assume purity
   node's BLOB copy with a `(() . ())` chain of the same width; `fz` lives outside the serialized
   `v0..end` root window, so the woken session starts with no finalizables. The dump-time fds
   meant nothing in the new process anyway.
-- **The glaze cache is emptied first.** The `bake` global is a glaze wrapper
-  (love/glaze/hook.l) over the host nif (src/image.c, the AiNif glob): a native closure cannot
-  serialize, and entries re-JIT lazily in the woken session. Any OTHER live native at bake time
-  is on the caller — the same contract as the boot bake.
+- **Natives ride.** A live native closure's cell names its code by the code rung, and the
+  blob is bytes in the segment; the woken session runs it without a compile.
 
 Smoke: test/host/bake.l (`test_hostnif`) round-trips a pinned marker through `bake` + `wake`
 in a child process.
