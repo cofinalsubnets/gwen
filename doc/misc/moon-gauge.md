@@ -357,6 +357,53 @@ inf_run/inf_build, snap's img_hashcons head the lists). Spot-verified in the for
 likewise. Neither needs SSA either: a span-local invariance pass over the flat forms
 is the same shape as this oracle.
 
+## where the corpus gap sits (2026-08-28, per symbol)
+
+The target row read directly: `doc/misc/proto/ccattr/` -- perf cycles on the corpus
+under the mooncc-built and gcc-musl-built love (ccbench's own lanes, static musl both),
+three interleaved runs each, per-symbol samples. 13,743 vs 11,753 samples (1.169×, the
+ccbench row); inlining differences hold 1.0%/0.6% of samples, so the ratios are sound.
+
+| symbol | mooncc | gcc | excess | ratio |
+|---|---:|---:|---:|---:|
+| lvm_cur | 1,353 | 902 | +451 | 1.50× |
+| lvm_eq | 860 | 419 | +441 | 2.05× |
+| am_dgmul | 267 | 77 | +190 | 3.47× |
+| lvm_unc | 676 | 515 | +161 | 1.31× |
+| lvm_tapn | 580 | 432 | +148 | 1.34× |
+| gcp | 529 | 408 | +121 | 1.30× |
+| lvm_qap | 326 | 227 | +99 | 1.44× |
+| lvm_argcap | 402 | 311 | +91 | 1.29× |
+| lvm_ret | 396 | 312 | +84 | 1.27× |
+| map_probe | 290 | 219 | +71 | 1.32× |
+
+**The top ten hold 93% of the whole excess** (+1,857 of +1,990), and two functions hold
+45%. mooncc wins some (lvm_argcup 0.69×, lvm_link 0.39×, lvm_argap 0.84×). The shapes,
+from the disassemblies side by side:
+
+- **lvm_eq 2.05×**: its hottest line (30% of the fn) is `movzbq (%rsp),%rax; test` -- the
+  `bool r` local lives in a CELL (`bool` is not lhomable; only int/uint/long/ptr are), so
+  the eq bit is stored as a byte and reloaded on the musttail path. Around it the bool
+  re-canonicalizes (`sete; movzbq; test; setne; movzbq`) though a `set` is already 0/1
+  -- a clean-width fact rezx does not track. The tag tests reload the object's head word
+  and re-materialize `la lvm_sym` four times where gcc holds them (the oracle's G-load
+  rows, live). Every exit reloads Sp/Ip/Hp from frame slots and restores r12/r13
+  before the `jmpq *%rax`; gcc's hot path is register moves.
+- **lvm_cur 1.50× (70 insns vs 38)**: four dead constant materializations at entry
+  (`li r9 1; li r0 0; li r0 1; li r13 4`), the GC bound computed as `r13=4; +2; ×8; +0x40`
+  where gcc has `lea 0x70(%rdx)`, a frame with two cs saves/restores that gcc's
+  register-only version never needs.
+- **am_dgmul 3.47×** (the decimal digit loop, 84 vs 56 insns): the one non-VM row.
+
+So the gap is not dispatch density and not the residency layer: it is frame and
+cs traffic on musttail exits, byte-wide locals kept in cells, repeated tag loads and
+address rematerialization, and constant folds lost across seats -- all in ten functions.
+The levers this names, cheapest first: bool/char locals homable under the canonical-ext
+discipline (lvm_eq's hottest line); a clean-width fact for `set` results in rezx; the
+post-repack copy fold (the G-load rows); a look at why lvm_cur's entry constants survive
+deaddef and cfoldir. Each is priced by re-running this attribution on the two functions
+it names, then the corpus row.
+
 ## how to measure
 
 - `make -C bench ccnif` per gen.l edit (~20 s, no runtime in the loop); one quiet
