@@ -481,6 +481,16 @@
    ; is free-LOOKING in a weave re-analysis surface, wire-resolved in truth -- never a gn candidate.
    ; lams = the scope's lambda-sibling list ((name . cell)..): a cell holds (entry . import-names),
    ; lz's frozen site.
+   ; adrv?: does e contain a DRIVER call -- a self-call or an applied frame/loop name? the
+   ; non-loop cost gate: a body whose only calls go to resolvable globals is a one-shot
+   ; wrapper (its compile is nearly always a waste); a body that drives a parameter (a
+   ; walker's f) or itself amortizes like a loop.
+   (adrv? env sf e)
+    (? (aquote? e) 0
+       (two? e) (: op <e
+          ((name? op && (id? op sf || (member? op env && two? >e)))
+           || (foldl (\ a x (a || adrv? env sf x)) 0 >e)))
+       0)
    (njit-amble s a e gv farq lams nm tgt)
     (: ps (init >s)  M (last >s)
        lp (amble-loop M)
@@ -508,9 +518,9 @@
                !(simp = (take ni ps)) 0
                nm)
        sfq  !(id? self 0)
-       ; the free-head seams, LOOP BODIES ONLY (the cost gate: a loop amortizes the drive taxes
-       ; over its jump + owned ops; a one-shot call wrapper -- (\ t k (peep t k ())) and kin --
-       ; is pure overhead ambled). the SELF seam below is separate and rides any body.
+       ; the free-head seams: LOOP bodies, and (drok) bodies that drive a param or themselves
+       ; -- the shapes that amortize the call and compile taxes. a one-shot wrapper whose only
+       ; calls go to globals -- (\ t k (peep t k ())) and kin -- stays bytecode.
        ; GLOBALS (v4): a free head that is NOT farq resolves via gv at COMPILE and rides an
        ; extras slot -- redefinition-stale, exactly the callout lanes' bet. a farq name (a
        ; letrec local the weave RE-analysis dropped from the import row) must never gv-resolve:
@@ -522,20 +532,22 @@
        ; extras slot and the call curries entry(imports.. args..). fixcaps' pour guarantees the
        ; import names sit in this frame; entry 0 (a forward/self ref, lz's backpatch case) or a
        ; stray import just isn't in cn -> amble-ok? declines that body.
-       cand (? lp (filter (\ f !(id? f self)) (foldl (\ ac i (aheads env go i ac)) (aheads env go body ()) inits)) ())
-       csx  (map (\ f [f (? (farq f)                       ; only a letrec-local can be a sibling: farq (a cheap chain peep) gates
+       cand (filter (\ f !(id? f self)) (foldl (\ ac i (aheads env go i ac)) (aheads env go body ()) inits))
+       drok (? lp 1 (? (two? cand) (adrv? env self body) 1))   ; the non-loop cost gate: free heads ride only a body that drives a param
+                                                               ; or itself -- and a declining body skips the resolution below entirely
+       csx  (? drok (map (\ f [f (? (farq f)                 ; only a letrec-local can be a sibling: farq (a cheap chain peep) gates
                               (: lfd (assoc f lams)          ; the lam-list assoc. the cell READ mirrors ev.l's cof: box slot 0.
                                  (? (two? lfd) (peep >lfd 0 0) 0))
                               0)])
-                 cand)
+                 cand) ())
        cgood (filter (\ p (: cc <>p                     ; import names must be FRAME params (ps, where fixcaps pours them) --
                              (two? cc && <cc && all (\ x (member? x ps)) >cc))) csx)   ; never loop vars (bytecode reads the propagated capture)
        cn    (map cap cgood)
        cvals (map (\ p <<>p) cgood)
        (cimp f) ><>(assoc f cgood)
-       gps  (filter (\ p (lit? <>p))
+       gps  (? drok (filter (\ p (lit? <>p))
              (map (\ f [f (gv f 0)])
-              (filter (\ f !(farq f)) (filter (\ f !(member? f cn)) cand))))
+              (filter (\ f !(farq f)) (filter (\ f !(member? f cn)) cand)))) ())
        gn   (map cap gps)
        gvals (map caup gps)
        qs   (foldl (\ ac i (aq i ac)) (aq body ()) inits)   ; the quoted-datum constants (id?-deduped source nodes)
@@ -547,7 +559,7 @@
        lpok (? lp ((all name? vars) && (adistinct vars) && (k = (tally inits))
                    && !(member? go vars) && !(member? go ps)) 1)
        ok ((two? s) && (two? >s) && (all name? ps) && (adistinct ps)
-           && (a = (tally ps)) && (0 < a) && lpok && (two? body)
+           && (a = (tally ps)) && (0 < a) && lpok && drok && (two? body)
            && (? (getenv "LOVE_AMBLE_NOCALL") !(ahascall? env go body) 1)              ; the call-lane bisect knob (forensics: splits call machinery from the rest)
            && (all lit? gvals) && (nd < 48) && ((k + (tally gn) + (tally cn) + nq) < 48)   ; slots are cheap once the prologue GUARDS the room (below)
            && (all (\ i (amble-ok? ps kn 0 0 0 i)) inits)
