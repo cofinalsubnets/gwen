@@ -1406,7 +1406,7 @@
    ; its bare (recipe ..) (cook-all 0) (ticket 0) only resolve on the module walk. one
    ; (use 'cook), at the one place that needs it -- a caller just needs the closure.
    (cook-main as)
-   (: _ (? (lit? (from 'cook)) (use 'cook) 0)   ; splice my registered self if I am one (the module
+   (: _ (? !(nil? (from 'cook)) (use 'cook) 0)  ; splice my registered self if I am one (the module
                                                 ; path); riding a cat, my names already walk -- the
                                                 ; presence guard keeps the loader out of it
       opt (parse-args as)

@@ -337,7 +337,7 @@ usage: kiosko [-p PORT] [-q] [DIR]
                 (quit 0))
    (need h r) (atom? r ? (say err $ "kiosko: " + h + " needs an argument\n", quit 2))
    (kiosko-main as)
-   (: _ (? (lit? (from 'kiosko)) (use 'kiosko))   ; splice my registered self if I am one (cook-main's
+   (: _ (? !(nil? (from 'kiosko)) (use 'kiosko))  ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
       box {'port 8080 'root "."}
       (loop (w . r))

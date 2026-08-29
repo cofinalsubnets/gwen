@@ -14,7 +14,7 @@
 ; (content of the forms is cskeep's charge at emission; this leg types the WIRING.)
 
 (: ovck (from 'overlay 'ov-check)
-   _ (? (lit? ovck) 0 (: _ (puts ";; moon-stage: no overlay module in this love") (quit 1)))
+   _ (? !(nil? (from 'overlay)) 0 (: _ (puts ";; moon-stage: no overlay module in this love") (quit 1)))
    stage-dies '(gst ir-vreg ir-chosen ir-nolab ir-noframe ir-jmpfix ir-final ir-emitted)
    (stage-join x y) (? (= x y) x 'top)
    (stage-tr op x y) 'top

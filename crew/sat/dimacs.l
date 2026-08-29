@@ -4,8 +4,8 @@
 ; (eps/lit/span/alt/seq/seqs/skip/many/runp) with cook; here we add only a signed-int LEAF `pint` (love
 ; has no regex) and the grammar. `dimacs text` -> (formula . nvars): skip `c` comment lines, read the
 ; `p cnf N M` header for N, parse the body integers, split them into clauses at each terminating 0.
-; Standalone (parse self-tests below); when loaded AFTER crew/sat/sat.l it also self-tests parse->solve via
-; `cdcl`. Run: out/host/love crew/sat/dimacs.l   (or: cat crew/sat/sat.l crew/sat/dimacs.l | out/host/love).
+; The self-tests below read `cdcl` for the parse->solve leg, so this file is run BEHIND the solver:
+; cat crew/sat/sat.l crew/sat/dimacs.l | out/host/love.
 ; the combinators (love/peg.l) -- its own top-level form; this reader is all lenient `runp`.
 (use 'peg)
 
@@ -53,17 +53,16 @@ p cnf 3 3
     (: r (dimacs "p cnf 100 1
 	42	-99	0
 ")  ((= 100 >r) && (= '((42 -99)) <r))))
- ; -- integration self-test (only when crew/sat/sat.l is loaded first, so `cdcl` is bound) --
- _ (? (lit? cdcl)
-      (assert
-       (: r (dimacs "p cnf 3 3
+ ; -- integration self-test. `cdcl` is crew/sat/sat.l's, and this file is CATTED after it --
+ ; a name that is not there is missing at compile, so no predicate can stand in front of one.
+ _ (assert
+     (: r (dimacs "p cnf 3 3
 1 2 0
 -1 3 0
 -2 -3 0
 ") f <r nv >r m (cdcl f nv) (!(id? m 'unsat) && sat? m f))   ; SAT -- model checks
-       (id? (cdcl <(dimacs "p cnf 1 2
+     (id? (cdcl <(dimacs "p cnf 1 2
 1 0
 -1 0
 ") 1) 'unsat))                                                             ; (x)(-x) -> UNSAT
-      1)
- _ (say err (+ "crew/sat/dimacs: ok -- DIMACS reader (parser combinators)" (+ (? (lit? cdcl) " + parse->solve" "") "\n"))))
+ _ (say err "crew/sat/dimacs: ok -- DIMACS reader (parser combinators) + parse->solve\n"))
