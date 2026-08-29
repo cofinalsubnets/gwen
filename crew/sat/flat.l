@@ -38,16 +38,10 @@
 ; the conf caller pre-ensures arena room (aru+nv+3 words) and node room (wnu+4): the
 ; kernels never grow a cask.
 (:
-   ; --- 8-byte word slots, low 4 bytes live: the host's word nifs (src/mem.c,
-   ; module 'mem -- (from 'mem) answers () off a host, so presence is an ordinary
-   ; read), the byte path as the portable twin -- picked once at bind time --------
-   memw (from 'mem)
-   getw (? (lit? memw) (memw 'peepw)
-           (\ c i (: b (8 * i) (peep c b 0 | ((peep c (b + 1) 0 << 8) | ((peep c (b + 2) 0 << 16) | (peep c (b + 3) 0 << 24)))))))
-   putw (? (lit? memw) (memw 'pinw)
-           (\ c i v (: b (8 * i)
-                       _ (pin c b (v & 255)) _ (pin c (b + 1) ((v >> 8) & 255))
-                       _ (pin c (b + 2) ((v >> 16) & 255)) (pin c (b + 3) ((v >> 24) & 255)))))
+   ; --- 8-byte word slots, low 4 bytes live: the host's word nifs, src/mem.c's
+   ; module 'mem. the host glob and k_host_c both carry it, so they are here -----
+   getw (from 'mem 'peepw)
+   putw (from 'mem 'pinw)
    (enc l) (? (l < 0) (1 + (2 * (0 - l))) (2 * l))          ; signed literal -> encoded
    ; --- the layout, from nv (twins recompute these from fx w3) --------------------
    (lvo-of nv) (8 + (nv + 1))
@@ -682,15 +676,14 @@
        (say j "0\n"))
    ; the seam itself, bound ONCE, through the MODULE: main.c's seal pulls `nif` off the book on
    ; every boot -- the glaze folded it into its closures and keeps it as a member, so this is the
-   ; one door left. no glaze answers () and (() 'nif) is 1, which `lit?` below declines: the guard
-   ; is the presence test. a local, so those guards read a binding and never a name.
+   ; one door left.
    nifseam (from 'glaze 'nif)
    (fnif ir fb ar)                                          ; assemble + install one kernel (fb = the honest twin)
     (: bs (peep ((from 'holo 'assemble) 'amd64 ir) 'bytes 0)   ; through the registry accessor -- holo's whole public surface
        c (cask bs)                                           ; the charlist lane fills in C
        (nifseam c fb '(\ q (q)) ar))
    (fbcpk nv)                                               ; -> (bcp conf dec), or () when they can't build
-    (? !(lit? nifseam && id? love-arch 'amd64) ()
+    (? !(id? love-arch 'amd64) ()
        (: hit (peep fkers nv ())
           (? (two? hit) hit
              (: ks [(fnif (fbcp-ir nv) fbcp3 3)
@@ -699,7 +692,7 @@
                 _ (pin fkers nv ks) ks))))
    bvkers (tablet 0)                                        ; NB -> (fbvag), the grow-step kernel, one assemble per bucket
    (fbvagk NB2)
-    (? !(lit? nifseam && id? love-arch 'amd64) ()
+    (? !(id? love-arch 'amd64) ()
        (: hit (peep bvkers NB2 ())
           (? (two? hit) hit
              (: ks (fnif (fbvag-ir NB2) fbvag3 4 >< ())
