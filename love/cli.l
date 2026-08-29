@@ -22,8 +22,10 @@
     cli2
  (trap (\ x
  (: (cli-leave c) (scare 'cli-leave c)
-    (load1 p) (open p "r" @ '() (say err $ "love: cannot open " + p, cli-leave 1)
-                            x (reads x))
+    ; a TEST, not a match on (): a refusal answers -errno and no negative
+    ; matches the empty pattern
+    (load1 p) (: q (open p "r")
+                 (? q (reads q) (say err $ "love: cannot open " + p, cli-leave 1)))
     (eval1 s) (: m (nom 0)                           ; a fresh nom: the unfinished shape, id?-safe
        (rdl x acc) (sound x @ 'torn      m           ; every top-level datum off the string, in order
                                (a . b)  (rdl b (a . acc))

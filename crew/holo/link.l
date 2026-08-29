@@ -1333,11 +1333,17 @@
    ; unlink is what a linker does for this: the live process keeps the old inode
    ; and the new bytes land on a fresh one. it also means an output that cannot be
    ; opened is ABSENT rather than stale, so the next build makes it again.
+   ; -> bytes written | a negative errno, as copyfile answers. the errno is
+   ; `open`'s own and passes straight through; the CALLER names itself in the
+   ; sentence a reader gets, so a program that could not write its output says so
+   ; and stops rather than reporting the build it did not do.
+   ; ⚠ test it as (n < 0), never for truth: a zero-byte write is falsy too.
    (ld-write path ps)
     (: _ (unlink path)
        q (open path "w")
-       (go l) (? !(two? l) (close q)
-                 (say q (: p <l (string? p ? p (cask p))),
-                  go >l))
-       (go ps)))
+       (go l n) (? !(two? l) (: _ (close q) n)
+                   (: p <l
+                      _ (say q (string? p ? p (cask p)))
+                      (go >l (n + #p))))
+       (? q (go ps 0) q)))
 ) ; module 'holo

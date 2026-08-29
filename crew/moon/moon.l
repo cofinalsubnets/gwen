@@ -912,7 +912,8 @@
        ; the EI_OSABI = 9 brand (rung UV3) is ldlink's now, laid where the header is
        ; made -- this driver used to lay it and kore's `ld` did not, which made two
        ; doors over one linker write two different files.
-       _ (ld-write dst ps)
+       nw (ld-write dst ps)
+       _ (? (nw < 0) (udie 1 ("cc: cannot write " + dst + " -- errno " + show (0 - nw))) 0)
        (chmod dst 493))
    usage "usage: mooncc [-c] [-pie] [-x c] [-t x64|arm64] [-os linux|none|freebsd] [-Ttext addr] [-Tdata addr] [-I dir] [-D name[=val]] [-freadme=F] [-o out] in.c|in.o|lib.a|- .."
    ; a flag's numeric argument: 0x.. hex or decimal (-Ttext 0x80000000)

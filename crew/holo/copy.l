@@ -154,6 +154,7 @@
           _ (? (two? r) 0 (oc-die ("cannot open " + src)))
           s <>r
           w (oc-read src s)
-          _ (ld-write dst (? (fmt = "ihex") (oc-ihex s <w <>w) (oc-bin s <w)))
+          nw (ld-write dst (? (fmt = "ihex") (oc-ihex s <w <>w) (oc-bin s <w)))
+          _ (? (nw < 0) (oc-die ("cannot write " + dst + " -- errno " + show (0 - nw))) 0)
           (quit 0))))
 ) ; module 'holo

@@ -261,9 +261,9 @@ lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  ai_musttail return Push(_res); }
 
 op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : zero)   // (charm? x): a fixnum -- a charm, the tagged odd word
-// (nil? x): the falsy predicate, (= 0 ($ x)) without the clamp. the single
-// truthiness oracle: `?`, zerop and aall all consult ai_nilp, so the feel pass
-// can drop a zerop wrapper.
+// (nil? x): the falsy predicate, ($ x <= 0) -- every negative is nil, not just
+// the zero point. the single truthiness oracle: `?`, zerop and aall all consult
+// ai_nilp, so the feel pass can drop a zerop wrapper.
 op11(lvm_nilp, ai_nilp(g, Sp[0]) ? putcharm(1) : zero)
 
 // unary math nif: numeric arg → double, call fn, box the rank-0 f64 result.

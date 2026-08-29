@@ -1339,8 +1339,9 @@ AiNif("swig", nif_swig);
 // both gate on the name, so the registration below is the whole wiring.
 
 // mode is a l string; only the first byte is consulted: r read, w truncate-or-
-// create, a append-or-create. every refusal (unknown mode, open(2) failure)
-// flattens to -1, which is what the door has always answered.
+// create, a append-or-create. an unknown mode is misuse and answers -1; open(2)
+// answers -errno, so the caller that cares can tell ETXTBSY (relinking a binary
+// that is running) from ENOENT rather than reading one word for every refusal.
 static int call_open(struct ai_str *pv, struct ai_str *mv) {
   if (mv->len == 0) return -1;
   int flags;
@@ -1349,18 +1350,26 @@ static int call_open(struct ai_str *pv, struct ai_str *mv) {
     case 'w': flags = O_WRONLY | O_CREAT | O_TRUNC; break;
     case 'a': flags = O_WRONLY | O_CREAT | O_APPEND; break;
     default: return -1; }
-  return open(pv->bytes, flags, 0644); }
+  int fd = open(pv->bytes, flags, 0644);
+  return fd < 0 ? -errno : fd; }
 
-// (open path mode) -- a heap port (closed on GC) or the zero point on failure.
+// (open path mode) -- a heap port (closed on GC), or a NEGATIVE fixnum: -errno
+// from open(2), -1 for misuse (a non-string argument, an unknown mode). the
+// value-op convention at the head of this file. ⚠ a success test reads the same
+// as it did against the zero point: nil? is ai_nilp, which is (net <= 0), and ?
+// is (net > 0), so every negative is falsy to BOTH. what a negative does not do
+// is MATCH the pattern (), so a caller that spells its failure arm as a literal
+// () rather than a test sees an errno as a port.
 static lvm(lvm_open) {
+  long rc = -1;
   if (!ai_strp(Sp[0]) || !ai_strp(Sp[1])) goto fail;
   struct ai_str *pv = (struct ai_str*) Sp[0];
   struct ai_str *mv = (struct ai_str*) Sp[1];
   int fd = call_open(pv, mv);
-  if (fd < 0) goto fail;
+  if (fd < 0) { rc = fd; goto fail; }
   Pack(g);
   struct ai *r = ai_io_alloc(g, fd);
-  if (!ai_ok(r)) { close(fd); goto fail; }
+  if (!ai_ok(r)) { close(fd); rc = -ENOMEM; goto fail; }
   g = r;
   Unpack(g);
   // stack: [port, path, mode, ...] -> [port, ...]
@@ -1369,7 +1378,7 @@ static lvm(lvm_open) {
   Ip += 1;
   ai_musttail return Continue();
  fail:
-  Sp[1] = ZeroPoint;
+  Sp[1] = putcharm(rc);
   Sp += 1;
   Ip += 1;
   ai_musttail return Continue(); }

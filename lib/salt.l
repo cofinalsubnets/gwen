@@ -24,9 +24,13 @@
  ; is the presence test. `sound` answers three ways -- the datum consed onto the
  ; rest, () at a clean end, `torn` on a dropped paren -- so ask two?, never spin.
  (salt-file path c)
-  (open path "r" @ () c q (: t (slurp q)
-                              (go x) (sound x @ (d . u) (two? d && name? <d && pin c <d >d, go u))
-                            (go t, close q, c)))
+  ; a TEST, not a match on (): a refusal answers -errno and no negative matches
+  ; the empty pattern
+  (: q (open path "r")
+     (? !q c
+        (: t (slurp q)
+           (go x) (sound x @ (d . u) (two? d && name? <d && pin c <d >d, go u))
+         (go t, close q, c))))
 
  ; --- the door --------------------------------------------------------------
  ; HOME, not the seat: /usr/bin/love seats at /usr and nobody's settings live in
