@@ -3935,6 +3935,25 @@
                           (: k2 (op = 'rol ? ((W - k) % W) k) u (uns v) p (k2 2)   ; ror, rol = ror W-k
                              (wrap ((u // p) + ((u % p) * ((W - k2) 2))))))
        (shk? op k) (charm? k && 0 <= k && k < (op = 'ror4 ? 32 W))
+       ; a CONSTANT DIVISION -> [k] | (), and () wherever the machine would TRAP and
+       ; so must be left standing: a zero divisor, and signed INT_MIN / -1, whose
+       ; quotient is not a word. the arithmetic is cfold's and icfold's, which have
+       ; folded these since the parser -- `//` truncates toward zero, which is C's /
+       (dvk op a b)
+        (: sg (member? op '(div rem))
+           x (? sg a (uns a)) y (? sg b (uns b))
+           (? (y = 0) ()
+              (sg && (a = (0 - H)) && (b = -1)) ()
+              [(wrap (? (member? op '(div udiv)) (// x y) (x - ((// x y) * y))))]))
+       ; ⚠ AN UNFOLDABLE ANSWER IS NO ANSWER. the alu arm may keep its original op
+       ; when `fold?` declines the value, because that op writes only d -- a division
+       ; writes r0..r3, so keeping one having invalidated d alone would leave three
+       ; stale knowns. so foldability rides in here, and the arm's guard reads it
+       (dvfold rg op f)
+        (: a (rv rg <>>f)
+           b (? (charm? <>>>f) [1 (wrap <>>>f)] (rv rg <>>>f))
+           k (? (kn? a && kn? b) (dvk op <>a <>b) ())
+           (? (two? k && fold? <k) k ()))
        ; the one-register rewrites: negate, complement, the sign/zero extensions from 8/16/32
        (unop op v) (op @ 'neg (wrap -v) 'not (-v - 1)
                          (: n (op @ ('sx1 || 'zx1) 8 ('sx2 || 'zx2) 16 32)
@@ -4051,6 +4070,16 @@
                                (go r 1 cur rg sl ce ci ([op d a <>bk] . acc)))
                            (: _ (defr ci rg sl ce d)
                               (go r 1 cur rg sl ce ci (f . acc))))))
+                 ; a division both of whose operands are known folds to its answer, and
+                 ; the machine div goes with it -- so only d is written, not the r0..r3
+                 ; the instruction would have clobbered. an UNFOLDABLE one is not
+                 ; handled here at all: it falls through to the default, which reads
+                 ; divops off rdsp and invalidates that clobber set properly
+                 (member? op divops && two? (dvfold rg op f))
+                  (: d <>f k <(dvfold rg op f)
+                     _ (defr ci rg sl ce d)
+                     _ (rset rg d [1 k])
+                     (go r 1 cur rg sl ce ci (['li d k] . acc)))
                  (member? op '(shl shr sar rol ror ror4))   ; the 2-operand immediate shifts/rotates
                   (: d <>f k <>>f dk (rv rg d)
                      _ (defr ci rg sl ce d)
