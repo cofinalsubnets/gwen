@@ -421,6 +421,7 @@ static char const src_glaze[] =
   ")"
   "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))"
 #include "hook.h"
+#include "walk.h"
   ,
   // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
   // module book) and the natjit hook cleared. the forensics twin of LOVE_NO_IMAGE, and a

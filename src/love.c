@@ -912,10 +912,13 @@ static lvm(lvm_apof) {
 
 // (jkoff x) -> the byte offset of g->jk, so the emitter's `jk` law reads a slot as `ld r g off`
 lvm(lvm_jkoff) { ai_musttail return Answer(putcharm((intptr_t) offsetof(struct ai, jk))); }
-// (nat? f) -> 1 when f is a native closure: its cell's head is a code address of the arena
+// (nat? f) -> 1 when f is a native closure: arity 1 enters its code directly; an
+// arity>=2 cell curries through lvm_cur with the code at value[2]
 lvm(lvm_natp) {
  word x = Sp[0];
- ai_musttail return Answer(putcharm(lamp(x) && code_in(g, (uintptr_t) cell(x)->ap))); }
+ int nat = lamp(x) && (code_in(g, (uintptr_t) cell(x)->ap) ||
+  (cell(x)->ap == lvm_cur && code_in(g, (uintptr_t) cell(x)[2].ap)));
+ ai_musttail return Answer(putcharm(nat)); }
 
 // default fd-keyed waits, conservative (all fds always-ready; multi-source wait
 // collapses to sleep) so non-multitasking frontends link without impls

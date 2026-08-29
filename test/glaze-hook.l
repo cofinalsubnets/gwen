@@ -40,6 +40,19 @@
     ; constant, so (id 9) twice is one object; a capturing one is allocated per call.
     (: id (ev '(\ z (\ x (+ x z))))  f (id 9)  g (id 9)            ; inner CAPTURES z -> a fresh native cell per call
        (&& (19 = (f 10)) (= f ((\ z (\ x (+ x z))) 9)) !(id? f g))) ; computes right, = the interp instance, yet distinct
+    ; --- the SELF seam: a letrec name recurs natively -- a tail call re-enters as a loop,
+    ; a non-tail call takes the direct self frame; a captured import re-supplies through both
+    (: n (peep fires () 0)
+       r (ev '(: (sum f z l) (? (two? l) (sum f (f z (cap l)) (cup l)) z) (sum (\ a x (+ a (* x x))) 0 '(1 2 3 4))))
+       (&& (30 = r) (fired? n)))
+    (: n (peep fires () 0)
+       r (ev '(: p 7 (f k) (? (< 0 k) (+ p (f (- k 1))) 0) (f 3)))
+       (&& (21 = r) (fired? n)))
+    ; --- the generic = stays native and right across kinds: points inline, structure drives
+    (: n (peep fires () 0)
+       mem (ev '(: (mem x l) (? (two? l) (? (= x (cap l)) 1 (mem x (cup l))) 0) mem))
+       (&& (1 = (mem 'b '(a b c))) (0 = (mem 'z '(a b c))) (1 = (mem "s" '("q" "s")))
+           (1 = (mem 2.0 '(1 2 3))) (0 = (mem 2.5 '(1 2 3))) (fired? n)))
    )
-(: _ (puts "glaze-hook: ok -- the natjit creation hook (leaf, float, loop, capture, transparency)
+(: _ (puts "glaze-hook: ok -- the natjit creation hook (leaf, float, loop, capture, self, =, transparency)
 ") 0)

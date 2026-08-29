@@ -323,9 +323,11 @@
    ; restore Sp, enter e on the ORIGINAL frame (arg slots are never mutated; loop state lives in
    ; the reserved slots). a restart re-runs any call-outs already made -- the same bet the fold
    ; lanes' twins take. grammar = the probed families: fixnum/() consts, two? cap cup id? link,
-   ; + - * and comparisons (fixnum-guarded), ?, ONE applied named-let (self tail-calls -> a jump,
-   ; both def sugars), calls to frame/loop names AND -- in LOOP bodies only -- to resolvable
-   ; global heads, QUOTED DATA (any datum: the source node rides a nifx extras slot, and
+   ; + - * and comparisons (fixnum-guarded; = is TOTAL -- points and fixnums inline, the rest
+   ; drives the = value), ? (2- or 3-arm), ONE applied named-let (self tail-calls -> a jump,
+   ; both def sugars), calls to frame/loop names, RECURSION on the closure's OWN letrec name
+   ; (a saturated tail call re-enters as a loop, any other takes the direct self frame), in
+   ; LOOP bodies calls to resolvable global heads, QUOTED DATA (any datum: the source node rides a nifx extras slot, and
    ; (a = 'sym) is raw identity by the point-= law). strings, floats, //%, &|^, inner \,
    ; effects, global reads in OPERAND position: DECLINE (bytecode, exactly as before). a global
    ; callee resolves via gv at compile (redefinition-stale -- the callout lanes' bet; NEVER a
@@ -377,7 +379,7 @@
        (aquote? e) 1
        (two? e)
         (: op <e  as >e  n (tally as)
-           (? (id? op '?) ((n = 3) && (amble-ok? env gn go k 0 <as)
+           (? (id? op '?) (((n = 3) || (n = 2)) && (amble-ok? env gn go k 0 <as)   ; 2-arm ?: the missing else is (), acg's amble-nil slot
                            && (amble-ok? env gn go k tl <>as)
                            && (amble-ok? env gn go k tl <>>as))
               (member? op '(two? cap cup)) (n = 1 && amble-ok? env gn go k 0 <as)
@@ -399,6 +401,7 @@
              (member? op '(two? cap cup)) (amble-depth go cx <as)
              (id? op '||) ((tally as) + (foldl (\ a x (amax a (amble-depth go cx x))) 0 as))   ; aor needs no spills, but a SHADOWED || is a call --
                                                                                               ; the call formula covers both (over-reserve is safe)
+             (id? op '=) (2 + (amax (amble-depth go cx <as) (1 + (amble-depth go cx <>as))))   ; aeq2's slow lane spills the partial + the operand
              (aop2? op) (amax (amble-depth go cx <as) (1 + (amble-depth go cx <>as)))
              (id? op go) ((tally as) + (foldl (\ a x (amax a (amble-depth go cx x))) 0 as))
              (((cx op) + (tally as)) + (foldl (\ a x (amax a (amble-depth go cx x))) 0 as)))))   ; a CALL spills a partial PER CURRY STEP: an n-arg call touches
@@ -478,7 +481,7 @@
    ; is free-LOOKING in a weave re-analysis surface, wire-resolved in truth -- never a gn candidate.
    ; lams = the scope's lambda-sibling list ((name . cell)..): a cell holds (entry . import-names),
    ; lz's frozen site.
-   (njit-amble s a e gv farq lams tgt)
+   (njit-amble s a e gv farq lams nm tgt)
     (: ps (init >s)  M (last >s)
        lp (amble-loop M)
        go   (? lp <lp 0)     vars0 (? lp <>lp ())
@@ -492,9 +495,22 @@
        env  (vars + ps)
        body (adesug env body)                                ; own list/&& by definition (nested links / nested ?s)
        inits (map (\ i (adesug env i)) inits)
+       ; SELF: the letrec name this closure is being bound to (ala's nm; 0 when anonymous).
+       ; a saturated tail self-call jumps the body top on a rewritten frame (the recursion
+       ; becomes a loop); any other self-call drives the blob's OWN cell (read off Ip at the
+       ; prologue) -- early-bound, exactly the wire's backpatched site. shadowed names decline.
+       sc   (assoc nm lams)                                  ; the self lams cell: its kept import row names the frame's leading slots,
+       scc  (? (two? sc) (peep >sc 0 0) 0)                   ; so a self-call re-supplies the imports the way the wire's site does
+       simp (? (two? scc) >scc ())
+       ni   (tally simp)
+       self (? (id? nm 0) 0  (member? nm ps) 0  (member? nm vars0) 0  (id? nm go) 0
+               (member? nm '(? two? cap cup id? link + - * < <= > >= = || tally list &&)) 0
+               !(simp = (take ni ps)) 0
+               nm)
+       sfq  !(id? self 0)
        ; the free-head seams, LOOP BODIES ONLY (the cost gate: a loop amortizes the drive taxes
-       ; over its jump + owned ops; a one-shot call wrapper -- (\ t k (peep t k ())) and kin,
-       ; mooncc's accessor class -- is pure overhead ambled, measured net-NEGATIVE).
+       ; over its jump + owned ops; a one-shot call wrapper -- (\ t k (peep t k ())) and kin --
+       ; is pure overhead ambled). the SELF seam below is separate and rides any body.
        ; GLOBALS (v4): a free head that is NOT farq resolves via gv at COMPILE and rides an
        ; extras slot -- redefinition-stale, exactly the callout lanes' bet. a farq name (a
        ; letrec local the weave RE-analysis dropped from the import row) must never gv-resolve:
@@ -506,7 +522,7 @@
        ; extras slot and the call curries entry(imports.. args..). fixcaps' pour guarantees the
        ; import names sit in this frame; entry 0 (a forward/self ref, lz's backpatch case) or a
        ; stray import just isn't in cn -> amble-ok? declines that body.
-       cand (? lp (foldl (\ ac i (aheads env go i ac)) (aheads env go body ()) inits) ())
+       cand (? lp (filter (\ f !(id? f self)) (foldl (\ ac i (aheads env go i ac)) (aheads env go body ()) inits)) ())
        csx  (map (\ f [f (? (farq f)                       ; only a letrec-local can be a sibling: farq (a cheap chain peep) gates
                               (: lfd (assoc f lams)          ; the lam-list assoc. the cell READ mirrors ev.l's cof: box slot 0.
                                  (? (two? lfd) (peep >lfd 0 0) 0))
@@ -525,9 +541,10 @@
        gvals (map caup gps)
        qs   (foldl (\ ac i (aq i ac)) (aq body ()) inits)   ; the quoted-datum constants (id?-deduped source nodes)
        nq   (tally qs)
-       cx   (\ op (? (member? op cn) (tally (cimp op)) 0))
+       eqv  (gv '= 0)                                       ; the = value: aeq2's generic lane drives it off an extras slot
+       cx   (\ op (? (id? op self) ni (member? op cn) (tally (cimp op)) 0))
        nd   (amax (amble-depth go cx body) (foldl (\ acd i (amax acd (amble-depth 0 cx i))) 0 inits))
-       kn   (gn + cn)                                     ; every resolvable free head (amble-ok?'s membership test)
+       kn   (? sfq (self >< (gn + cn)) (gn + cn))         ; every resolvable free head + the self name (amble-ok?'s membership test)
        lpok (? lp ((all name? vars) && (adistinct vars) && (k = (tally inits))
                    && !(member? go vars) && !(member? go ps)) 1)
        ok ((two? s) && (two? >s) && (all name? ps) && (adistinct ps)
@@ -538,15 +555,16 @@
            && (amble-ok? env kn go k 1 body))
        (? ok
           (: _ (? (getenv "LOVE_AMBLE_TRACE") (puts ("amble: " + (show s) + "\n")) 0)   ; the compile trace (forensics: names every ambled source)
-             ng (1 + (tally gn) + (tally cn) + nq)          ; extras region = [() | globals | sibling entries | quoted data]: () is
+             ng (1 + (tally gn) + (tally cn) + nq + (? (lit? eqv) 1 0))   ; extras region = [() | globals | sibling entries | quoted data | =]: () is
                                                                 ; the empty MINT (li 1 would be the charm 0-fossil), entries + quotes
                                                                 ; are HEAP values -- all ride the nifx extras chain into GC-walked slots
-             R (k + 2 + ng + nd)                            ; loopvars | Se | BUDGET | extras | spills
+             R (k + 3 + ng + nd)                            ; loopvars | Se | So | BUDGET | extras | spills
              A (greg tgt 'acc)  T (greg tgt 'tmp)  X (greg tgt 'anchor)  SC (greg tgt 'scratch)
              SP (greg tgt 'sp)  IP (greg tgt 'ip)  HP (greg tgt 'hp)
-             seo (8 * k)  budo (8 * (k + 1))  gbo (8 * (k + 2))  spo (8 * (k + 2 + ng))  fro (8 * R)
+             seo (8 * k)  soo (8 * (k + 1))  budo (8 * (k + 2))  gbo (8 * (k + 3))  spo (8 * (k + 3 + ng))  fro (8 * R)
              (voff v) (? (member? v vars) (8 * (posof v vars 0)) (fro + (8 * (posof v ps 0))))
              (spill d) (spo + (8 * d))
+             eqo (gbo + (8 * (1 + (tally gn) + (tally cn) + nq)))   ; the = value's extras slot (past globals, siblings, quotes)
              (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T,A fixnum, else lbl
              (abin sa sb d fin) ((acg sa d) + [['st SP (spill d) A]] + (acg sb (d + 1)) + [['ld T SP (spill d)]] + fin)   ; T = a, A = b
              (aar op sa sb d)
@@ -555,6 +573,29 @@
                   (id? op '-) ((fx2 'deopt) + [['subs T T A] ['br 'vs 'deopt] ['lea A T 1]])         ; 2(x-y) then tag
                   ((fx2 'deopt) + [['sar A 1] ['sub T T 1] ['mulo A A T SC 'deopt] ['or A A 1]]))) ; y * 2x = 2xy (mulo IS the tag-range gate) then tag
              (acmp2 op sa sb d) (abin sa sb d ((fx2 'deopt) + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]]))
+             ; aeq2: the GENERIC = -- total, never a deopt. equal fixnums and the same point
+             ; answer 1; distinct fixnums, and a point against ANYTHING else, answer 0 (a
+             ; point equals only itself); everything structural -- strings, gems (the numeric
+             ; bridges and NaN), bigs, lists -- drives the = value off its extras slot.
+             (aeq2 sa sb d) (: ys (mint 0)  no (mint 0)  sl (mint 0)  dn (mint 0)  ne1 (mint 0)  et (mint 0)
+              (abin sa sb d
+               ([['cmp T A] ['br 'ne ne1]
+                 ['test A 1] ['br 'ne ys]                                                          ; equal fixnums -> 1
+                 ['ld X A 0] (jk tgt SC 3) ['cmp X SC] ['br 'eq ys]                              ; the same point -> 1
+                 (jk tgt SC 4) ['cmp X SC] ['br 'eq ys] ['jmp sl]                                ; the same heap box: structural (NaN) -> drive
+                 ['label ne1] ['test T 1] ['br 'eq et]
+                 ['test A 1] ['br 'ne no]                                                          ; distinct fixnums -> 0
+                 ['ld X A 0] (jk tgt SC 3) ['cmp X SC] ['br 'eq no]                              ; a point equals only itself -> 0
+                 (jk tgt SC 4) ['cmp X SC] ['br 'eq no] ['jmp sl]
+                 ['label et] ['ld X T 0] (jk tgt SC 3) ['cmp X SC] ['br 'eq no]
+                 (jk tgt SC 4) ['cmp X SC] ['br 'eq no] ['jmp sl]
+                 ['label ys] ['li A 3] ['jmp dn]
+                 ['label no] ['li A 1] ['jmp dn]
+                 ['label sl] ['st SP (spill (d + 1)) A] ['mov A T]]                              ; slow: spill b ; A = a
+                + (adrive eqo)                                                                     ; A = (= a)
+                + [['st SP (spill d) A] ['ld A SP (spill (d + 1))]]                              ; spill the partial ; A = b
+                + (adrive (spill d))                                                               ; A = (= a b)
+                + [['label dn]])))
              (aid sa sb d) (abin sa sb d [['cmp T A] ['set 'eq A] ['leax A A A 1 1]])                ; raw word identity: total, no guard
              (atwo sx d) (: ln (mint 0)
               ((acg sx d) + [['li T 1] ['test A 1] ['br 'ne ln]
@@ -605,17 +646,48 @@
                + (adrive (gbo + (8 * (1 + (posof 'tally gn 0)))))
                + [['label en]]))
              (acall f as d)
-              (? (member? f cn)                                                                             ; a SIBLING: curry the frozen entry through its import names (all in
+              (? (id? f self)                                                                               ; SELF: saturated -> the direct frame jump; partial/over-applied ->
+                 (? ((tally as) = (a - ni))                                                                 ; curry the own cell through its imports, then the args (a saturated
+                    (aselfcall as d)                                                                        ; TAIL self-call took sgo instead)
+                    (achain (simp + as) soo d))
+                 (member? f cn)                                                                             ; a SIBLING: curry the frozen entry through its import names (all in
                  (achain ((cimp f) + as) (gbo + (8 * (1 + (tally gn) + (posof f cn 0)))) d)             ; the frame by fixcaps) then the args -- lz's site, drive-compiled
                  (: cso (? (member? f vars || member? f ps) (voff f) (gbo + (8 * (1 + (posof f gn 0)))))
-                    (? (lp && !(two? >as) && (member? f vars || member? f ps))                        ; a 1-arg frame callee can be a STRING at run time (the lexer class) --
-                       ((acg <as d) + (astr1 cso))                                                     ; LOOP bodies only, the same cost gate as gn: the guard amortizes over
+                    (? ((? lp 1 sfq) && !(two? >as) && (member? f vars || member? f ps))              ; a 1-arg frame callee can be a STRING at run time (the lexer class) --
+                       ((acg <as d) + (astr1 cso))                                                     ; LOOPING bodies only (named-let or self-call), the same cost gate as
                        (achain as cso d))))                                                                 ; the loop, but on a one-shot recursion wrapper it taxed EVERY drive
                                                                                                             ; (~7 insns x ~400M mooncc calls = +19%). a gn or sibling callee is
                                                                                                             ; never a string (lit?-gated / a woven entry), so those keep the bare drive.
              (agous us j d) (? (two? us) ((acg <us (d + j)) + [['st SP (spill (d + j)) A]] + (agous >us (j + 1) d)) ())
              (agomv j d) (? (j < 0) () ([['ld A SP (spill (d + j))] ['st SP (8 * j) A]] + (agomv (j - 1) d)))
              (ago as d) ((agous as 0 d) + (agomv (k - 1) d) + [['jmp 'top]])                            ; updates from OLD vars (spilled first), then the back-edge
+             (asmv j d) (? (j < 0) () ([['ld A SP (spill (d + j))] ['st SP (fro + (8 * (ni + j))) A]] + (asmv (j - 1) d)))
+             ; aselfcall: a SATURATED non-tail self-call jumps the blob's own entry directly --
+             ; frame [imports.. args.. RESUME tag(bb-entry0) entry0] under Sp, Ip restored off So,
+             ; and the callee's hand-rolled ret returns through lvm_resume to bb. no drive, no
+             ; curry chain, no partials; the entry's room + budget guards run per level.
+             (aselfcall as d) (: bb (mint 0)  w (a + 3)
+              ((agous as 0 d)
+               + (: (gimp l i) (? (two? l) ([['ld T SP (voff <l)] ['st SP ((8 * i) - (8 * w)) T]] + (gimp >l (i + 1))) ()) (gimp simp 0))
+               + (: (garg j) (? (j < (a - ni)) ([['ld T SP (spill (d + j))] ['st SP ((8 * (ni + j)) - (8 * w)) T]] + (garg (j + 1))) ()) (garg 0))
+               + [(jk tgt T 8) ['add T T 8] ['st SP ((8 * a) - (8 * w)) T]                          ; cont = &resume[1]: ret jumps the cell's word 0 = lvm_resume
+                  ['lar T bb] ['lar X 'entry0] ['subs T T X] ['leax T T T 1 1] ['st SP ((8 * (a + 1)) - (8 * w)) T]
+                  ['st SP ((8 * (a + 2)) - (8 * w)) X]
+                  ['ld IP SP soo]]
+               + (? (a = 1) () [['add IP IP 16]])
+               + [['sub SP SP (8 * w)] ['jmp 'entry0]
+                  ['label bb] ['ld A SP 0] ['add SP SP 8]]))
+             (aselfgo as d) ((agous as 0 d) + (asmv (a - ni - 1) d) + [['jmp 'sgo]])               ; saturated tail self-call: new args (spilled first) over the arg slots (imports keep), jump the body top
+             (acqt st sth sel d) (: le (mint 0)  ln (mint 0)                                       ; acq, tails threaded
+              ((acg st d) + [['test A 1] ['br 'eq 'deopt] ['cmp A 1] ['br 'le le]]
+               + (acgt sth d) + [['jmp ln] ['label le]] + (acgt sel d) + [['label ln]]))
+             (acgt e d)                                                                             ; tail-position acg: thread tails through ? so a saturated self-call jumps
+              (? (aquote? e) (acg e d)
+                 !(two? e) (acg e d)
+                 (: op <e  as >e
+                    (? (id? op '?) (acqt <as <>as <>>as d)
+                       (sfq && (id? op self) && ((tally as) = (a - ni))) (aselfgo as d)
+                       (acg e d))))
              (acg e d)
               (? (name? e) [['ld A SP (voff e)]]
                  (whole? e) [['li A ((2 * e) + 1)]]
@@ -630,6 +702,7 @@
                        (id? op 'link) (alink <as <>as d)
                        (id? op '= && (aqnom? <as || aqnom? <>as))
                         (aid <as <>as d)                                               ; (a = 'sym): a POINT equals only itself (the point-= law) -> raw identity, total
+                       (id? op '= && (lit? eqv)) (aeq2 <as <>as d)
                        (acmp? op) (acmp2 op <as <>as d)
                        (member? op '(+ - *)) (aar op <as <>as d)
                        (id? op 'tally && !(member? 'tally env) && member? 'tally gn && !(two? >as))
@@ -639,12 +712,15 @@
                        (acall op as d))))
              initR (: (goi j) (? (j < R) ([['st SP (8 * j) T]] + (goi (j + 1))) ())
                       ([['li T 1]] + (goi 0)))                                                          ; every reserved slot a VALID value before any call (GC walks them)
-             unpk ([['ld T IP 8] ['st SP seo T] ['ld T IP 32]                                     ; Se = value[1] = e (plain -- image-revert-clean); T = the nifx EXTRAS chain
+             unpk ([['ld T IP 8] ['st SP seo T]]                                                  ; Se = value[1] = e (plain -- image-revert-clean)
+                   + (? (a = 1) [['st SP soo IP]] [['mov T IP] ['sub T T 16] ['st SP soo T]])     ; So = the own cell (= Ip, or Ip-16 past the cur pair) -- the self-drive callee
+                   + [['ld T IP 32]                                                               ; T = the nifx EXTRAS chain
                        ['st SP budo T] ['ld T T 16]]                                                    ; link 0 = the budget CELL (saved for the deopt decrement), slots after it
                    + (: (gou j) (? (j < ng) ([['ld X T 8] ['st SP (gbo + (8 * j)) X] ['ld T T 16]] + (gou (j + 1))) ()) (gou 0)))
              initsir (: (goj is j) (? (two? is) ((acg <is 0) + [['st SP (8 * j) A]] + (goj >is (j + 1))) ())
                         (goj inits 0))
-             bodyir (? lp (initsir + ['(label top)] + (acg body 0)) (acg body 0))   ; body = GB|M DESUGARED (adesug) -- never compile the raw forms
+             bodyir ((? sfq ['(label sgo)] ())                                                     ; the self-jump landing: a fresh invocation on the rewritten frame
+                     + (? lp (initsir + ['(label top)] + (acgt body 0)) (acgt body 0)))   ; body = GB|M DESUGARED (adesug) -- never compile the raw forms
              epi [['add SP SP fro] ['st SP 0 A]                                                       ; hand-rolled lvm_ret (a drive call clobbered Ip)
                     ['ld IP SP (8 * a)] ['st SP (8 * a) A] ['add SP SP (8 * a)]
                     ['ld T IP 0] ['jmpr T]]
@@ -654,13 +730,13 @@
                   + (? (a = 1) [['mov IP T]] [['lea IP T 16]])                                      ; a=1: re-apply e; else: enter e's body on the saturated frame
                   + [['ld T IP 0] ['jmpr T]])
              prog (['(label entry0)                                                                       ; entry0 = the resume-offset anchor (any shared label works; the blob's first byte)
-                      ['lea X HP (40 + (8 * (R + 4)))] ['cmp SP X] ['br 'below 'd0]                   ; ROOM guard: the reservation + a call frame + floor must fit Sp-Hp,
+                      ['lea X HP (40 + (8 * (R + 4 + a)))] ['cmp SP X] ['br 'below 'd0]              ; ROOM guard: the reservation + the widest call frame (a drive's, or a self jump's a+3) + floor must fit Sp-Hp,
                       ['ld T IP 32] ['ld X T 8] ['cmp X 1] ['br 'le 'd0]                            ; the DEOPT BUDGET (extras link 0, a charm): spent -> the native is
                       ['sub SP SP fro]]                                                                   ; RETIRED, every call takes d0 straight to the twin (frame untouched
                                                                                                             ; -> the twin runs it whole; a perma-deopting native heals to bytecode)
                    + initR + unpk + bodyir + epi + dpt
                    + ['(label d0) ['ld T IP 8]] + (? (a = 1) [['mov IP T]] [['lea IP T 16]]) + [['ld T IP 0] ['jmpr T]])
-             (nifx (emit (asmt tgt prog)) e s a (8 >< (amble-nil >< gvals + cvals + (map (\ q <>q) qs)))))
+             (nifx (emit (asmt tgt prog)) e s a (8 >< (amble-nil >< gvals + cvals + (map (\ q <>q) qs) + (? (lit? eqv) [eqv] ())))))
           0))
    ; --- N-VARIABLE loop: the general tail-recursive counted loop ------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in

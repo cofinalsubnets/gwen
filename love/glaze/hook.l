@@ -85,9 +85,11 @@
    ; reference site, so amble compiles the SAME application (entry curried through the
    ; import names, all in the frame by fixcaps' pour) with no staleness bet; entry 0 (a
    ; forward ref, pre-weave) declines.
+   ; nm = the letrec name this closure is being bound to (0 when anonymous) -- amble's
+   ; self-call seam: a tail self-call loops, any other drives the blob's own cell.
    ; ps = (init >s) = the frame [imps args]; body = the surface body. compile
    ; body over ps; deopt -> e. non-qualifying -> e unchanged.
-   (natjit e s a gv farq lams)
+   (natjit e s a gv farq lams nm)
     (: ps (init >s)  body (last >s)
        (? !(all name? ps) e                                ; a NAMELESS (mint) frame -- bsub's fresh binders, boxfix's
                                                            ; cells -- declines every lane. mints only reach emission at
@@ -162,7 +164,7 @@
                             (: _ (pin fires () (1 + (peep fires () 0))) (jitgroupirx agdefs osym arch e s))
                             ; AMBLE lane (LAST): the universal boring-tier translation -- tagged values, Sp-slot
                             ; temporaries, drive call-outs, restart deopt. njit-amble answers 0 on decline.
-                            (: aj (njit-amble s a e gv farq lams arch)
+                            (: aj (njit-amble s a e gv farq lams nm arch)
                                (? aj (: _ (pin fires () (1 + (peep fires () 0))) aj)
                                   (: _ (? (getenv "LOVE_AMBLE_TRACE2") (puts ("amble-DECLINE: " + (show s) + "\n")) 0) e)))))))))))))))   ; the decline trace (forensics: what the last lane passed on)
       natjit)                                          ; inner `:` BODY = the natjit closure (its ~20 glaze aliases stay private); close the inner scope
