@@ -566,6 +566,98 @@
          '((begin ((expr (assign "=" (var "x") (num 1)))))))
       (= (aw-program (aw-lex "/a/,/b/{}") (tablet 0) ()) '((range (ere "a") (ere "b") ())))))
 
+; --- the pager (crew/kore/less.l): every key below drives the PURE engine, one
+; byte at a time, and reads the tablet back -- no tty, no port, no file ---
+(: (pg-bytes s) (: n (tally s) (go i acc) (? (i < 0) acc (go (i - 1) (s i >< acc))) (go (n - 1) ()))
+   (pg-mk ls w h fl)
+    (: t (tablet 0)
+       _ (foldl (\ a c (pin t c 1)) 0 (pg-bytes fl))
+       st (pgnew t w h)
+       _ (pgload st ls "t")
+       st)
+   (pg-run ls w h fl keys)                      ; the state after the keys
+    (: st (pg-mk ls w h fl) _ (foldl (\ a c (pgstep st c)) 0 (pg-bytes keys)) st)
+   (pg-top ls w h fl keys) ((pg-run ls w h fl keys) 'top)
+   ten '("l1" "l2" "l3" "l4" "l5" "l6" "l7" "l8" "l9" "l10")
+   caps '("a" "b" "c" "d" "e" "f" "ALPHA" "h" "i" "j")
+   (assert
+      ; the wrap: fragments at the width, a tab to the next 8th column, a control
+      ; byte as ^X, and a utf-8 tail byte no column of its own
+      (= (pgwrap 4 "abcdefghij") '("abcd" "efgh" "ij"))
+      (= (pgwrap 4 "abcd") '("abcd"))
+      (= (pgwrap 4 "") '(""))                   ; a blank line is a row like any other
+      (= (pgwrap 8 "a\tb") '("a       " "b"))
+      (= (pgwrap 20 (string 1)) '("^A"))
+      (= (pgwrap 2 "\xce\xbb\xce\xbb\xce\xbb") '("\xce\xbb\xce\xbb" "\xce\xbb"))
+      (= (pgclip 3 "abcdef") "abc") (= (pgclip 9 "abcdef") "abcdef")
+      ; the status clips the other way -- its TAIL is what carries the news
+      (= (pgclipl 6 "t  1-2/3  66%") "<  66%")
+      (= (pgclipl 20 "t  1-2/3  66%") "t  1-2/3  66%")
+      ; a row carries the source line it came off and whether it heads it
+      (= (pgrows 4 '("abcdef" "x")) '(("abcd" 0 1) ("ef" 0 ()) ("x" 1 1)))
+      ; ten lines in a five-line window: four of text, so the last top is row 6
+      (= (pg-top ten 20 5 "" " ") 4)            ; a screenful, and the end holds it
+      (= (pg-top ten 20 5 "" "  ") 6)
+      (= (pg-top ten 20 5 "" " b") 0)
+      (= (pg-top ten 20 5 "" "3j") 3)           ; a count is LINES, whatever the key
+      (= (pg-top ten 20 5 "" "3j2k") 1)
+      (= (pg-top ten 20 5 "" "5 ") 5)
+      (= (pg-top ten 20 5 "" "G") 6) (= (pg-top ten 20 5 "" "Gg") 0)
+      (= (pg-top ten 20 5 "" "3g") 2) (= (pg-top ten 20 5 "" "7g") 6)
+      (= (pg-top ten 20 5 "" "d") 2) (= (pg-top ten 20 5 "" "du") 0)
+      (= (pg-top ten 20 5 "" "50p") 5)
+      ; the search starts PAST the top line, and n / N walk it either way
+      (= (pg-top ten 20 5 "" "/l7\n") 6)
+      (= (pg-top ten 20 5 "" "G?l2\n") 1)
+      (= (pg-top ten 20 5 "" "/l[0-9]\n") 1)
+      (= (pg-top ten 20 5 "" "/l[0-9]\nn") 2)
+      (= (pg-top ten 20 5 "" "/l[0-9]\nnN") 1)
+      (= ((pg-run ten 20 5 "" "/zz\n") 'msg) "pattern not found: zz")
+      (= ((pg-run ten 20 5 "" "n") 'msg) "no previous pattern")
+      ; -i folds the pattern, and without it the case counts
+      (= (pg-top caps 20 5 "i" "/alpha\n") 6)
+      (= (pg-top caps 20 5 "" "/alpha\n") 0)
+      ; -s squeezes a run of blank lines to one, and -e is the door out at the end
+      (= ((pg-mk '("a" "" "" "" "b") 20 5 "s") 'ls) '("a" "" "b"))
+      (= ((pg-mk '("a" "" "" "" "b") 20 5 "") 'ls) '("a" "" "" "" "b"))
+      !((pg-run ten 20 5 "e" " ") 'quit)
+      ((pg-run ten 20 5 "e" "G ") 'quit)
+      !((pg-run ten 20 5 "" "G  ") 'quit)
+      ((pg-run ten 20 5 "" "q") 'quit)
+      ((pg-run ten 20 5 "" "ZZ") 'quit) !((pg-run ten 20 5 "" "Z") 'quit)
+      ; h swaps the help page in, and q comes back out of it before it quits
+      (= ((pg-run ten 20 5 "" "h") 'file) "HELP")
+      (= ((pg-run ten 20 5 "" "hq") 'file) "t")
+      ((pg-run ten 20 5 "" "hqq") 'quit)
+      ; a typed line takes a rubout, and ESC drops the whole thing
+      (= ((pg-run ten 20 5 "" "/l9\x7f") 'cmd) "l")
+      (= ((pg-run ten 20 5 "" "/l9\x1b") 'mode) 'n)
+      ; the frame: the body, the status in standout, then the cursor on it --
+      ; and a row past the end of the buffer is a tilde
+      (= (pgframe (pg-mk '("ab" "cd" "ef") 20 3 ""))
+         "\e[Hab\e[K\r\ncd\e[K\r\n\e[7mt  1-2/3  66%\e[0m\e[K\e[3;14H")
+      (= (pgframe (pg-mk '("ab") 20 3 ""))    ; ... and a status one over clips left
+         "\e[Hab\e[K\r\n~\e[K\r\n\e[7m< 1-1/1  100%  (END)\e[0m\e[K\e[3;21H")
+      (= (pgstat (pg-mk '("ab") 20 3 "")) "t  1-1/1  100%  (END)")
+      (= (pgstat (pg-mk ten 20 5 "")) "t  1-4/10  40%")
+      ; and what a search paints on the rows it found
+      (= (pgpaint (string 27) <(pgnds (pg-mk ten 20 5 "") "l.") "hello")
+         "he\e[7mll\e[27mo")))
+
+; the : commands name the next file and leave the READ to the face, and they
+; refuse to walk off either end of the operand list
+(: t (tablet 0)
+   st (pgnew t 20 5)
+   _ (pgload st '("x") "a.txt")
+   _ (pins st 'files '("a.txt" "b.txt") 'fi 0)
+   _ (pgstep st 58) _ (pgstep st 110)
+   (assert (= (st 'fi) 1) (= (st 'doe) '("b.txt")))
+   _ (pin st 'doe ())
+   _ (pgstep st 58) _ (pgstep st 110)
+   (assert (= (st 'fi) 1) (nil? (st 'doe)) (= (st 'msg) "no next file"))
+   _ (pgstep st 58) _ (pgstep st 112)
+   (assert (= (st 'fi) 0) (= (st 'doe) '("a.txt"))))
+
 (test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
-(say err "crew/kore/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find and awk floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
+(say err "crew/kore/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk and pager floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")

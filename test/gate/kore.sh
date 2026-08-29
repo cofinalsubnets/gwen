@@ -44,11 +44,11 @@ pipe() { n=$1; i=$2; shift 2
          same "$n"; }
 
 # ------------------------------------------------------------------- the laws
-echo "UTILS crew/kore/{text,core,fs,re,sed,awk,expr,find,diff,patch,law}.l"
+echo "UTILS crew/kore/{text,core,fs,re,sed,awk,expr,less,find,diff,patch,law}.l"
 out=$ho/.test_kore.out
 # ⚠ lush's job.l + glob.l ride along because find.l captures sh-match at its define
 { cat test/00-init.l crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/re.l \
-      crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/proc.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
+      crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/proc.l crew/kore/less.l lib/lint.l crew/vi/config.l crew/vi/hue.l \
       crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/patch.l crew/lush/job.l crew/lush/glob.l \
       crew/kore/find.l; \
   echo "(use 'kore)"; \
@@ -1104,6 +1104,36 @@ cp "$pw/base" "$pw/o/sub/f.txt"
   || fail "kore patch: the .rej does not re-apply"
 cmp -s "$pw/o/sub/f.txt" "$pw/new" || fail "kore patch: the re-applied .rej lands elsewhere"
 echo "kore: patch (13 applications leaving the same tree GNU patch does -- offsets, creates, rejects, the newline) ok"
+
+# ----------------------------------------------------------------- the pager
+# `less` and `more` are ONE door (crew/kore/less.l). Its engine is lawed with the
+# rest above -- pgstep driven byte by byte, no tty in it -- and its face rides a
+# real pty below. What belongs here is the lane a script actually takes: stdout is
+# not a terminal, so the pager pours, and the pour has to be cat to the byte.
+pg=$ho/.kore-pg
+printf 'one\ntwo\nthree\n' > "$pg"
+cat "$pg" > "$g"
+for tool in less more; do
+  korerun $tool "$pg" > "$o" 2>/dev/null || fail "kore $tool pouring a file"
+  cmp -s "$g" "$o" || fail "kore $tool does not pour like cat"
+done
+korerun less < "$pg" > "$o" 2>/dev/null || fail "kore less pouring stdin"
+cmp -s "$g" "$o" || fail "kore less does not pour stdin like cat"
+# the flags are still read on that lane; an unknown one is usage's 2 and a name
+# that will not open is 1
+korerun less -Nse "$pg" > "$o" 2>/dev/null
+cmp -s "$g" "$o" || fail "kore less -Nse does not pour like cat"
+korerun less -z "$pg" > /dev/null 2>&1
+[ $? -eq 2 ] || fail "kore less -z: not usage's 2"
+korerun less "$pg.nope" > /dev/null 2>&1
+[ $? -eq 1 ] || fail "kore less on a missing file: not 1"
+echo "kore: less/more (one pager, both names; the pour lane byte-identical to cat) ok"
+# ..and the FACE, which needs a terminal: test/host/less.l tethers one and types at it
+echo "PAGER test/host/less.l (the face on a pty)"
+cat test/00-init.l test/host/less.l | LOVEBIN=$K LESSTESTDIR=$HO "$m" > "$o" 2>&1
+r=$?
+{ [ $r -eq 0 ] && grep -q "test/host/less:" "$o"; } || { cat "$o"; fail "kore less on a pty (exit $r)"; }
+tail -1 "$o"
 
 # ------------------------------------------------------- the status charm
 # every main ANSWERS its status (crew/kore/core.l's urun) instead of quitting, so

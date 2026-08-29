@@ -29,6 +29,8 @@
 ;   kore ps|free|uptime|pidof|pgrep|pkill|killall|pwdx   the /proc family
 ;   kore whoami|groups|arch|nproc    the four one-line answers
 ;   kore vi [FILE]                   the editor (crew/vi/)
+;   kore less|more [-Nise] [+N|+/P] [F..]   the pager (crew/kore/less.l; one pager,
+;                                           two spellings, less's keys and its manners)
 ;   kore sh [-c CMD | FILE]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
 ; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/misc/moon.md.)
 ;
@@ -48,7 +50,7 @@
         chmod-main chomp chown-main cksum-main cmp-main cnames comm-main cp-main cut-main
         date-main dirname-main dsplit du-main echo-main env-main expand-main expr-main
         factor-main false-main find-main fold-main free-main gfind grep-main groups-main
-        head-main id-main install-main join-main killall-main kill-main lastn lines link-main
+        head-main id-main install-main join-main killall-main kill-main lastn less-main lines link-main
         ln-main ls-main md5sum-main mkdir-main mktemp-main mv-main myers nl-main nproc-main
         od-main paste-main patch-main pgrep-main pidof-main pkill-main printenv-main
         printf-main ps-main pwd-main pwdx-main readlink-main realpath-main rebre refind refold
@@ -287,6 +289,7 @@
             'grep grep-main 'sed sed-main
             'awk awk-main 'find find-main
             'vi (from 'vi 'vi-main)   ; the editor's wrap registered ahead in the cat
+            'less less-main 'more less-main   ; one pager, and the two names it is asked for
             'env env-main 'printenv printenv-main 'sleep sleep-main
             'whoami whoami-main 'groups groups-main
             ; the /proc family -- no nif of their own, /proc is a filesystem
@@ -333,6 +336,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
   date [-u] [-d @SEC] [-r F] [+FMT]       the clock, UTC (no tz database here)
   id [-u|-g|-G] [-n]                      who this process is
   vi [FILE]                               the editor (crew/vi/)
+  less | more [-Nise] [+N|+/PAT] [F..]    the pager (crew/kore/less.l); h is its help
   sh [-c CMD | FILE]                      the shell, lush (crew/lush/)
   ls cp mv rm mkdir rmdir ln touch pwd chmod   the fs tools (crew/kore/fs.l)
   install readlink cmp                         ... the build's fs verbs
