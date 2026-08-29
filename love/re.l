@@ -196,9 +196,22 @@
                  (: _ (put o (? (rcls neg rs c) 1 0)) (go (c + 1))))
        tbl (go 0)
        (\ c (? (c <= 255) (tbl c) (rcls neg rs c))))
-   (recomp ns)
-    (ns @ (nd >< rest) (renode nd (recomp rest))
+   ; the PROGRAM a caller holds: the matcher, and whether the pattern can only
+   ; match at 0. the find loops read the second half -- `^` used to be asked its
+   ; one failing question at every byte of the line
+   (recomp ns) [(recompm ns) (reanch ns)]
+   (recompm ns)
+    (ns @ (nd >< rest) (renode nd (recompm rest))
           (\ s i sp k (k i sp)))
+   ; anchored: a leading `^`, or a shape whose every path opens with one. a `^`
+   ; anywhere else is not the head of this list and answers 0, which is the walk
+   (reanch ns)
+    (ns @ (nd >< _)
+       (nd @ ['bol]       1
+             ['grp _ sub] (reanch sub)
+             ['alt brs]   (all reanch brs)
+             0)
+       0)
    (renode nd tail)
     (nd @ ['chr c]      (\ s i sp k (i < #s && s i = c ? (tail s (i + 1) sp k)))
           ['any]        (\ s i sp k (i < #s ? (tail s (i + 1) sp k)))
@@ -206,18 +219,18 @@
                            (\ s i sp k (i < #s && p (s i) ? (tail s (i + 1) sp k))))
           ['bol]        (\ s i sp k (i = 0 ? (tail s i sp k)))
           ['eol]        (\ s i sp k (i = #s ? (tail s i sp k)))
-          ['grp gi sub] (: b (recomp sub)
+          ['grp gi sub] (: b (recompm sub)
                            (\ s i sp k
                               (b s i sp (\ j sp2 (tail s j ([gi i j] . sp2) k)))))
           ; alternation: the branches in order on the winning path, each with the
           ; tail as its onward; a branch that fails answers () so the next is asked
-          ['alt brs]    (: bs (map recomp brs)
+          ['alt brs]    (: bs (map recompm brs)
                            (\ s i sp k
                               (: (try l)
                                   (l @ (b . more)
                                      (b s i sp (\ j sp2 (tail s j sp2 k)) || try more))
                                  (try bs))))
-          ['rep a lo hi] (: ab (recomp [a])
+          ['rep a lo hi] (: ab (recompm [a])
                             (\ s i sp k (rrepc ab lo hi tail s i sp k 0))))
    ; the repeat: try one more (progress required), else the tail once fed.
    ; ⚠ AN EMPTY ITERATION CANNOT REPEAT -- that guard is what stops `\(\)*` spinning
@@ -237,8 +250,8 @@
    ; the boolean face: does s contain a match anywhere. the continuation answers
    ; (1 j), never (j): a match ending at 0 would net blue and read as absence
    (rehasm m s)
-    (: n #s
-       (from i) (? (m s i () (\ j sp [1 j])) 1
+    (: f <m n (<>m ? 0 #s)                        ; anchored: the walk ends where it starts
+       (from i) (? (f s i () (\ j sp [1 j])) 1
                    (i < n) (from (i + 1)))
        (from 0))
    ; the node-list faces: they compile and then match, for a caller with one text to
@@ -255,8 +268,8 @@
    ; "a._c_" is word-bounded at "a" and not at the greedy "a.", and the outside
    ; filter calls that line a miss where GNU calls it a hit
    (refindpm m s i p)
-    (: n #s
-       (from j) (m s j () (\ e sp (p j e ? [1 e sp])) @ [_ e sp] [1 j e sp]
+    (: f <m n (<>m ? i #s)                        ; anchored: the walk ends where it starts
+       (from j) (f s j () (\ e sp (p j e ? [1 e sp])) @ [_ e sp] [1 j e sp]
                   (? (j < n) (from (j + 1)) ()))
        (from i))
    (refindm m s i) (refindpm m s i (\ a b 1))
