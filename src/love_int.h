@@ -683,7 +683,7 @@ void code_free(struct ai *g, char *code), jk_ini(struct ai *g);
 int code_in(struct ai *g, uintptr_t v);
 size_t code_len(char *code);
 // the jk slots (g->jk): what a native reads off g -- the emitter's `jk` law names them the same
-enum { JkChain, JkStr, JkMap, JkNom, JkMint, JkGem, JkCask, JkDrive, JkResume };
+enum { JkChain, JkStr, JkMap, JkNom, JkMint, JkGem, JkCask, JkDrive, JkResume, JkCur };
 union u *fn_base(union u *k, int *nargs);
 struct ai
  *ai_eval_(struct ai *g),
