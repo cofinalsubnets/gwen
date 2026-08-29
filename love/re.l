@@ -180,55 +180,70 @@
                  nd))
          nds)
 
-   ; -- the matcher: greedy backtracking in continuation style --
+   ; -- the matcher: greedy backtracking in continuation style, COMPILED --
+   ; a node list becomes one lambda of (s i sp k), once, before any text is read.
+   ; the shape walk and the class ranges are spent there, so what a character costs
+   ; at match time is a call and a compare. the node vocabulary is renode's arm list
+   ; -- a shape with no arm there cannot be built above
    ; does charm c sit in a class of these ranges, negated or not?
    (rcls neg rs c)
     (: hit (any (\ [lo hi] (lo <= c <= hi)) rs) (? neg !hit hit))
-   ; match the node list ns against s from i; sp carries the group spans won so
-   ; far; k rides (end-index spans) onward on the winning path. THE NODE
-   ; VOCABULARY IS THE ARM LIST -- a shape with no arm here cannot be built above
-   (rem ns s i sp k)
-    (ns @ (nd >< rest)
-       (: n (tally s)
-          (step j) (rem rest s j sp k)          ; the tail, one charm on
-          (nd @ ['chr c]      (i < n && s i = c ? (step (i + 1)))
-                ['any]        (i < n ? (step (i + 1)))
-                ['cls neg rs] (i < n && rcls neg rs (s i) ? (step (i + 1)))
-                ['bol]        (i = 0 ? (step i))
-                ['eol]        (i = n ? (step i))
-                ['grp gi sub] (rem sub s i sp
-                               (\ j sp2 (rem rest s j ([gi i j] . sp2) k)))
-                ; alternation: the branches in order on the winning path. the CPS
-                ; is the whole implementation -- try one with the tail as its
-                ; onward, and a branch that fails answers () so the next is asked
-                ['alt brs] (: (try bs)
-                               (bs @ (b . more)
-                                 (rem b s i sp (\ j sp2 (rem rest s j sp2 k)) || try more))
-                              (try brs))
-                ['rep a lo hi] (rrep a lo hi rest s i sp k 0)))
-       (k i sp))
+   ; the class as a 256-wide membership table: a range walk per charm was the whole
+   ; cost of [a-z], and the table is one native string index
+   (recls neg rs)
+    (: o (jug 0)
+       (go c) (? (255 < c) (slurp o)
+                 (: _ (put o (? (rcls neg rs c) 1 0)) (go (c + 1))))
+       tbl (go 0)
+       (\ c (? (c <= 255) (tbl c) (rcls neg rs c))))
+   (recomp ns)
+    (ns @ (nd >< rest) (renode nd (recomp rest))
+          (\ s i sp k (k i sp)))
+   (renode nd tail)
+    (nd @ ['chr c]      (\ s i sp k (i < #s && s i = c ? (tail s (i + 1) sp k)))
+          ['any]        (\ s i sp k (i < #s ? (tail s (i + 1) sp k)))
+          ['cls neg rs] (: p (recls neg rs)
+                           (\ s i sp k (i < #s && p (s i) ? (tail s (i + 1) sp k))))
+          ['bol]        (\ s i sp k (i = 0 ? (tail s i sp k)))
+          ['eol]        (\ s i sp k (i = #s ? (tail s i sp k)))
+          ['grp gi sub] (: b (recomp sub)
+                           (\ s i sp k
+                              (b s i sp (\ j sp2 (tail s j ([gi i j] . sp2) k)))))
+          ; alternation: the branches in order on the winning path, each with the
+          ; tail as its onward; a branch that fails answers () so the next is asked
+          ['alt brs]    (: bs (map recomp brs)
+                           (\ s i sp k
+                              (: (try l)
+                                  (l @ (b . more)
+                                     (b s i sp (\ j sp2 (tail s j sp2 k)) || try more))
+                                 (try bs))))
+          ['rep a lo hi] (: ab (recomp [a])
+                            (\ s i sp k (rrepc ab lo hi tail s i sp k 0))))
    ; the repeat: try one more (progress required), else the tail once fed.
    ; ⚠ AN EMPTY ITERATION CANNOT REPEAT -- that guard is what stops `\(\)*` spinning
    ; -- BUT IT STILL SATISFIES THE MINIMUM, all at once. without that second half
    ; `a*\+\+` demands an `a`, because the inner a* matches empty, the empty is
    ; refused, and the outer's lo=1 is never met: GNU matches every line there and
    ; we matched only the ones with an a. (the seeded fuzz found it, not a human.)
-   (rrep a lo hi rest s i sp k cnt)
+   (rrepc ab lo hi tail s i sp k cnt)
     (: more (? (!hi || cnt < hi)
-               (rem [a] s i sp
-                    (\ j sp2 (j = i ? (cnt < lo ? (rem rest s j sp2 k))
-                              (rrep a lo hi rest s j sp2 k (cnt + 1)))))
+               (ab s i sp
+                   (\ j sp2 (j = i ? (cnt < lo ? (tail s j sp2 k))
+                              (rrepc ab lo hi tail s j sp2 k (cnt + 1)))))
                ())
        (? more more
           (cnt < lo) ()
-          (rem rest s i sp k)))
+          (tail s i sp k)))
    ; the boolean face: does s contain a match anywhere. the continuation answers
    ; (1 j), never (j): a match ending at 0 would net blue and read as absence
-   (rehas ns s)
+   (rehasm m s)
     (: n #s
-       (from i) (? (rem ns s i () (\ j sp [1 j])) 1
+       (from i) (? (m s i () (\ j sp [1 j])) 1
                    (i < n) (from (i + 1)))
        (from 0))
+   ; the node-list faces: they compile and then match, for a caller with one text to
+   ; ask about. a caller with many -- grep, sed, awk -- holds the matcher instead
+   (rehas ns s) (rehasm (recomp ns) s)
    ; the leftmost span at-or-after i: (1 start end spans) | () -- uread's success
    ; shape, since the empty match at 0 is the span (0 0), blue by measure. greedy
    ; end: the span the substitution tools take; spans feed \1
@@ -239,12 +254,14 @@
    ; do that -- it only ever sees the greedy span. -w is where it shows: `a*.` on
    ; "a._c_" is word-bounded at "a" and not at the greedy "a.", and the outside
    ; filter calls that line a miss where GNU calls it a hit
-   (refindp ns s i p)
+   (refindpm m s i p)
     (: n #s
-       (from j) (rem ns s j () (\ e sp (p j e ? [1 e sp])) @ [_ e sp] [1 j e sp]
+       (from j) (m s j () (\ e sp (p j e ? [1 e sp])) @ [_ e sp] [1 j e sp]
                   (? (j < n) (from (j + 1)) ()))
        (from i))
-   (refind ns s i) (refindp ns s i (\ a b 1))
+   (refindm m s i) (refindpm m s i (\ a b 1))
+   (refindp ns s i p) (refindpm (recomp ns) s i p)
+   (refind ns s i) (refindm (recomp ns) s i)
 )
 
 ) ; module 're

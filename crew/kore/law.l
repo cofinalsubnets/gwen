@@ -447,12 +447,12 @@
 
 ; --- the sed floor (crew/kore/sed.l): the substitution walk to its GNU face,
 ; and the script parser's shapes -- what parses, what refuses ---
-(: (sub p r s g?) (: b (rebre p) <>(usub <>b r s g?))
+(: (sub p r s g?) (: b (rebre p) <>(usub (recomp <>b) r s g?))
    (sp s) (sparse s ())                                          ; the BRE door, the default
    (assert
       (= (sub "b" "X" "abc" ()) "aXc") (= (sub "z" "X" "abc" ()) "abc")
-      <(usub <>(rebre "b") "X" "abc" ())                         ; the changed bit ...
-      !<(usub <>(rebre "z") "X" "abc" ())                        ; ... and its absence
+      <(usub (recomp <>(rebre "b")) "X" "abc" ())                ; the changed bit ...
+      !<(usub (recomp <>(rebre "z")) "X" "abc" ())               ; ... and its absence
       (= (sub "b" "X" "abab" 1) "aXaX")                          ; g takes every match
       (= (sub "b" "X" "abab" ()) "aXab")                         ; bare s takes the first
       (= (sub "x*" "-" "abc" 1) "-a-b-c-")                       ; the empty-match step rule

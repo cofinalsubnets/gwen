@@ -7,6 +7,7 @@
 (module 'kore
 (: rebre (from 're 'rebre) reere (from 're 'reere)      ; the four engine names grep reads
    refold (from 're 'refold) refindp (from 're 'refindp)
+   recomp (from 're 'recomp) refindpm (from 're 'refindpm)
 
    ; -- grep --------------------------------------------------------------------
    ; flags ride a tablet keyed by the option charm (u.l's uopts fills it), so a
@@ -34,17 +35,17 @@
    ; -w: the span must not sit inside a word. checked at the SPAN, not the
    ; pattern, because a word boundary is not a node this engine can hold
    (gword? c) ((48 <= c <= 57) || (65 <= c <= 90) || (97 <= c <= 122) || (c = 95))
-   ; the leftmost match of any of nss in ln, word-bounded if w? -> (1 st en) | ()
-   (gfind nss ln w? i)
+   ; the leftmost match of any of ms (compiled) in ln, word-bounded if w? -> (1 st en) | ()
+   (gfind ms ln w? i)
     (: n (tally ln)
        (bnd st en) (? !w? 1
                       ((st = 0 || !(gword? (ln (st - 1)))) &&
                        (en = n || !(gword? (ln en)))))
-       (best acc nds)
-        (refindp nds ln i bnd @ [_ st en _]
+       (best acc m)
+        (refindpm m ln i bnd @ [_ st en _]
           (? !(two? acc) [1 st en] (st < <>acc) [1 st en] acc)
           acc)
-       (foldl best () nss))
+       (foldl best () ms))
    (grep-main as)
     (: t (tablet 0)
        o (uopts as t '(101 109) ())              ; -e PATTERN (stacks), -m COUNT
@@ -57,7 +58,7 @@
        fs (? (two? eps) rest >rest)
        nss (gnodes t pt)
        _ (? (two? nss) () (udie 2 ("grep: invalid pattern: " + pt)))
-       ast <>nss
+       ast (map recomp <>nss)                     ; compiled once, not per line
        n? (gflag t 110) v? (gflag t 118) c? (gflag t 99) l? (gflag t 108)
        q? (gflag t 113) h? (gflag t 104) o? (gflag t 111) w? (gflag t 119)
        mx (: v (uoptv t 109) (? v (uatoi v) ()))

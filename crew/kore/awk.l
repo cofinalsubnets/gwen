@@ -1,7 +1,8 @@
 ; crew/kore/awk.l -- awk: a pattern-action language over records and fields. a
 ; toolbox file, no seat -- kore (crew/kore/kore.l) is its door. it rides the
 ; u-floor (udie/uleave, uread, uatoi), text.l's lines, and re.l's ERE engine
-; (reere, refind, rehas) for every regex it speaks.
+; (reere, recomp, refindm, rehasm) for every regex it speaks: a pattern is
+; COMPILED to a matcher once and the cache holds that, not its nodes.
 ;
 ;   awk [-F FS] [-v var=value].. 'PROGRAM' [FILE..]
 ;   awk [-F FS] [-v var=value].. -f PROGFILE.. [FILE..]
@@ -715,7 +716,7 @@
         (: nds (aw-re pat) (pin c pat nds, nds))))
    (aw-re pat)
     (: p (reere pat)
-       (two? p ? <>p (aw-err ("bad regular expression: /" + pat + "/"))))
+       (two? p ? (recomp <>p) (aw-err ("bad regular expression: /" + pat + "/"))))
 
    ; -- fields ---------------------------------------------------------------
    (aw-splitw t)                                 ; the default FS: runs of blank
@@ -737,7 +738,7 @@
     (: n #t nds (aw-recomp E pat)
        (n = 0 ? ()
         (: (go i acc)
-            (refind nds t i @ [_ st en _]
+            (refindm nds t i @ [_ st en _]
               (en <= st ? (rev ((snip t i n) . acc))          ; an empty match cannot walk
                  (go en ((snip t i st) . acc)))
               (rev ((snip t i n) . acc)))
@@ -835,7 +836,7 @@
           'field (aw-anfld <>e)
           ; a bare /re/ in an expression is `$0 ~ /re/`, not a value
           'ere (: nds (aw-re <>e)
-                  (E \ (rehas nds (aw-rec E) ? 1 0)))
+                  (E \ (rehasm nds (aw-rec E) ? 1 0)))
           ; mentioning a[i] creates it -- awk's rule, and `if (a[k])` then leaves
           ; k in the array for a later `in`
           'idx (: nm <>e k (aw-ankey <>>e) (E \ (aw-idx E nm (k E))))
@@ -918,8 +919,8 @@
             (: f (aw-an pe) (E \ (aw-recomp E (aw-sv E (f E))))))
    (aw-anmatch neg a pe)
     (: g (aw-anpat pe)
-       (neg ? (E \ (rehas (g E) (aw-sv E (a E)) ? 0 1))
-          (E \ (rehas (g E) (aw-sv E (a E)) ? 1 0))))
+       (neg ? (E \ (rehasm (g E) (aw-sv E (a E)) ? 0 1))
+          (E \ (rehasm (g E) (aw-sv E (a E)) ? 1 0))))
    (aw-anassign op lp rhs)
     (: get <lp put <>lp
        (? (op = "=") (\ E (put E (rhs E)))
@@ -968,7 +969,7 @@
     (: n (tally s) o (jug 0)
        (go i cnt)
         (? (n < i) [(slurp o) cnt]
-           (refind nds s i @ [_ st en _]
+           (refindm nds s i @ [_ st en _]
              (: _ (say o (snip s i st))
                 _ (say o (aw-repl rep (snip s st en)))
                 (? !glob (: _ (say o (snip s en n)) [(slurp o) (cnt + 1)])
@@ -1026,7 +1027,7 @@
                          <>r))))
           "match"
            (: pf (aw-anpat (aw-nth as 1))
-              (E \ (refind (pf E) (s0 E) 0 @ [_ st en _]
+              (E \ (refindm (pf E) (s0 E) 0 @ [_ st en _]
                      (pin (aw-g E) "RSTART" (st + 1),
                       pin (aw-g E) "RLENGTH" (en - st),
                       st + 1)

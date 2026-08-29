@@ -52,7 +52,7 @@
        ; ate marks "a match ended exactly here": an empty match at that point is
        ; DISCARDED (the POSIX rule -- s/x*/-/g on "xbz" is "-b-z-", one dash)
        (walk i acc ate hit)
-        (refind nodes ln i @ [_ ms me sp]
+        (refindm nodes ln i @ [_ ms me sp]
           (? (&& ate (me = ms) (ms = i))
              (? (i < n) (walk (i + 1) (acc + snip ln i (i + 1)) () hit)
                 [hit acc])
@@ -94,7 +94,7 @@
               (? (dig? c) (num i 0 @ [v j] [['ln v] j])
                  (c = 36) ['(last) (i + 1)]
                  (c = 47) (until (i + 1) 47 "" @ [txt j]
-                            (rx txt @ [_ nds _] [['re nds] j] ())
+                            (rx txt @ [_ nds _] [['re (recomp nds)] j] ())
                             ())
                  [() i])))
        (sepend? j) ((n <= j) || sep? (sc j))
@@ -112,7 +112,7 @@
                               (sc k = 103) (fgo (k + 1) 1 p?)
                               (sc k = 112) (fgo (k + 1) g? 1)
                               ())
-                          (fgo j5 () () @ [j6 g? p?] [[nds rp g? p?] j6] ()))
+                          (fgo j5 () () @ [j6 g? p?] [[(recomp nds) rp g? p?] j6] ()))
                        ())
                      ())
                    ()))))
@@ -152,7 +152,7 @@
         (? !(two? a) 1
            (<a = 'ln) (no = <>a)
            (<a = 'last) last?
-           (rehas <>a ln))
+           (rehasm <>a ln))
        ; is command c (at index idx) selected on line no with pattern space ln?
        ; a range opens on its first address and closes on a LATER line's second
        (sel? c idx no ln last?)
