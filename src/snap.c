@@ -649,6 +649,54 @@ static void img_hashcons(struct ai *g) {
       for (uintptr_t i = 0, ne = tray_nelem(tray(p)); i < ne; i++) e[i] = hc_can(h, e[i]); }
       break;
      default: break; } }
+   p = (union u*) ((word*) p + sz); }
+  // 6. threads: many closures compile to cell-identical bodies (the tiny accessors, and
+  // every source the chain merge above just unified), so the image carried each of them.
+  // the terminator is a self-pointer -- derived, never content -- and is skipped on both
+  // sides of the compare; a match maps the whole span word-for-word onto the first copy,
+  // so a value pointing anywhere into a duplicate lands at the same offset in the one
+  // kept. the fl/cn/tab scratch is re-seeded: a kept head notes its width in cn (the
+  // probe's size check), a duplicate's words go HcDone with cn holding the destination.
+  // mutable carriers (tablet halves, casks, ports, coins), partials, and a parked
+  // continuation (a yield word in the body) stay their own; roots are left alone as above.
+  memset(h->fl, 0, nw);
+  memset(h->tab, 0, cap * sizeof(word));
+  for (union u *p = (union u*) base; (word*) p < hp; ) {
+   uintptr_t sz = hc_stride(g, p, &fz), off = (uintptr_t) ((word*) p - base);
+   if (!fz && sz > 1 && !in_data(p->ap)
+       && p->ap != lvm_map_lookup && p->ap != lvm_map_data && p->ap != lvm_cask
+       && p->ap != lvm_coin && p->ap != lvm_port_io && p->ap != lvm_cur) {
+    int parked = 0;
+    uintptr_t hv = 1469598103934665603u;
+    for (uintptr_t i = 0; i + 1 < sz; i++) {
+     word w = ((word*) p)[i];
+     if (w == (word) lvm_yield_sw || w == (word) lvm_yield_nif
+      || w == (word) lvm_task_exit || w == (word) _lvm_yieldk) parked = 1;
+     hv = (hv ^ w) * 1099511628211u; }
+    if (!parked) {
+     h->cn[off] = (word) sz;
+     for (uintptr_t i = hv & h->mask; ; i = (i + 1) & h->mask) {
+      word q = h->tab[i];
+      if (!q) { h->tab[i] = (word) p; break; }
+      if ((uintptr_t) h->cn[hc_off(h, q)] == sz && !memcmp((void*) q, p, (sz - 1) * sizeof(word))) {
+       for (uintptr_t k = 0; k < sz; k++)
+        h->fl[off + k] = HcDone, h->cn[off + k] = q + (word) (k * sizeof(word));
+       break; } } } }
+   p = (union u*) ((word*) p + sz); }
+  // ..and re-point every in-heap reference, the same coverage as step 5 plus the chain
+  // fields step 4 owned; the last word of a span is its terminator and stays
+  for (union u *p = (union u*) base; (word*) p < hp; ) {
+   uintptr_t sz = hc_stride(g, p, &fz);
+   if (!fz) {
+    if (!in_data(p->ap))
+     for (uintptr_t i = 0; i + 1 < sz; i++) ((word*) p)[i] = hc_can(h, ((word*) p)[i]);
+    else switch (ai_typ(p)) {
+     case DChain: two(p)->a = hc_can(h, two(p)->a), two(p)->b = hc_can(h, two(p)->b); break;
+     case DTray: if (tray(p)->type == ai_O) {
+      word *e = (word*) tray_data(tray(p));
+      for (uintptr_t i = 0, ne = tray_nelem(tray(p)); i < ne; i++) e[i] = hc_can(h, e[i]); }
+      break;
+     default: break; } }
    p = (union u*) ((word*) p + sz); } }
  g->alloc(g, h->fl, 0), g->alloc(g, h->cn, 0), g->alloc(g, h->tab, 0), g->alloc(g, h->stk, 0); }
 // compact g and encode its live half into a fresh g->alloc'd blob, filling *Ho; NULL on

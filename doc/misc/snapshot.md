@@ -186,6 +186,16 @@ Three things carry it:
 - **Roots are not rewritten.** A duplicate the stack still names simply survives — a few words, and
   a mid-eval bake's continuation keeps its values identical.
 
+Threads merge too, one step after the chains. Many closures compile to cell-identical bodies —
+the tiny accessors, and every source the chain merge just unified — and a thread's one
+address-bearing word is its terminator, derived rather than content, so the compare skips it on
+both sides and a duplicate maps word-for-word onto the first copy (a value points anywhere into a
+span; the same offset lands in the one kept). Mutable carriers (tablet halves, casks, ports,
+coins), partials, and a parked continuation (a yield word in the body) stay their own, and roots
+are again left alone. The crew image drops 5,392 threads (26,000 words), the stream 73 KB, the
+binary 10,543,584 → 10,474,512 B; two baked closures that compiled alike now answer `id?` 1, the
+same bargain the chains already struck.
+
 The pass is a pure function of the heap, which `test_bakerep` and `love seed`'s fixpoint both
 hold it to.
 
