@@ -73,7 +73,7 @@ hsuf := $(if $(HCC),-cc,)$(if $(filter 0,$(tco)),-tco0,)
 # the collation -- a locale `ls` orders uukind* first and the laws would run against an
 # unloaded kernel. ⚠ glaze-x86 and glaze-hook are EXCLUDED: both EXECUTE native machine
 # code, so they ride their own arch-guarded targets, never the arch-neutral corpus.
-t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
+t = $R/test/00-init.l $R/test/spec.l $R/test/uu.l $(filter-out %/00-init.l %/spec.l %/glaze-x86.l %/glaze-hook.l %/letrec.l %/uu.l,$(sort $(wildcard $R/test/*.l)))
 
 # the runtime's own headers. named, not globbed: src/ holds the metal seat's k.h and the
 # per-ISA asmops beside these, and a touch on those must not rebuild every love object.

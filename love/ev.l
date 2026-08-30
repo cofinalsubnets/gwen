@@ -454,7 +454,7 @@
      (? (purep a se) (<r . ((p . a) . >r))
         (i = si && 1 = rdn p bd) (<r . ((p . a) . >r))                  ; the licensed effectful substitution
         (: n (nom 0) ((n . a . <r) . ((p . n) . >r))))))
-   (bspl x h h2 hr as se fl op bnd) (: r (lp hr) np #<r
+   (bspl x h h2 hr as se fl op bnd pb) (: r (lp hr) np #<r
     (#as < np ? (keep2 x h2 as)                                           ; under-saturated -> decline (a partial's effects fire at build time; the pure lane's curry bet is not licensed here)
      (: bd0 (last hr)
         ; a nom head resolved through se already passed pbody? at admission -- only a
@@ -465,10 +465,18 @@
         rest (drop np as)
       (op || two? rest || !(lambp bd) ?
          (: f2 (atom? <sp ? bd (': . (<sp + [bd])))                          ; no binding left -> no let: the call is gone
-            (cprop (two? rest ? (f2 . rest) f2) se (fl - 1) op bnd))
+            (cprop (two? rest ? (f2 . rest) f2) se (fl - 1) op bnd pb))
          (keep2 x h2 as)))))                                                     ; a lambda body escaping at a value position -> decline (the escape law)
-   (cplam x se fl op bnd) (atom? >>x ? x                                       ; (\ v) quote -> leave
-    (: r (lp x) (relam x r (cprop >r (rmkeys <r se) fl 0 (<r + bnd)))))          ; the body is a value -> op 0
+   ; a param that shadows an enclosing lambda param renames to a fresh mint (with its
+   ; like-named inners: one cluster, so a pre-pin read still sees the outer) -- ana's
+   ; letrec loads a sibling's captures BY NAME at each reference site, and a shadow
+   ; would hand the site its own value. the check rides the visit; a clean lambda pays
+   ; two or three compares.
+   (cplam x se fl op bnd pb) (atom? >>x ? x                                       ; (\ v) quote -> leave
+    (: r (lp x)
+     (? (any (p \ p != '_ && member? p pb) <r)
+        (cplam (foldl (\ z p (? (p != '_ && member? p pb) (sub1 z p (nom 0)) z)) x <r) se fl op bnd pb)
+        (relam x r (cprop >r (rmkeys <r se) fl 0 (<r + bnd) (<r + pb))))))          ; the body is a value -> op 0
    ; the new-law guard (eager reads see let*, closures see letrec*): bsub renames a :'s
    ; binders over the WHOLE form -- letrec-wise -- but a bare read BEFORE its name's pin
    ; reads the OUTER binding, and that rename would capture it (the fresh nom then reads
@@ -488,44 +496,46 @@
            (walk >>bs (<bs . pn))))
        (walk >x ()))
     (any entg? x))
-   (cpbinds bs se fl op bnd) (?
+   (cpbinds bs se fl op bnd pb) (?
     (atom? bs) bs
-    (atom? >bs) (keep1 bs (cprop <bs se fl op bnd))                              ; the let's BODY inherits the let's op
-    (: nd (dsug <bs <>bs) nm <nd v1 (cprop >nd se fl 0 bnd)       ; a binding value is a value -> op 0
+    (atom? >bs) (keep1 bs (cprop <bs se fl op bnd pb))                              ; the let's BODY inherits the let's op
+    (: nd (dsug <bs <>bs) nm <nd v1 (cprop >nd se fl 0 bnd pb)       ; a binding value is a value -> op 0
        se2 (propk? v1 || inlinable? nm v1 ?                                      ; a const OR a known pure lambda enters se
               ([nm v1] . rmq nm se) (rmq nm se))
-       (keep3 bs nm v1 (cpbinds >>bs se2 fl op bnd))))
+       (keep3 bs nm v1 (cpbinds >>bs se2 fl op bnd pb))))
    ; bnd: the lexical binder set (\ params + : names), one-scope. its ONE reader is the macro lane:
    ; a locally-bound name is an ordinary variable, never a macro head (the shadow law; se can't
    ; stand in -- absence from se doesn't distinguish local from global).
    ; ⚠ the atom test stays OUT of the @ chain: as a pattern it would be the pin ^x,
    ; and a pin compiles to `=` -- a deep structural walk where this is one cheap
    ; test per node. in cprop, which runs on every node, that cost the bake 7 minutes.
-   (cprop x se fl op bnd) (<x = x ?
+   (cprop x se fl op bnd pb) (<x = x ?
     (nom? x ? (assq x se @ (_ . e . _) e x) x)               ; const/known-lambda var -> value
     (<x @
-    '\ (cplam x se fl op bnd)
-    ': (ln >x @ ns (keep x (cpbinds >x (rmkeys ns se) fl op (ns + bnd)) ':))
-    '? (keep x (mapi (e \ cprop e se fl op bnd) >x) '?)              ; no prune here -- wxc does it
+    '\ (cplam x se fl op bnd pb)
+    ': (ln >x @ ns (keep x (cpbinds >x (rmkeys ns se) fl op (ns + bnd) pb) ':))
+    '? (keep x (mapi (e \ cprop e se fl op bnd pb) >x) '?)              ; no prune here -- wxc does it
     h (: m (? (nom? h) (macros h) 0)                                          ; macro head, not shadowed? expand on RAW args -- a
-       (? (m && !(member? h bnd)) (cprop (m >x) se fl op bnd)                  ; structural macro (a two?/cap probe) must see them
-          (: as (mapi (e \ cprop e se fl 0 bnd) >x)
-             hr (nom? h ? (: e (assq h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd)) ; HEAD is consumed -> op 1
+       (? (m && !(member? h bnd)) (cprop (m >x) se fl op bnd pb)                  ; structural macro (a two?/cap probe) must see them
+          (: as (mapi (e \ cprop e se fl 0 bnd pb) >x)
+             hr (nom? h ? (: e (assq h se) (atom? e ? h <>e)) (cprop h se fl 1 bnd pb)) ; HEAD is consumed -> op 1
              h2 (nom? h ? h hr)                                                 ; the emitted head: a nom stays a nom (ana resolves it);
              hk (kconst hr)                                                       ; the head's own value, when it has one
              (? (0 < fl && lambp hr && two? as)
                  (? (entg? (last hr))                   ; an entangled : in the body -> no bsub lane is sound;
                      (keep2 x h2 as)                                                     ;   keep the call (boxfix's runtime law answers it)
                     (allp as se)                        ; two? as: (f) is f -- nothing to substitute
-                     (: red (cprop (beta hr as) se (fl - 1) op bnd)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
+                     (: red (cprop (beta hr as) se (fl - 1) op bnd pb)                       ; KNOWN LAMBDA -> beta, re-cprop (fuel-bounded)
                       (op || !(lambp red) ? red (keep2 x h2 as)))                    ; escaping lambda result -> REVERT (keep the closure)
-                    (bspl x h h2 hr as se fl op bnd))                                     ;    foldc/cpap are dead for a lambda head, so its decline keeps the call)
+                    (bspl x h h2 hr as se fl op bnd pb))                                     ;    foldc/cpap are dead for a lambda head, so its decline keeps the call)
                 (nom? h && allk as && !(member? h bnd) && pure-head? h as)            ; pure-fn on consts -> fold. bnd-guarded: a binder
                   (foldc (gv h ()) as)                                                ;   spelled like an op still SHADOWS (the alpha law)
                 (two? as && propk? <as && <hk && pure-ap? >hk (kval <as))             ; a PURE-APPLYING head with a KNOWN operand: fold the whole
                   (cpap >hk as)                                                       ;   known prefix, an unknown tail keeps the value as its head
                 (keep2 x h2 as)))))))                                                ; nothing rewrote -> the ORIGINAL call
-   (wx (cprop x () 64 0 ()) ()))   ; bnd seeds (): a 0 seed rode `list + 0` into every binder set
+   (sub1 x p m) (? (id? x p) m  (atom? x) x  (<x == '\ && atom? >>x) x
+                   (mapi2 x (sub1 <x p m) (sub1 >x p m)))
+   (wx (cprop x () 64 0 () ()) ()))   ; bnd seeds (): a 0 seed rode `list + 0` into every binder set
   ; a bare symbol is a variable reference -- EXCEPT the zero point, which reads as a nom? literal.
   ; ⚠ routing it to ava captures it as a SPURIOUS import: it inflates a closure's arity by one with
   ; no matching value applied at the ref site -> an under-saturated partial (silently wrong). the

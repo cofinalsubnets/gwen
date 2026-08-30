@@ -35,7 +35,7 @@ love0 = out/host/love0
 # every verb here is phony, one roster (a fragment's own gates are rostered in that fragment).
 .PHONY: all install uninstall clean distclean host kernel wasm love0 site site-serve test test_host \
   test_hdiff test_slow test_extra test_tools test_love0 test_wasm test_proof test_gen test_uugen \
-  test_gc test_gcheck test_gcstress test_hostegg test_hostnif test_doc test_glaze test_hook test_sat test_cli \
+  test_gc test_gcheck test_gcstress test_hostegg test_hostnif test_doc test_glaze test_hook test_letrec test_sat test_cli \
   test_holo test_as test_elf32 test_objcopy test_holofuzz test_glazefuzz test_encver test_lux \
   test_extract test_big test_mx test_clay test_moonfuzz test_arm64 test_thumb1 test_thumb2 \
   test_virt test_wake test_embed test_rp2040 valg disasm flame cat cata catav perf repl gdb \
@@ -1484,7 +1484,7 @@ include $(R)/mk/install.mk
 
 JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
-test_phases = test_host test_love0
+test_phases = test_host test_love0 test_letrec
 # fast gate
 test:
 	@$(MAKE) --no-print-directory $(test_phases)
