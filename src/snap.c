@@ -183,14 +183,26 @@ struct img_ctx {
  // the code segment: the live natives' blobs packed in walk order, each [len, pad, code..]
  // rounded to 16 as the arena lays them, and the table of what landed where
  char *cseg; uintptr_t cn, ccap;
- struct img_code { uintptr_t a, off; } *ct; uintptr_t ctn, ctcap; };
+ struct img_code { uintptr_t a, off, h, n; } *ct; uintptr_t ctn, ctcap; };
 // the code rung: a native's code address -> its byte offset in the packed segment,
 // appending the blob on first sight. -1 when no room (the dump refuses)
+static uintptr_t img_chash(char const *p, uintptr_t n) {          // FNV-1a over a blob's code
+ uintptr_t h = (uintptr_t) 1469598103934665603u;
+ for (uintptr_t i = 0; i < n; i++) h = (h ^ (unsigned char) p[i]) * (uintptr_t) 1099511628211u;
+ return h; }
 static intptr_t img_code_off(struct img_ctx *x, uintptr_t a) {
  struct ai *g = x->g;
  for (uintptr_t i = 0; i < x->ctn; i++) if (x->ct[i].a == a) return (intptr_t) x->ct[i].off;
  uintptr_t hd = 2 * sizeof(uintptr_t), n = code_len((char*) a), span = (hd + n + 1 + 15) & ~(uintptr_t) 15;
- if (x->cn + span > x->ccap) {
+ // two closures compiled from different sites often assemble to the same bytes -- the tiny
+ // accessors, mostly -- so an identical blob is packed once and both name its offset. the
+ // alias still gets a table row, since the address scan above is what a later sighting reads
+ uintptr_t hv = img_chash((char const*) a, n);
+ intptr_t hit = -1;
+ for (uintptr_t i = 0; i < x->ctn; i++)
+  if (x->ct[i].h == hv && x->ct[i].n == n && !memcmp(x->cseg + x->ct[i].off, (char const*) a, n)) {
+   hit = (intptr_t) x->ct[i].off; break; }
+ if (hit < 0 && x->cn + span > x->ccap) {
   uintptr_t cap = x->ccap ? 2 * x->ccap : 1u << 16;
   while (cap < x->cn + span) cap *= 2;
   char *b = g->alloc(g, NULL, cap);
@@ -203,11 +215,14 @@ static intptr_t img_code_off(struct img_ctx *x, uintptr_t a) {
   if (!t) return -1;
   if (x->ct) memcpy(t, x->ct, x->ctn * sizeof *t), g->alloc(g, x->ct, 0);
   x->ct = t, x->ctcap = cap; }
- uintptr_t off = x->cn + hd;
- memcpy(x->cseg + x->cn, (char*) a - hd, hd + n + 1);
- memset(x->cseg + x->cn + hd + n + 1, 0, span - hd - n - 1);
- x->cn += span;
- x->ct[x->ctn].a = a, x->ct[x->ctn].off = off, x->ctn++;
+ uintptr_t off;
+ if (hit >= 0) off = (uintptr_t) hit;
+ else {
+  off = x->cn + hd;
+  memcpy(x->cseg + x->cn, (char*) a - hd, hd + n + 1);
+  memset(x->cseg + x->cn + hd + n + 1, 0, span - hd - n - 1);
+  x->cn += span; }
+ x->ct[x->ctn].a = a, x->ct[x->ctn].off = off, x->ct[x->ctn].h = hv, x->ct[x->ctn].n = n, x->ctn++;
  return (intptr_t) off; }
 // an un-wakeable absolute? every legit lane excluded first: a heap pointer, the lvm table, an
 // immortal, the code arena -- what is left is a pointer of the binary, which the guard audits

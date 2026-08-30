@@ -1038,7 +1038,7 @@ __attribute__((weak)) long __ai_osv;
 #ifndef MAP_ANONYMOUS
 #define MAP_ANONYMOUS MAP_ANON
 #endif
-struct ai_code { char *base; size_t len, used; struct ai_code *next; };   // one chunk; used is its bump
+struct ai_code { char *base; size_t len, used; int fixed; struct ai_code *next; };   // one chunk; used is its bump, fixed = the image's own (shared blobs, never freed)
 struct ai_cfree { char *p; size_t n; struct ai_cfree *next; };           // a freed blob (its whole span)
 #define CodeChunk ((size_t) 1 << 20)
 #define CodeHead (2 * sizeof(uintptr_t))
@@ -1057,7 +1057,7 @@ static struct ai_code *code_chunk(struct ai *g, size_t need) {
  if (b == MAP_FAILED) return NULL;
  struct ai_code *c = g->alloc(g, NULL, sizeof *c);
  if (!c) { munmap(b, len); return NULL; }
- c->base = b, c->len = len, c->used = 0, c->next = g->code, g->code = c;
+ c->base = b, c->len = len, c->used = 0, c->fixed = 0, c->next = g->code, g->code = c;
  return c; }
 // (code_install g src n): n bytes of code -> their executable address, NULL when no seat can hold them
 char *code_install(struct ai *g, char const *src, size_t n) {
@@ -1085,7 +1085,10 @@ char *code_install(struct ai *g, char const *src, size_t n) {
  return p + CodeHead; }
 void code_free(struct ai *g, char *code) {
  char *p = code - CodeHead;
- struct ai_cfree *f = g->alloc(g, NULL, sizeof *f);
+ struct ai_cfree *f;
+ for (struct ai_code *c = g->code; c; c = c->next)      // the image's chunk is text: the dump packs one blob
+  if (c->fixed && p >= c->base && p < c->base + c->len) return;   // per distinct BODY, so a dead closure never
+ f = g->alloc(g, NULL, sizeof *f);                      // frees bytes another one is still running
  if (!f) return;                                                  // no node: the blob stays, unreachable
  f->p = p, f->n = code_round(CodeHead + ((uintptr_t*) p)[0] + 1), f->next = g->cfree, g->cfree = f; }
 int code_in(struct ai *g, uintptr_t v) {                          // a code address of this session's arena?
@@ -1106,7 +1109,7 @@ char *code_adopt(struct ai *g, char const *src, size_t n) {
 #endif
  struct ai_code *c = g->alloc(g, NULL, sizeof *c);
  if (!c) { munmap(b, len); return NULL; }
- c->base = b, c->len = len, c->used = len, c->next = g->code, g->code = c;   // used = len: the tail is nobody's
+ c->base = b, c->len = len, c->used = len, c->fixed = 1, c->next = g->code, g->code = c;   // used = len: the tail is nobody's
  return b; }
 #else
 // freestanding: RAM runs as it is; blobs live in the heap (lvm_nif) and an image's segment in the allocator
