@@ -414,11 +414,54 @@ static ai_noinline Ana(analyze) {
  return ana_2(g, c, x, a, b); }
 
 
+// substitute nom p -> m over x, quoted data kept; answers the result on sp0. runs
+// only on a lambda being renamed, so the fresh spine costs what it renames.
+static struct ai *subst1(struct ai *g, word x, word p, word m) {
+ if (!ai_ok(g)) return g;
+ if (x == p) return ai_push(g, 1, m);
+ if (!chainp(x)) return ai_push(g, 1, x);
+ { struct ai_str *nm; word a = A(x);
+   if (nomp(a) && (nm = nom_str(g, a)) && len(nm) == 1 && *txt(nm) == '\\' &&
+       chainp(B(x)) && !chainp(BB(x))) return ai_push(g, 1, x); }   // (\ q): a quote is data
+ { struct ai_r *mm0 = ai_core_of(g)->root;
+   mm(g, &x); mm(g, &p); mm(g, &m);
+   g = subst1(g, A(x), p, m);
+   if (ai_ok(g)) g = subst1(g, B(x), p, m);
+   ai_core_of(g)->root = mm0;
+   return gxr(g); } }
+
 static struct ai *c0_lambda(struct ai *g, struct env **c, intptr_t imps, intptr_t exp) {
  union u *k, *ip;
  word ops = exp;             // the full operand list (params… body) for the stored src
  struct env *d = NULL;
  mm(g, &d); mm(g, &exp); mm(g, &ops);
+
+ // a param that shadows an enclosing binder renames to a fresh mint over the whole
+ // operand list -- one cluster, so a like-named inner : renames with it and a
+ // pre-pin read still sees the outer. ana_d applies a sibling's captures by name at
+ // each reference site, and a shadow would hand the site its own value (ev.l's
+ // cplam holds the same law; there boxfix cells cover the let-value names this
+ // lane's EFars/EStack rows stand for).
+ for (bool again = true; again && ai_ok(g);) {
+  again = false;
+  for (word e = exp; chainp(e) && chainp(B(e)); e = B(e)) {
+   word p = A(e), hit = 0; struct ai_str *nm;
+   if (!nomp(p) || ((nm = nom_str(g, p)) && len(nm) == 1 && *txt(nm) == '_')) continue;
+   for (struct env *d2 = *c; !hit && !zerop(d2); d2 = d2->par)
+    hit = memq(g, eget(g, d2, EArgs), p) || memq(g, eget(g, d2, EFars), p)
+       || memq(g, eget(g, d2, EStack), p);
+   if (!hit) continue;
+   mm(g, &p);
+   g = ai_have(g, Width(struct ai_mint));
+   if (ai_ok(g)) {
+    struct ai_mint *y = (struct ai_mint*) bump(g, Width(struct ai_mint));
+    ini_missing(y, ++g->next_serial);
+    g = subst1(g, exp, p, word(y)); }
+   um(g);
+   if (ai_ok(g)) exp = pop1(g), again = true;
+   break; } }
+ ops = exp;
+
  g = enscope(g, *c, exp, imps);
 
  if (ai_ok(g)) {

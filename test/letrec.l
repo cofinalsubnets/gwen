@@ -1,11 +1,9 @@
 ; --- test/letrec.l: the letrec CAPTURE laws under a shadowing binder ----------------------
-; ale loads a sibling lambda's captures BY NAME at each reference site, and pour propagates
-; them by name too, so a lambda binder that shadows a name free in a sibling def used to
-; hand the site its own value. feel's `shy` renames such a binder before ana ever sees the
-; shadow; every law here is a shape that answered wrongly without it.
-;
-; NOT in the corpus (mk/common.mk's $t filters it out, beside glaze-hook.l): love0's first
-; pass runs the corpus through c0, whose own letrec shares the by-name flaw and has no shy.
+; both letrecs load a sibling lambda's captures BY NAME at each reference site and
+; propagate them by name across siblings, so a lambda binder that shadows a name free in
+; a sibling def used to hand the site its own value. both compilers now mint such a
+; binder before analysis -- ev.l's cplam and c0_lambda hold the same law -- and every
+; shape here answered wrongly without it, under either.
 (assert
     ; a sibling's param shadows the name a LATER sibling captures; reads and calls both ways
     (5 = ((\ a (: (h a) (go a) (go b) (* b a) (h 5))) 1))

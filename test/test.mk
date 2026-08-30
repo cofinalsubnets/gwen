@@ -4,7 +4,7 @@
 
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
-  test_filemode test_stdinbuf test_embed test_glaze test_hook test_letrec test_glazefuzz test_sat test_drat test_lux \
+  test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
   test_sb test_kore test_refuzz test_cookdiff test_dist test_seed test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
@@ -272,14 +272,6 @@ else
 test_hook:
 	@echo "test_hook: skipped (the hook emits for x86_64 / aarch64; host arch is $a)"
 endif
-# test_letrec -- the letrec capture laws under a shadowing binder (feel's shl). NOT in the
-# corpus: love0's pass 1 runs the corpus through c0, whose letrec shares the by-name flaw.
-test_letrec: host
-	@echo TEST test/letrec.l "(the baked image)"
-	@sh test/gate/run.sh -a letrec "$m" "letrec: ok" test/letrec.l
-	@echo TEST test/letrec.l "(egg boot)"
-	@sh test/gate/run.sh -a letrec "env LOVE_NO_IMAGE=1 $m" "letrec: ok" test/letrec.l
-
 # test_glazefuzz -- the glaze's DIFFERENTIAL fuzz (love/glaze/fuzz.l): 3000 random closures
 # run TWICE against the SAME binary (plain, then LOVE_NO_GLAZE=1), stdouts byte-identical.
 # `fires=` is the checked proof of work; stderr is dropped (the two runs scare differently).
