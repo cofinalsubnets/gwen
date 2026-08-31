@@ -8,7 +8,7 @@ static int img_lt_pair(struct img_ord const *o, uintptr_t i, uintptr_t j);
 static int img_lt_rank(struct img_ord const *o, uintptr_t i, uintptr_t j);
 static int img_lt_word(struct img_ord const *o, uintptr_t i, uintptr_t j);
 static int img_nom_before(word a, word b);
-static int img_tok(word const *key, unsigned char const *tk, word v);
+static int img_tok(word const *key, uint16_t const *tk, word v);
 static int img_wxp(struct img_ctx *x, word v);
 static intptr_t image_ap_index(intptr_t ap);
 static intptr_t image_ap_resolve(intptr_t idx);
@@ -28,12 +28,12 @@ static uintptr_t hc_stride(struct ai *g, union u *p, int *fzp);
 static uintptr_t image_datasize(union u *d, void const *s);
 static uintptr_t image_nhost(void);
 static uintptr_t image_objsize(struct ai *g, union u *p);
-static uintptr_t img_dict(word *sorted, uintptr_t nw, word *dict);
+static uintptr_t img_dict(word *sorted, uintptr_t nw, word *dict, uintptr_t *cnt);
 static uintptr_t img_hash(word v);
 static uintptr_t img_rank_assign(struct ai *g, word const *blob, uintptr_t const *slots,
                                  uintptr_t nslot, word *rank, uintptr_t nser);
 static uintptr_t img_stream(unsigned char *out, word const *blob, uintptr_t nw,
-                            word const *key, unsigned char const *tk);
+                            word const *key, uint16_t const *tk);
 static unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char const *p,
                                        unsigned char const *end, word const *dict);
 static unsigned char hc_flag(struct hc *h, word x);
@@ -141,10 +141,10 @@ intptr_t image_imm_index(word v) {
 // {header, dictionary, token stream}; load validates, expands, decodes in place.
 // a mismatched buffer -> NULL, so the caller boots normally -- never wrong.
 /* bump if the wire format changes -- which includes RENUMBERING image_immortals, since a
-   saved index means nothing to a binary that lays the table differently. "..05": the
-   immortals lost the C-string vt with the baked-source port. ⚠ test/gate/bakerep.sh greps
-   the SPELLING ("AISNO05") to corrupt a header, so the two move together. */
-#define ImageMagic 0x35304f4e5349411aULL
+   saved index means nothing to a binary that lays the table differently. "..06": the
+   stream grew the 8-aligned lane and the wide dictionary seats below. ⚠ test/gate/
+   bakerep.sh greps the SPELLING ("AISNO06") to corrupt a header, so the two move together. */
+#define ImageMagic 0x36304f4e5349411aULL
 #if defined(__x86_64__)
 #define ImageArch 1
 #elif defined(__aarch64__)
@@ -355,20 +355,36 @@ ai_inline intptr_t img_decode(intptr_t v, word *base, char *code) {
  if (uv < hb + 2 * (ImageNLvm + ImageNImm)) return (intptr_t) image_immortals[(uv - hb - 2 * ImageNLvm) / 2];
  return img_decode_cold(v, code); }
 // ============================================================================
-// the token stream: an encoded word rides as one byte when it is one of the 248
-// commonest words in the image, else as an escape naming its own width. half an
-// image is 25 distinct words and the single commonest -- lvm_chain's index, the ap
-// every pair wears -- is 23% of it, so the stream lands near a quarter of the blob.
-// chosen by count, not by lane: a fixed budget per lane measures 3.63x against this
-// 3.82x, and follows whichever image it was tuned to. always ImageNDict words -- a short
-// image repeats its commonest into the spare seats, which costs nothing, spares the wake
-// a bound test per word, and lets the loader read the dictionary where it lies (the
-// header is a whole number of words and a shebang is padded to one).
-#define ImageNDict 248u   /* tokens 0..247 name a dictionary word, 248..255 a 1..8-byte literal */
-#define ImageDHash 512u   /* the encoder's value -> token map (open-addressed, 0xff = free) */
+// the token stream: an encoded word rides as one byte when it is one of the commonest
+// words in the image, else as an escape naming its own width. half an image is 25
+// distinct words and the single commonest -- lvm_chain's index, the ap every pair wears
+// -- is 23% of it, so the stream lands near a quarter of the blob. chosen by count, not
+// by lane: a fixed budget per lane measures 3.63x against this 3.82x, and follows
+// whichever image it was tuned to. always the full dictionary -- a short image repeats
+// its commonest into the spare seats, which costs nothing, spares the wake a bound test
+// per word, and lets the loader read the dictionary where it lies (the header is a whole
+// number of words and a shebang is padded to one).
+// the tail of the frequency curve is long and flat, so seats past the byte pay for
+// themselves at TWO bytes: 1024 of them behind four escapes cost 8 KB of dictionary and
+// take ~150 KB off the stream, where a word that would ride as a 4-byte escape rides as
+// an escape and an index.
+// a heap pointer encodes as a BYTE offset and the pool is word-aligned, so its low three
+// bits are always clear -- 1.2M of them carrying three dead bits apiece. the 8-aligned
+// lane stores such a word shifted, which is what drops most of the 4-byte offsets (a
+// 21 MB pool needs 25 bits, 22 shifted) to three. a pure serialization move: the shift is
+// exact, so the word read back is the word written, and no lane rule is consulted. it
+// needs seven widths, not eight: the lane is taken only where it is strictly narrower.
+#define ImageNDict 237u   /* 0..236 a one-byte dictionary word */
+#define ImageNWide 4u     /* 237..240 escape to the wide seats: this byte and an index */
+#define ImageNDict2 (ImageNWide * 256u)              /* the seats those escapes reach */
+#define ImageNAll (ImageNDict + ImageNDict2)          /* the whole dictionary, as it ships */
+#define ImageNShift (ImageNDict + ImageNWide)         /* 241..247 an 8-aligned 1..7-byte literal */
+#define ImageNPlain (ImageNShift + 7u)                /* 248..255 a plain 1..8-byte one */
+#define ImageDHash 4096u  /* the encoder's value -> token map (open-addressed, 0xffff = free) */
 // the encoder's tables ride the allocator, never the frame: together they are kilobytes, and
 // an arm32 load has 12 bits of displacement -- port/mps2 refused to compile them onto the stack.
-struct img_dic { word dict[ImageNDict], key[ImageDHash]; unsigned char tk[ImageDHash]; };
+struct img_dic { word dict[ImageNAll], key[ImageDHash]; uint16_t tk[ImageDHash];
+                 uintptr_t cnt[ImageNAll]; };   /* cnt is the selection's, too big for a frame */
 static uintptr_t img_hash(word v) {
  uintptr_t h = (uintptr_t) v;
  return h ^= h >> 17,
@@ -399,42 +415,51 @@ static void img_sort(struct img_ord const *o, uintptr_t n) {
  for (uintptr_t k = n; k > 1; ) { img_ord_swap(o, 0, --k); img_ord_sift(o, 0, k); } }
 static int img_lt_word(struct img_ord const *o, uintptr_t i, uintptr_t j) {
  return o->a[i] < o->a[j]; }
-// the commonest words of the blob, most frequent first. exact, and the tie-break is
-// total: two machines baking one tree must choose the same 248 words or the images differ
-// in every token (test_bakerep). a sorted copy costs a pass and answers exactly; the
-// approximate counters that would save it have a tie order, which is the thing to avoid.
-static uintptr_t img_dict(word *sorted, uintptr_t nw, word *dict) {
- uintptr_t cnt[ImageNDict], nd = 0;
+// the commonest words of the blob, most frequent first -- the byte seats take the head of
+// that order and the wide ones the rest, so nothing here has to know where the line is.
+// exact, and the tie-break is total: two machines baking one tree must choose the same
+// words or the images differ in every token (test_bakerep). a sorted copy costs a pass and
+// answers exactly; the approximate counters that would save it have a tie order, which is
+// the thing to avoid.
+static uintptr_t img_dict(word *sorted, uintptr_t nw, word *dict, uintptr_t *cnt) {
+ uintptr_t nd = 0;
  struct img_ord o = { img_lt_word, sorted, 1, NULL, NULL };
  img_sort(&o, nw);
  for (uintptr_t i = 0; i < nw; ) {
   uintptr_t j = i;
   while (j < nw && sorted[j] == sorted[i]) j++;
   uintptr_t n = j - i;
-  if (nd < ImageNDict || n > cnt[nd - 1]) {                               // beats the weakest seat
-   uintptr_t k = nd < ImageNDict ? nd++ : ImageNDict - 1;
+  if (nd < ImageNAll || n > cnt[nd - 1]) {                                // beats the weakest seat
+   uintptr_t k = nd < ImageNAll ? nd++ : ImageNAll - 1;
    for (; k && cnt[k - 1] < n; k--) dict[k] = dict[k - 1], cnt[k] = cnt[k - 1];
    dict[k] = sorted[i], cnt[k] = n; }
   i = j; }
  return nd; }
-int img_tok(word const *key, unsigned char const *tk, word v) {
- for (uintptr_t h = img_hash(v) & (ImageDHash - 1); tk[h] != 0xff; h = (h + 1) & (ImageDHash - 1))
+int img_tok(word const *key, uint16_t const *tk, word v) {
+ for (uintptr_t h = img_hash(v) & (ImageDHash - 1); tk[h] != 0xffff; h = (h + 1) & (ImageDHash - 1))
   if (key[h] == v) return tk[h];
  return -1; }
 // one token per blob word. out == NULL sizes the stream instead of writing it, so the
 // buffer is allocated at its true length rather than at a worst case nine times the blob.
 static uintptr_t img_stream(unsigned char *out, word const *blob, uintptr_t nw,
-                            word const *key, unsigned char const *tk) {
+                            word const *key, uint16_t const *tk) {
  uintptr_t n = 0;
  for (uintptr_t i = 0; i < nw; i++) {
   int t = img_tok(key, tk, blob[i]);
   if (t >= 0) {
-    if (out) out[n] = (unsigned char) t;
-    n++;
+    if ((uintptr_t) t < ImageNDict) { if (out) out[n] = (unsigned char) t; n++; }
+    else { unsigned j = (unsigned) t - ImageNDict;         // a wide seat: the escape, then the index
+      if (out) out[n] = (unsigned char)(ImageNDict + (j >> 8)), out[n + 1] = (unsigned char)(j & 255);
+      n += 2; }
     continue; }
   uintptr_t uv = (uintptr_t) blob[i], q = uv; unsigned wd = 0;
   do wd++, q >>= 8; while (q);                             // unsigned: word is signed, and a
-  if (out) { out[n] = (unsigned char)(ImageNDict + wd - 1);   // negative one would shift forever
+  unsigned base = ImageNPlain;                             // negative one would shift forever
+  if (!(uv & 7)) {                                         // 8-aligned: try it shifted
+   uintptr_t sv = uv >> 3; unsigned ws = 0;
+   do ws++, sv >>= 8; while (sv);
+   if (ws < wd) uv >>= 3, wd = ws, base = ImageNShift; }
+  if (out) { out[n] = (unsigned char)(base + wd - 1);
    for (unsigned k = 0; k < wd; k++) out[n + 1 + k] = (unsigned char)(uv >> (8 * k)); }
   n += 1 + wd; }
  return n; }
@@ -448,12 +473,26 @@ static unsigned char const *img_expand(word *out, uintptr_t nw, unsigned char co
   if (p >= end) return NULL;
   unsigned t = *p++;
   if (t < ImageNDict) { out[i] = dict[t]; continue; }
-  unsigned wd = t - ImageNDict + 1;
+  // three-wide is 9 escapes in 10, in both lanes, and the lane's shift folds into the
+  // read: each door is the same three ors either way, so neither pays for the other.
+  if (t == ImageNPlain + 2) {
+   if ((uintptr_t)(end - p) < 3) return NULL;
+   out[i] = (word)((uintptr_t) p[0] | (uintptr_t) p[1] << 8 | (uintptr_t) p[2] << 16);
+   p += 3; continue; }
+  if (t == ImageNShift + 2) {
+   if ((uintptr_t)(end - p) < 3) return NULL;
+   out[i] = (word)((uintptr_t) p[0] << 3 | (uintptr_t) p[1] << 11 | (uintptr_t) p[2] << 19);
+   p += 3; continue; }
+  if (t < ImageNShift) {                                // a wide seat: this byte picks the block
+   if (p >= end) return NULL;
+   out[i] = dict[ImageNDict + (((uintptr_t) t - ImageNDict) << 8) + *p++];
+   continue; }
+  unsigned k = t - ImageNShift;                         // 0..6 the 8-aligned lane, 7..14 plain
+  unsigned wd = (k < 7 ? k : k - 7) + 1, sh = k < 7 ? 3 : 0;
   if ((uintptr_t)(end - p) < wd) return NULL;
   uintptr_t v = 0;
-  if (wd == 3) v = (uintptr_t) p[0] | (uintptr_t) p[1] << 8 | (uintptr_t) p[2] << 16;  // 4 escapes in 5 are a
-  else for (unsigned k = 0; k < wd; k++) v |= (uintptr_t) p[k] << (8 * k);             // heap offset, three wide
-  p += wd, out[i] = (word) v; }
+  for (unsigned j = 0; j < wd; j++) v |= (uintptr_t) p[j] << (8 * j);
+  p += wd, out[i] = (word)(v << sh); }
  return p; }
 // the intern map's slot order is its insertion history: linear probing settles a
 // collision by arrival, and each major re-arrives in old slot order, so the layout
@@ -840,15 +879,15 @@ static void *img_wire(struct ai *g, struct image_hdr *H, word const *blob, uintp
  word *sorted = g->alloc(g, NULL, bytes);
  if (!sorted) { g->alloc(g, d, 0); return NULL; }
  memcpy(sorted, blob, bytes);
- uintptr_t nd = img_dict(sorted, nw, d->dict);
+ uintptr_t nd = img_dict(sorted, nw, d->dict, d->cnt);
  g->alloc(g, sorted, 0);
  memset(d->tk, 0xff, sizeof d->tk);
  for (uintptr_t i = 0; i < nd; i++) {
   uintptr_t h = img_hash(d->dict[i]) & (ImageDHash - 1);
-  while (d->tk[h] != 0xff) h = (h + 1) & (ImageDHash - 1);
-  d->key[h] = d->dict[i], d->tk[h] = (unsigned char) i; }
- for (uintptr_t i = nd; i < ImageNDict; i++) d->dict[i] = nd ? d->dict[0] : 0;   // the spare seats
- uintptr_t ns = img_stream(NULL, blob, nw, d->key, d->tk), db = ImageNDict * sizeof(word);
+  while (d->tk[h] != 0xffff) h = (h + 1) & (ImageDHash - 1);
+  d->key[h] = d->dict[i], d->tk[h] = (uint16_t) i; }
+ for (uintptr_t i = nd; i < ImageNAll; i++) d->dict[i] = nd ? d->dict[0] : 0;    // the spare seats
+ uintptr_t ns = img_stream(NULL, blob, nw, d->key, d->tk), db = ImageNAll * sizeof(word);
  H->nstream = ns;
  // the code segment ships deflated: thousands of blobs share prologue and epilogue
  // shapes, so it makes about a tenth of itself and the wake pays one inflate. a stream
@@ -898,7 +937,7 @@ struct ai *img_wake(void const *buf, uintptr_t len,
  if (len < sizeof H) return NULL;
  memcpy(&H, buf, sizeof H);
  if (H.magic != ImageMagic || H.wordsize != sizeof(word) || H.arch != ImageArch) return NULL;
- uintptr_t nw = H.nwords, db = ImageNDict * sizeof(word), ns = H.nstream;
+ uintptr_t nw = H.nwords, db = ImageNAll * sizeof(word), ns = H.nstream;
  // the stream's length is the header's, never the buffer's: a baked image arrives inside a
  // reserved section and a file may carry a shebang, so "the rest of what you handed me" is
  // the one reading that would make a good image look foreign and fall silently back to the egg.
