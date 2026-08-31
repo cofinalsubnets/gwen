@@ -274,12 +274,13 @@
    ; every runtime surprise -- a non-fixnum under arith/cmp, a heap value under ?, overflow, a
    ; full heap under link -- deopts by RESTART: the twin comes from its reserved slot (a call
    ; clobbers Ip, so the epilogue hand-rolls lvm_ret and the deopt never reads Ip-relative), Sp
-   ; is restored, and e re-runs on the original frame. arg slots are never mutated and loop state
-   ; lives in the reserved slots, so the restart is faithful -- it repeats any call-outs already
-   ; made, the same bet the fold lanes' twins take.
-   ; amble-ok? below is the grammar. strings, floats, effects and global reads in operand position
-   ; decline. a global callee resolves via gv at COMPILE -- redefinition-stale, the callout lanes'
-   ; bet -- and never through a farq name, whose book entry is at best a stale namesake.
+   ; is restored, and e re-runs from the restart point. a restart REPEATS any call-out already
+   ; made from that point, which only a pure callee survives -- so asafe (njit-amble) declines a
+   ; body where a deopting op sits after a call, and the grammar's calls stay ones no restart can
+   ; reach.
+   ; amble-ok? below is the grammar. strings, floats and global reads in operand position decline.
+   ; a global callee resolves via gv at COMPILE -- redefinition-stale, the callout lanes' bet --
+   ; and never through a farq name, whose book entry is at best a stale namesake.
    ; a ? over a heap test value, bare (? l ..) on a list, deopts every call: correct, and a small
    ; entry tax over pure bytecode.
    amble-nil (:)
@@ -578,12 +579,47 @@
        kn   (sfq ? (self . (gn + cn)) (gn + cn))         ; every resolvable free head + the self name (amble-ok?'s membership test)
        lpok (lp ? ((all name? vars) && (adistinct vars) && (k = #inits)
                    && !(member? go vars) && !(member? go ps)) 1)
+       ; the restart law. a deopt RESTARTS: Sp goes back and the twin re-runs from the restart
+       ; point, so every call-out the native already made is made AGAIN -- faithful only where
+       ; the callee is pure, which the grammar cannot ask. so no deopting op may sit after a
+       ; call. asafe walks acg's own evaluation order carrying "a call has run", answering that
+       ; flag onward or 'bad where a guard follows one. the restart point is the arg slots: a
+       ; saturated tail self-call rewrites them before the jump, so the flag clears at that back
+       ; edge and only the running iteration can replay; a named-let's vars live in reserved
+       ; slots the twin never sees, so its restart is the whole invocation and a call poisons
+       ; every later iteration -- (go ..) under a set flag declines. the lanes that drive rather
+       ; than guard -- =, tally -- resolve book primitives at compile, and two?/id? carry no
+       ; guard at all, so none of them sets the flag.
+       (asafe tl cl ex)
+        (: (aseq c l) (foldl (\ ac x (asafe 0 ac x)) c l)                      ; the children, in order
+           (aguard c) (? (id? c 'bad) 'bad  c 'bad  0)                         ; then the node's own guard
+           (? (id? cl 'bad) 'bad
+              (atom? ex) cl
+              (aquote? ex) cl
+              (: op <ex  as >ex
+                 (? (id? op ':) ((: (gol l c) (atom? >l ? (asafe tl c <l) (gol >>l (asafe 0 c <>l)))) as cl)
+                    (id? op '?)
+                     (: ct (aguard (asafe 0 cl <as))
+                        (? (id? ct 'bad) 'bad
+                           (: ca (asafe tl 0 <>as)  cb (asafe tl 0 <>>as)      ; the arms are alternatives; either call poisons the sequel
+                              (? (id? ca 'bad || id? cb 'bad) 'bad (ca || cb)))))
+                    (sfq && tl && (id? op self) && (#as = (a - ni)))
+                     (: c2 (aseq cl as) (id? c2 'bad ? 'bad 0))                ; the self back edge
+                    (id? op go) (aguard (aseq cl as))                          ; the named-let back edge
+                    (member? op '(two? id?)) (aseq cl as)
+                    (id? op '= && (aqnom? <as || aqnom? <>as || lit? eqv)) (aseq cl as)
+                    (id? op 'tally && !(member? 'tally env) && member? 'tally gn && atom? >as) (aseq cl as)
+                    (id? op '|| && !(member? op env) && two? >as) (aguard (aseq cl as))
+                    (id? op amble-lam) (two? >>as ? (aguard cl) cl)            ; the site's room guard, over frame reads
+                    (member? op '(cap cup link + - * // % & | ^ < <= > >= =)) (aguard (aseq cl as))
+                    (: c2 (aseq cl as) (id? c2 'bad ? 'bad 1))))))             ; a call: its args, then the call
        ok ((two? s) && (two? >s) && (all name? ps) && (adistinct ps)
            && (a = #ps) && (0 < a) && lpok && drok && !(id? lts 'bad) && (two? body)
            && (getenv "LOVE_AMBLE_NOCALL" ? !(ahascall? env go body) 1)                ; the call-lane bisect knob: splits the call machinery from the rest
            && (all lit? gvals) && (nd < 48) && ((k + #gn + #cn + nq + nin + nl) < 48)   ; slots are cheap once the prologue guards the room (below)
            && (all (i \ amble-ok? ps kn 0 0 0 i) inits)
-           && (amble-ok? env kn go k 1 body))
+           && (amble-ok? env kn go k 1 body)
+           && !(id? (asafe 1 (foldl (\ ac i (asafe 0 ac i)) 0 inits) body) 'bad))   ; the restart law, over the gated body
        (? ok
           (: _ (getenv "LOVE_AMBLE_TRACE" ? (puts ("amble: " + show s + "\n")) 0)   ; the compile trace: names every ambled source
              ng (1 + #gn + #cn + nq + (lit? eqv ? 1 0) + nin)   ; extras = [() | globals | sibling entries | quoted data | = | inner entries]:

@@ -101,6 +101,18 @@
     (: n (peep fires () 0)
        mk (ev '(\ l ((: (go l acc) (? (two? l) (go (cup l) (link (\ y (* y (tally (show (cap l))))) acc)) acc)) l ())))
        (&& (fired? n) ('(2 2 2) = (map (\ c (c 2)) (mk '(1 2 3)))) ('(4 2) = (map (\ c (c 2)) (mk '(1 10))))))
+    ; --- the restart law: a deopt re-runs the twin from the restart point, so any call-out the
+    ;     native already made is made AGAIN. both loops write a byte and then overflow a fixnum
+    ;     on the very next step, so the guard fires with the byte already out -- the amble
+    ;     declines them, and the answer is the interpreter's: 40 bytes, nothing written twice.
+    (: f (ev '(: (mk o n k) (? (<= n 0) (slurp o) (: _ (put o (+ 97 (% k 5))) (mk o (- n 1) (+ (* k 7) 3)))) mk))
+       ("ebadebadebadebadebadebadebadebadebadebad" = (f (jug 0) 40 9)))     ; a self-call loop: its restart point is the running iteration
+    (: f (ev '(: (build o n) ((: (go m k) (? (<= m 0) (slurp o) (: _ (put o (+ 97 (% k 5))) (go (- m 1) (+ (* k 7) 3))))) n 9) build))
+       ("ebadebadebadebadebadebadebadebadebadebad" = (f (jug 0) 40)))       ; a named-let: its vars ride reserved slots, so the restart is the WHOLE loop
+    ; ... and the lane keeps the calls no restart can reach -- nothing deopts after this one
+    (: n (peep fires () 0)
+       f (ev '(: (go i m a) (? (< i m) (go (+ i 1) m (tally (show (+ a i)))) a) go))
+       (&& (fired? n) (2 = (f 0 20 0))))
    )
 (: _ (puts "glaze-hook: ok -- the natjit creation hook (leaf, float, loop, capture, self, =, transparency)
 ") 0)
