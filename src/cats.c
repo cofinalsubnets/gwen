@@ -12,24 +12,21 @@ extern intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, 
 #include "cat_prel_z.h"
 #include "cat_post_z.h"
 
-// ONE registry, both frontends. the order is the dependency order: overlay's body reads
-// (from 'kanren ..) as it registers, so the three blobs go a, holo, b -- ai_evals_ reads
-// form by form and each module is one form, so three calls are the one call.
-// K_TEST drops holo and its backend, and only those -- nothing its corpus runs opens with
-// (use 'holo), where the kore cat's asbook.l does. that pie is unbaked by construction, so
-// it takes the egg warm on every gate boot under TCG, and holo+x64 registers ~1.5G
-// instructions against kanren's 302M, overlay's 128M, peg's 80M.
-// the shipped kernel takes the whole set. it wakes the artifact's image, so this text is
-// its fallback lane and the wake is what a box gets -- and `from` on an unregistered
-// module answers () rather than scaring, so a short registry is a silent wrong binding.
+// ONE registry, every frontend and every face. the order is the dependency order:
+// overlay's body reads (from 'kanren ..) as it registers, so the blobs go a, holo, b --
+// ai_evals_ reads form by form and each module is one form, so three calls are the one
+// call. `from` on an unregistered module answers () rather than scaring, so a short
+// registry is a silent wrong binding, and every build takes the whole set.
+// holo rides a blob per arch because the backend does; an arch with no backend registers
+// neither, which is the one shape that leaves AiCatModsH unset.
 #include "cat_modsa_z.h"
-#if !defined(K_TEST) && defined(__x86_64__)
+#if defined(__x86_64__)
 #define AiCatModsH 1
 #include "cat_mods_amd64_z.h"
-#elif !defined(K_TEST) && defined(__aarch64__)
+#elif defined(__aarch64__)
 #define AiCatModsH 1
 #include "cat_mods_arm64_z.h"
-#elif !defined(K_TEST) && defined(__riscv)
+#elif defined(__riscv)
 #define AiCatModsH 1
 #include "cat_mods_rv64_z.h"
 #endif
