@@ -543,9 +543,12 @@ lushfiles = crew/lush/job.l crew/lush/lex.l crew/lush/gram.l crew/lush/glob.l cr
 # ⚠ awk.l sits with sed.l because it rides re.l; find.l sits AFTER $(lushfiles)
 # because it rides lush's fnmatch (sh-match) and a body captures its free names at
 # its define -- the same law that keeps kore.l last.
-korefiles =crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/sum.l crew/kore/re.l crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/bc.l crew/kore/proc.l crew/kore/less.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/patch.l tools/ain.l $(lushfiles) crew/kore/find.l crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
+korefiles =crew/kore/text.l crew/kore/u.l crew/kore/core.l crew/kore/fs.l crew/kore/sum.l crew/kore/re.l crew/kore/sed.l crew/kore/awk.l crew/kore/expr.l crew/kore/bc.l crew/kore/proc.l crew/kore/less.l lib/lint.l crew/vi/config.l crew/vi/hue.l crew/vi/core.l crew/vi/vi.l crew/kore/diff.l crew/kore/patch.l lib/dns.l tools/ain.l $(lushfiles) crew/kore/find.l crew/cook/cook.l crew/kore/asbook.l crew/holo/elf.l crew/holo/obj.l crew/holo/link.l crew/holo/copy.l crew/kore/kore.l
 # mooncc is its OWN app, NOT in the kore cat: a cc edit rebuilds only mooncc, so a kore
-# rebuild in another session cannot tear the compiler. ⚠ member order is the scope -- the
+# rebuild in another session cannot tear the compiler. ⚠ a member's own (use ..) is a
+# roster question: `use` reads the registry and nothing else -- there is no lib/ walk
+# behind it -- so a module a member opens has to BE here, ahead of it. lib/dns.l rides for
+# tools/ain.l, which splices it. ⚠ member order is the scope -- the
 # u-floor, then asbook splices the boot-registered holo and the CROSS BACKENDS join it
 # (defbackend mutates holo's own table, so mooncc cross-compiles every target whichever
 # single backend the host image baked), the writers, the compiler proper, then moon.l
