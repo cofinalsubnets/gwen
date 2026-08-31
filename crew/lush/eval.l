@@ -178,6 +178,12 @@
    ; would spawning this word land on the binary we are already running? the one
    ; policy question behind every in-image lane -- lush's own, and cook's.
    (sh-ours? w) (? (sh-slashed? w) (sh-self? w) (sh-onpath? w))
+   ; can this seat run the word at all? PATH answers wherever there is a seat to
+   ; exec -- a hosted love resolves a word to a file. a seat with NONE never execs:
+   ; the kernel's spawn hands the word to the verb registry, so that is the authority
+   ; there, and asking PATH would call every tool it carries missing.
+   (sh-verbw? w) (: f (from 'verbs 'word) (? (lit? f) !(nil? (f w)) 0))
+   (sh-known? w) (? (nil? (sh-seat ())) (sh-verbw? w) (two? (sh-whichp w)))
    (sh-imgask w)
      (: al (sh-assoc w sh-imgalias)
         mn (? (two? al) <>al (w + "-main"))
@@ -482,7 +488,7 @@
                  ; foreign, or an explicit path: spawned as ever -- its 127 is the
                  ; child's own and the pipeline's status bookkeeping wants a real
                  ; pid; only the word is ours to say
-                 (: _ (? (two? (sh-whichp w)) 0 (sh-saynf w))
+                 (: _ (? (sh-known? w) 0 (sh-saynf w))
                     (spawnmap (sh-nth st 1) (base + (sh-nth st 2)) allclose pg fgi))))
            (: p (fork 0)
               (? (p = 0)
@@ -585,7 +591,7 @@
                     _ (flush out) _ (flush err)      ; see sh-spawn1: the child writes the fd straight
                     ; the redirects are already open, which is where a shell answers an
                     ; unfindable word from -- `nope > f` still makes f, then says so
-                    pid (? (two? (sh-whichp <argv))
+                    pid (? (sh-known? <argv)
                            (spawnmap argv (sh-nth rm 1) (opens + (map cap wrs))
                                      (sh-pgm 0) (sh-fgm 0))
                            ())
