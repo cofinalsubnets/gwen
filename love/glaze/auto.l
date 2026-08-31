@@ -411,16 +411,19 @@
              (': . cbflat newpairs))))                                                       ; even -> body-less, which leaks its bindings globally: keep it so
    ; fold-consts: inline a top-level `:`'s whole-constant value bindings (e.g. strscan's `hmod 1000000007`)
    ; into every body and drop them -- so a folded constant doesn't read as an un-glazeable free symbol.
+   ; a pair's own params -- the sugared head's tail, or a lambda value's -- shadow a
+   ; same-named sibling throughout its body, so no inliner may substitute one there
+   (prps pr) (? (two? <pr) ><pr (two? >pr && id? <>pr '\) (ho-initl >>pr) ())
    (fold-consts form)
     (? !(two? form && id? <form ': && !(atom? >form)) form
        (: parsed (anat-defs >form) pairs <parsed body <>parsed
           consts (filter (pr \ name? <pr && whole? >pr) pairs)
           (? (atom? consts) form
-             (: sub (e \ foldl (\ b pr (subst-sym <pr >pr b)) e consts)
+             (: sub (\ ps e (foldl (\ b pr (? (member? <pr ps) b (subst-sym <pr >pr b))) e consts))
                 hasbody (1 = (#>form % 2))
                 keep (? hasbody (filter (pr \ !(name? <pr && whole? >pr)) pairs) pairs)  ; body-less: the const is exported, keep it bound
-                subbed (map (pr \ <pr . sub >pr) keep)
-                (': . (? hasbody (unpair subbed (sub body)) (cbflat subbed)))))))
+                subbed (map (pr \ <pr . sub (prps pr) >pr) keep)
+                (': . (? hasbody (unpair subbed (sub () body)) (cbflat subbed)))))))
    ; --- hof inline (dehof): a non-recursive lambda-constant binding inlines into every body, and dsimp
    ;     beta-collapses the now-literal curried application -- so ((twice (adder i)) i) reduces to the
    ;     first-order arithmetic that lift+autogroup glaze, and the inlined lambdas drop like fold-consts'.
@@ -473,7 +476,7 @@
           ; one -- inlining both would leave the dropped binding dangling in that text.
           lamcs (filter (q \ !(ho-any (r \ !(id? <r <q) && occurs? <q >r) lamcs0)) lamcs0)
           (? (atom? lamcs) form                                                                  ; no hof const -> leave the form for the other lanes (dsimp mangles string/cask/loop forms)
-             (: sub (e \ dsimp (foldl (\ b pr (subst-sym <pr >pr b)) e lamcs))         ; inline each hof lamc, then beta-collapse
+             (: sub (\ ps e (dsimp (foldl (\ b pr (? (member? <pr ps) b (subst-sym <pr >pr b))) e lamcs)))   ; inline each hof lamc the pair does not shadow, then beta-collapse
                 hasbody (1 = (#>form % 2))
                 ; a body-less `:` exports every binding, so an inlined hof const stays bound:
                 ; its callers are outside the form (kore's verb table names bracket-main, and
@@ -483,8 +486,8 @@
                 ; module's surface here. The inlining still lands at every call site either way.
                 keep (? hasbody (filter (pr \ !(ho-any (q \ id? <q <(dehead pr)) lamcs)) pairs)
                                 pairs)                                                           ; non-inlined bindings keep their raw form (grpfix recognizes define-sugar function heads)
-                subbed (map (pr \ <pr . sub >pr) keep)
-                (': . (? hasbody (unpair subbed (sub body)) (cbflat subbed)))))))
+                subbed (map (pr \ <pr . sub (prps pr) >pr) keep)
+                (': . (? hasbody (unpair subbed (sub () body)) (cbflat subbed)))))))
    ; --- church lowering (dechurch): (N f x) with N a small numeral and f a literal function is f applied
    ;     to x N times, so lower it to the nesting at compile time -- (2 (+ i) i) -> (i + i + i), pure
    ;     arithmetic the group lane glazes, where church otherwise dispatches through `num-ap` and stays

@@ -43,3 +43,17 @@
       ((link (link (link 0 1) 1) 1) = (scar-link 3)))        ; was 1
    0)
 
+; --- autogroup's constant fold respects a pair's own params ---------------------------
+; fold-consts inlines a whole-constant sibling into every body of a bare top-level `:`,
+; and dehof does the same with a lambda constant; a pair whose own params spell that
+; name binds it itself -- sugared head and explicit lambda alike -- so the fold passes
+; such a pair by. driven through `ev`: only a bare top-level letrec meets autogroup, and
+; on a glazeless frontend `ev` is the base evaluator answering the same by definition.
+(assert
+    (3  = (ev '(: (x f) f  f 2  (x 3))))
+    (7  = (ev '(: (x f y) (+ f y)  f 2  (x 3 4))))
+    (3  = (ev '(: f 2  (x f) f  (x 3))))
+    (3  = (ev '(: x (\ f f)  f 2  (x 3))))
+    (11 = (ev '(: f 2  (g f) (+ f 1)  (g 10))))
+    (7  = (ev '(: tw (\ h (h 1))  (g tw) (tw (\ y (+ y 5)))  (g (\ k 7)))))   ; dehof's lamc fold holds the same law
+    (12 = (ev '(: m 7  (g x) (+ x m)  (g 5)))))                                ; ..and an unshadowed const still folds

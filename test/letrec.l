@@ -36,6 +36,13 @@
     (4 = ((\ a (: (f y) (* y 2) g (\ f (f 3)) (g (\ z (+ z a))))) 1))
     ; the let* law shy's cluster rename must keep: a pre-pin read sees the outer
     (43 = ((\ p (: p (+ p 1) p)) 42))
+    ; a sugared head's param shadowing a value sibling of the SAME `:`, both orders,
+    ; and the explicit-lambda spelling it must agree with
+    (3 = (: (x f) f  f 2  (x 3)))
+    (7 = (: (x f y) (+ f y)  f 2  (x 3 4)))
+    (3 = (: f 2  (x f) f  (x 3)))
+    (3 = (: x (\ f f)  f 2  (x 3)))
+    (11 = (: f 2  (g f) (+ f 1)  (g 10)))
    )
 (: _ (puts "letrec: ok -- a shadowing binder never captures a sibling's name
 ") 0)
