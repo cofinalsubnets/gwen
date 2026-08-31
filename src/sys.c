@@ -237,7 +237,11 @@ long __ai_inle(long n, long a, long b, long c, long d, long e, long f) {
       if (!a || (a & 4095)) return -22;                     // EINVAL
       kfree(((void **) a)[-1]);
       return 0;
-    case NR_mprotect: return 0;                             // one flat RWX map: nothing to change
+    // the map is not flat: mkboot.l puts NX on the hhdm, and these are 2 MiB entries the
+    // identity window shares, so nothing here can lift it off one page. R/W is already
+    // what every heap page is -- answer that, and REFUSE the exec ask rather than
+    // returning 0 to a caller whose next move is to jump into what it just protected.
+    case NR_mprotect: return (c & 4) ? -EACCES : 0;
     // one clock, the wall: ai_clock's body is clock_gettime now (src/seat.c),
     // so this arm is where the kernel's scale becomes a timespec.
     case NR_clock_gettime: {

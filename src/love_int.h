@@ -679,6 +679,7 @@ extern union u const callout_drive[];
 extern union u const yield_c[];
 struct ai_bio *bio_of(struct ai *g, struct ai_io *i);
 char *code_install(struct ai *g, char const *src, size_t n), *code_adopt(struct ai *g, char const *src, size_t n);
+char *ai_code_window(char *p);
 void code_free(struct ai *g, char *code), jk_ini(struct ai *g);
 int code_in(struct ai *g, uintptr_t v);
 size_t code_len(char *code);

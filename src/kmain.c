@@ -18,6 +18,10 @@ static uintptr_t k_ticks_for(uintptr_t ms) { return (ms + k_tick_ms - 1) / k_tic
 // khhdm + P, taken from kboot's hhdm. Set before archinit,
 // so arch code can use it for MMIO.
 uintptr_t khhdm;
+// the window that RUNS. the hhdm carries NX for the whole higher half (src/mkboot.l), so
+// a block of heap is reachable there and not executable there; the identity map describes
+// the same pages without the bit, and the image's code is what needs it.
+char *ai_code_window(char *p) { return (char*)((uintptr_t) p - khhdm); }
 
 static struct mem {
   struct mem *next;

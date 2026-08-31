@@ -1096,9 +1096,27 @@ int code_in(struct ai *g, uintptr_t v) {                          // a code addr
   if (v >= (uintptr_t) c->base && v < (uintptr_t) c->base + c->used) return 1;
  return 0; }
 size_t code_len(char *code) { return ((uintptr_t*) code)[-2]; }
+// the seat's executable alias for a heap block: itself, unless a seat maps its heap
+// non-executable and keeps a second window that runs. inle does (src/kmain.c).
+__attribute__((weak)) char *ai_code_window(char *p) { return p; }
 // the image lane: a packed segment of blobs becomes a chunk of its own, sealed for the
 // session -- image code is text, nothing frees it
 char *code_adopt(struct ai *g, char const *src, size_t n) {
+ // inle: mmap hands back the hhdm, which is NX by construction (src/mkboot.l puts the
+ // bit on the whole window), and its mprotect cannot lift that off a 2 MiB entry the
+ // identity map shares. so take the block through the window that runs -- the same
+ // memory, the address the low map reaches it by -- and seat it as a fixed chunk, so
+ // code_in and code_free read it the way they read the hosted one.
+ if (__ai_osv < 0) {
+  char *b = g->alloc(g, NULL, n);
+  if (!b) return NULL;
+  memcpy(b, src, n);
+  char *x = ai_code_window(b);
+  __builtin___clear_cache(x, x + n);
+  struct ai_code *c = g->alloc(g, NULL, sizeof *c);
+  if (!c) { g->alloc(g, b, 0); return NULL; }
+  c->base = x, c->len = n, c->used = n, c->fixed = 1, c->next = g->code, g->code = c;
+  return x; }
  size_t ps = code_page(), len = (n + ps - 1) & ~(ps - 1);
  void *b = mmap(0, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
  if (b == MAP_FAILED) return NULL;
