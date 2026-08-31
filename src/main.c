@@ -413,28 +413,28 @@ static char const cli[] =
 // not in src_mods: an unglazed build must not pay for it, and the empty twins below let
 // every eval site stand unconditional -- only the unsplice after the load still asks.
 #ifdef AiGlazed
-static char const src_glaze[] =
-  "(use 'holo)"
-  "(module 'glaze "
-#include "emit.h"
-#include "auto.h"
-  ")"
-  "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))"
-#include "hook.h"
-#include "walk.h"
-  // holo again, now under the hook: its layout loops (lay, plumb, resolve, revonto) compile
-  // native, hook.l pins this build's `assemble` for the glaze, and mooncc's object emission
-  // rides the same module.
-#include "holo0.h"
-#include "amd640.h"
-#include "arm640.h"
-  ,
-  // LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
-  // module book) and the natjit hook cleared. the forensics twin of LOVE_NO_IMAGE, and a
-  // session knob: it governs a run, never the baked artifact.
-  glaze_off[] = "(: ev (from 'glaze 'base-ev) natjit ())";
+// the glaze's own source, DEFLATED (tools/mkgz.l lays it, the Makefile spells the
+// concatenation this used to make out of #includes): 138 KB of text that only a
+// `love bake` ever reads, for 41 KB of .rodata. src_glaze_z holds the bytes,
+// src_glaze_z_raw what they inflate to.
+extern intptr_t ai_inflate_raw(const unsigned char*, uintptr_t, unsigned char*, uintptr_t);
+#include "glaze_z.h"
+// LOVE_NO_GLAZE: a pure-interpreter session -- ev back to base-ev (kept in the glaze
+// module book) and the natjit hook cleared. the forensics twin of LOVE_NO_IMAGE, and a
+// session knob: it governs a run, never the baked artifact.
+static char const glaze_off[] = "(: ev (from 'glaze 'base-ev) natjit ())";
+// inflate, eval, hand the buffer back: ai_evals_ reads it form by form and keeps none of
+// it, and the buffer is off-heap, so a collect mid-eval cannot move it.
+static struct ai *eval_glaze(struct ai *g) {
+  char *t = g->alloc(g, NULL, src_glaze_z_raw + 1);
+  if (!t) return g;
+  if (ai_inflate_raw(src_glaze_z, sizeof src_glaze_z - 1,
+                     (unsigned char*) t, src_glaze_z_raw) == (intptr_t) src_glaze_z_raw)
+    t[src_glaze_z_raw] = 0, g = ai_evals_(g, t);
+  return g->alloc(g, t, 0), g; }
 #else
-static char const src_glaze[] = "", glaze_off[] = "";
+static char const glaze_off[] = "";
+#define eval_glaze(g) (g)
 #endif
 
 // the session layer: boot is over, and from here the base (prel/ev, the nifs, every
@@ -482,9 +482,8 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
   // default, so the shipped surface and every gate stay swept.
   { char const *nm = getenv("LOVE_NO_MOP");
     if (nm && *nm) g = ai_evals_(g, "(: nomop 1)"); }
-  g = ai_egg_(g, ai_cat_egg, ai_cat_p1, ai_cat_prel,    // prel, then ev's half
-                 ai_cat_post);                           // the printer, and `@` with it
-  g = ai_evals_(g, ai_cat_mods);                         // register every baked module; the uses below are splices
+  g = ai_cats_egg(g);                                    // prel then ev's half, and the printer with `@`
+  g = ai_cats_mods(g);                                   // register every baked module; the uses below are splices
   g = ai_evals_(g,
     "(use 'coin)"
     "(use 'rng)"
@@ -512,7 +511,7 @@ static struct ai *boot(struct ai *g, bool argp, char const *bake, char const *ba
     "   ufail? (from 'kanren 'ufail?)  var (from 'kanren 'var)"
     "   s_plus (from 'kanren 's_plus)  s_star (from 'kanren 's_star)"
     "   === (from 'kanren '===)  =/= (from 'kanren '=/=))");
-  g = ai_evals_(g, src_glaze);                           // "" on an unglazed arch
+  g = eval_glaze(g);                                     // a no-op on an unglazed arch
 #ifdef AiGlazed
   g = ai_unsplice_(g);                                   // holo back to non-ambient
 #endif

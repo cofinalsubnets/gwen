@@ -133,9 +133,77 @@ $(asm0_h): out/lib/%0.h: crew/holo/%.l
 	$(sed_h)
 out/lib/%0.h: love/%.l
 	$(sed_h)
-# the glaze is sigil-heavy, so it skips the lcat reader round-trip and bakes verbatim.
+# the glaze rides the same lcat pipeline as the egg -- its forms read back as themselves,
+# so the canonical spelling is the one to bake.
 $(glaze_h): out/lib/%.h: love/glaze/%.l
-	$(sed_h)
+	$(lcat_h)
+# ..and then rides DEFLATED. the glaze text is read once, before a `love bake` and never on
+# a normal boot, so 138 KB of source is 41 KB of .rodata for one inflate on the lane that
+# already pays ~810 ms. the ITEMS below ARE src/main.c's concatenation, in its order: the
+# quoted arguments are the glue cpp used to splice between the headers, so the two move
+# together. holo and the two backends join by their lcat'd names -- the 0.h twins are
+# love0's, which lcats nothing it is itself assembled from. ⚠ love0 lays this, like every
+# other baked header, and lays it deterministically: the seed's fixpoint rests on that.
+glaze_items = "(use 'holo)(module 'glaze " @out/lib/emit.h @out/lib/auto.h ")" \
+  "(: ev (from 'glaze 'ev) member? (from 'glaze 'member?))" \
+  @out/lib/hook.h @out/lib/walk.h @out/lib/holo.h @out/lib/amd64.h @out/lib/arm64.h
+out/lib/glaze_z.h: $(glaze_h) $(holo_h) tools/mkgz.l $(love0)
+	@mkdir -p out/lib; t=$@.$$$$.tmp; \
+	  $(lcat_love) tools/mkgz.l src_glaze_z $(glaze_items) > $$t && test -s $$t \
+	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+# the baked corpus rides DEFLATED the same way: 114 KB of lcat'd text for 40 KB of
+# .rodata. only a love with NO image to wake ever reads it -- the shipped boot wakes and
+# never opens these -- so the inflate lands where seconds are already being spent. one
+# blob per symbol (ai_egg_ takes four texts, and four blobs cost 308 bytes over one), and
+# the registry splits exactly where src/cats.c's own conditionals do: 99 bytes of ratio to
+# leave K_TEST and the arch #if where they are. holo and the backend ride a blob per arch,
+# all three spelling ai_cat_mods_h_z, since cats.c includes exactly one of them.
+cats_egg_items   = @out/lib/egg.h
+cats_p1_items    = @out/lib/p1.h
+cats_prel_items  = @out/lib/prel.h " " @out/lib/ev.h
+cats_post_items  = @out/lib/post.h
+cats_modsa_items = @out/lib/coin.h @out/lib/rng.h @out/lib/q.h @out/lib/glob.h \
+  @out/lib/kanren.h @out/lib/overlay.h @out/lib/uu.h
+cats_modsb_items = @out/lib/bao.h @out/lib/verbs.h @out/lib/scan.h @out/lib/re.h @out/lib/peg.h
+cats_z = out/lib/cat_egg_z.h out/lib/cat_p1_z.h out/lib/cat_prel_z.h out/lib/cat_post_z.h \
+  out/lib/cat_modsa_z.h out/lib/cat_modsb_z.h \
+  out/lib/cat_mods_amd64_z.h out/lib/cat_mods_arm64_z.h out/lib/cat_mods_rv64_z.h
+out/lib/cat_egg_z.h: out/lib/egg.h tools/mkgz.l $(love0)
+	@mkdir -p out/lib; t=$@.$$$$.tmp; \
+	  $(lcat_love) tools/mkgz.l ai_cat_egg_z $(cats_egg_items) > $$t && test -s $$t \
+	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+out/lib/cat_p1_z.h: out/lib/p1.h tools/mkgz.l $(love0)
+	@mkdir -p out/lib; t=$@.$$$$.tmp; \
+	  $(lcat_love) tools/mkgz.l ai_cat_p1_z $(cats_p1_items) > $$t && test -s $$t \
+	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+out/lib/cat_prel_z.h: out/lib/prel.h out/lib/ev.h tools/mkgz.l $(love0)
+	@mkdir -p out/lib; t=$@.$$$$.tmp; \
+	  $(lcat_love) tools/mkgz.l ai_cat_prel_z $(cats_prel_items) > $$t && test -s $$t \
+	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+out/lib/cat_post_z.h: out/lib/post.h tools/mkgz.l $(love0)
+	@mkdir -p out/lib; t=$@.$$$$.tmp; \
+	  $(lcat_love) tools/mkgz.l ai_cat_post_z $(cats_post_items) > $$t && test -s $$t \
+	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+out/lib/cat_modsa_z.h: out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/glob.h out/lib/kanren.h out/lib/overlay.h out/lib/uu.h tools/mkgz.l $(love0)
+	@mkdir -p out/lib; t=$@.$$$$.tmp; \
+	  $(lcat_love) tools/mkgz.l ai_cat_mods_a_z $(cats_modsa_items) > $$t && test -s $$t \
+	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+out/lib/cat_modsb_z.h: out/lib/bao.h out/lib/verbs.h out/lib/scan.h out/lib/re.h out/lib/peg.h tools/mkgz.l $(love0)
+	@mkdir -p out/lib; t=$@.$$$$.tmp; \
+	  $(lcat_love) tools/mkgz.l ai_cat_mods_b_z $(cats_modsb_items) > $$t && test -s $$t \
+	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+out/lib/cat_mods_%_z.h: out/lib/holo.h out/lib/%.h tools/mkgz.l $(love0)
+	@mkdir -p out/lib; t=$@.$$$$.tmp; \
+	  $(lcat_love) tools/mkgz.l ai_cat_mods_h_z @out/lib/holo.h @out/lib/$*.h > $$t && test -s $$t \
+	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
 # ⚠ the corpus SET stamp: ktests.l aggregates $t, a wildcard, so a DELETED test leaves every
 # remaining prereq older than the target and make keeps baking the ghost. Depend on the LIST:
 # rewritten only when membership changes, so it re-lays on add OR delete. love0 READS this file
@@ -324,6 +392,7 @@ $(ho)/love.o: out/lib/love_version.h
 # link below read the same name, and three spellings is how they drift.
 baked_h = out/lib/egg.h out/lib/post.h out/lib/p1.h out/lib/prel.h out/lib/ev.h out/lib/cli.h out/lib/bao.h out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/glob.h out/lib/kanren.h out/lib/overlay.h out/lib/scan.h out/lib/re.h out/lib/peg.h out/lib/uu.h out/lib/verbs.h out/lib/distlist.h $(holo_h) $(glaze_h)
 $(ho)/src/main.o $(ho)/src/cats.o: $(baked_h)
+$(ho)/src/cats.o: $(cats_z)
 # the carried-blob reader both the first boot and the kernel's ram fs decode with
 $(ho)/src/main.o $(ho)/src/ustar.o: $(R)/src/ustar.h
 # src/cb.c rides the crew/quay sources by unity include -- recompile when they move.
@@ -366,6 +435,7 @@ $(moon_d)/host_%.o: $(R)/src/%.c $(love_h) $(moon0_dep)
 	@mkdir -p $(dir $@)
 	@$(moon0) -D ai_tco=$(tco) -I$(ho) -I. -Isrc -Iout/lib -c $< $@
 $(moon_d)/host_main.o $(moon_d)/host_cats.o: $(baked_h)
+$(moon_d)/host_cats.o: $(cats_z)
 $(moon_d)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(moon_d)/m_%.o: crew/moon/lib/math/%.c $(moon0_dep)
 	@echo 'MOON	'$@
@@ -784,11 +854,18 @@ $(xd)/love.o: out/lib/love_version.h            # only this TU carries the versi
 # ..and the lcat headers these two #include, which the host lane names and this one did
 # not: from a FRESH tree the cross target reached cats.c before out/lib/egg.h existed.
 $(xd)/host_main.o $(xd)/host_cats.o: $(baked_h)
+$(xd)/host_cats.o: $(cats_z)
 $(xd)/host_%.o: $(R)/src/%.c $(love_h) out/host/mooncc0.image
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moonx) -D ai_tco=$(tco) -I$(ho) -I. -Isrc -Iout/lib -c $< $@
 $(xd)/host_main.o: $(baked_h)
+# main.c takes the glaze as ONE deflated blob rather than the headers cpp spliced, so every
+# lane that compiles it wants the blob: the mooncc default, the HCC twin, and the cross
+# one. love0's main.o is unglazed and asks for none of it.
+# ⚠ HERE, below $(moon_d) and $(xd): a prerequisite expands where it is READ, and either
+# name is empty higher up -- the same law the dist_source rules state above.
+$(moon_d)/host_main.o $(ho)/src/main.o $(xd)/host_main.o: out/lib/glaze_z.h
 $(xd)/host_cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(xd)/m_%.o: crew/moon/lib/math/%.c out/host/mooncc0.image
 	@echo 'MOON	'$@
@@ -1035,7 +1112,7 @@ out/lib/korelist.h: Makefile
 
 # Shared C sources (src/love.c, crew/quay/, nolibc's six) + per-arch free/<a>/.
 # Under K_TEST kmain.c #includes the baked corpus out/lib/ktests.h.
-$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) $(baked_h) $(if $(K_TEST),out/lib/kfs.h out/lib/ktests.h,out/lib/korelist.h)
+$(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) $(baked_h) $(cats_z) $(if $(K_TEST),out/lib/kfs.h out/lib/ktests.h,out/lib/korelist.h)
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
 	@$(kcc) -c $< -o $@

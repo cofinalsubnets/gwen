@@ -6,12 +6,13 @@
 #ifndef AI_CATS_H
 #define AI_CATS_H
 
-// the egg's four texts, in ai_egg_'s own argument order -- ai_cat_prel carries ev's
-// half spliced after prel's, which is the corpus that call wants.
-extern char const ai_cat_egg[], ai_cat_p1[], ai_cat_prel[], ai_cat_post[];
+// the texts ride DEFLATED, so they are reached through calls rather than named: the
+// blobs and the inflate are src/cats.c's alone, and a frontend asks for the effect.
+// warm the egg from its four texts -- prel carries ev's half spliced after its own.
+struct ai *ai_cats_egg(struct ai *g);
 
-// every module this build carries, as (module 'nm ..) source: eval it once and each
-// later `use` is a pure splice.
-extern char const ai_cat_mods[];
+// register every module this build carries: eval them once and each later `use` is a
+// pure splice.
+struct ai *ai_cats_mods(struct ai *g);
 
 #endif

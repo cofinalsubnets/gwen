@@ -1,22 +1,20 @@
 // cats.c -- the baked source, one copy for the whole link: the egg's four texts and the
-// module registry. src/main.c and src/kmain.c both warm from these; see src/cats.h.
+// module registry, each DEFLATED (tools/mkgz.l). src/main.c and src/kmain.c both warm
+// from these through the two calls below; see src/cats.h.
+// only a love with no image to wake reads any of it, so the inflate lands on the lane
+// that was already warming an egg -- never on a shipped boot.
 #include "love.h"
 #include "cats.h"
 
-char const ai_cat_egg[] =
-#include "egg.h"
- , ai_cat_p1[] =
-#include "p1.h"
- , ai_cat_prel[] =
-#include "prel.h"
- " "
-#include "ev.h"
- , ai_cat_post[] =
-#include "post.h"
- ;
+extern intptr_t ai_inflate_raw(unsigned char const*, uintptr_t, unsigned char*, uintptr_t);
+#include "cat_egg_z.h"
+#include "cat_p1_z.h"
+#include "cat_prel_z.h"
+#include "cat_post_z.h"
 
 // ONE registry, both frontends. the order is the dependency order: overlay's body reads
-// (from 'kanren ..) as it registers.
+// (from 'kanren ..) as it registers, so the three blobs go a, holo, b -- ai_evals_ reads
+// form by form and each module is one form, so three calls are the one call.
 // K_TEST drops holo and its backend, and only those -- nothing its corpus runs opens with
 // (use 'holo), where the kore cat's asbook.l does. that pie is unbaked by construction, so
 // it takes the egg warm on every gate boot under TCG, and holo+x64 registers ~1.5G
@@ -24,27 +22,48 @@ char const ai_cat_egg[] =
 // the shipped kernel takes the whole set. it wakes the artifact's image, so this text is
 // its fallback lane and the wake is what a box gets -- and `from` on an unregistered
 // module answers () rather than scaring, so a short registry is a silent wrong binding.
-char const ai_cat_mods[] =
-#include "coin.h"
-#include "rng.h"
-#include "q.h"
-#include "glob.h"
-#include "kanren.h"
-#include "overlay.h"
-#include "uu.h"
-#ifndef K_TEST
-#include "holo.h"
-#if defined(__x86_64__)
-#include "amd64.h"
-#elif defined(__aarch64__)
-#include "arm64.h"
-#elif defined(__riscv)
-#include "rv64.h"
+#include "cat_modsa_z.h"
+#if !defined(K_TEST) && defined(__x86_64__)
+#define AiCatModsH 1
+#include "cat_mods_amd64_z.h"
+#elif !defined(K_TEST) && defined(__aarch64__)
+#define AiCatModsH 1
+#include "cat_mods_arm64_z.h"
+#elif !defined(K_TEST) && defined(__riscv)
+#define AiCatModsH 1
+#include "cat_mods_rv64_z.h"
 #endif
+#include "cat_modsb_z.h"
+
+// a blob to a NUL-terminated buffer off the heap, so a collect mid-eval cannot move it.
+// NULL on refusal, which leaves the caller's g untouched and the boot to fail where it
+// would have failed anyway -- a short registry is the thing to avoid, not to paper over.
+static char *cat_open(struct ai *g, unsigned char const *z, uintptr_t zn, uintptr_t raw) {
+  char *t = g->alloc(g, NULL, raw + 1);
+  if (!t) return NULL;
+  if (ai_inflate_raw(z, zn, (unsigned char*) t, raw) != (intptr_t) raw)
+    return g->alloc(g, t, 0), NULL;
+  return t[raw] = 0, t; }
+#define CatOpen(g, nm) cat_open((g), nm, sizeof nm - 1, nm##_raw)
+
+static struct ai *cat_eval(struct ai *g, unsigned char const *z, uintptr_t zn, uintptr_t raw) {
+  char *t = cat_open(g, z, zn, raw);
+  if (!t) return g;
+  g = ai_evals_(g, t);
+  return g->alloc(g, t, 0), g; }
+#define CatEval(g, nm) cat_eval((g), nm, sizeof nm - 1, nm##_raw)
+
+// the egg wants its four texts at once, so all four are open across the one call.
+struct ai *ai_cats_egg(struct ai *g) {
+  char *e = CatOpen(g, ai_cat_egg_z), *p = CatOpen(g, ai_cat_p1_z),
+       *r = CatOpen(g, ai_cat_prel_z), *o = CatOpen(g, ai_cat_post_z);
+  if (e && p && r && o) g = ai_egg_(g, e, p, r, o);     // prel carries ev's half spliced after its own
+  g->alloc(g, e, 0), g->alloc(g, p, 0), g->alloc(g, r, 0), g->alloc(g, o, 0);
+  return g; }
+
+struct ai *ai_cats_mods(struct ai *g) {
+  g = CatEval(g, ai_cat_mods_a_z);
+#ifdef AiCatModsH
+  g = CatEval(g, ai_cat_mods_h_z);
 #endif
-#include "bao.h"
-#include "verbs.h"
-#include "scan.h"
-#include "re.h"
-#include "peg.h"
- ;
+  return CatEval(g, ai_cat_mods_b_z); }

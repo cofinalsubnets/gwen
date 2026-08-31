@@ -1931,8 +1931,8 @@ void kmain(void) {
   // image already carries. the seat text below runs on BOTH lanes.
   struct ai *r = g;
   if (!woke) {
-  r = ai_egg_(g, ai_cat_egg, ai_cat_p1, ai_cat_prel, ai_cat_post);
-  r = ai_evals_(r, ai_cat_mods);                        // register every baked module; the uses below are splices
+  r = ai_cats_egg(g);
+  r = ai_cats_mods(r);                                  // register every baked module; the uses below are splices
   r = ai_evals_(r,
  // verbs FIRST: this machine's userland IS a verb table -- the cat's apps pin their
  // own names as they load, and the boot cmdline's program seat reads the registry.
