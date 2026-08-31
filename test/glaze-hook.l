@@ -109,6 +109,17 @@
        ("ebadebadebadebadebadebadebadebadebadebad" = (f (jug 0) 40 9)))     ; a self-call loop: its restart point is the running iteration
     (: f (ev '(: (build o n) ((: (go m k) (? (<= m 0) (slurp o) (: _ (put o (+ 97 (% k 5))) (go (- m 1) (+ (* k 7) 3))))) n 9) build))
        ("ebadebadebadebadebadebadebadebadebadebad" = (f (jug 0) 40)))       ; a named-let: its vars ride reserved slots, so the restart is the WHOLE loop
+    ; --- a constant past fixnum range cannot ride as an immediate: tag(e) = 2e+1 overflows the
+    ;     machine word, so the amble must decline the body rather than lay it TRUNCATED. the
+    ;     answer is the whole number, never a wrapped negative -- and the sign both ways.
+    (: f (ev '(\ x (: y 6000000000000000000 (+ x y))))
+       (&& (6000000000000000000 = (f 0)) (= (f 0) ((\ x (: y 6000000000000000000 (+ x y))) 0))))
+    (: f (ev '(\ x (: y -6000000000000000000 (+ x y))))
+       (-6000000000000000000 = (f 0)))
+    (: f (ev '(\ n (: (go i a) (? (< i n) (go (+ i 1) 6000000000000000000) a) (go 0 0))))
+       (6000000000000000000 = (f 4)))                            ; ... and one folding left behind in a loop
+    (: f (ev '(\ n ((: (go i a) (? (< i n) (go (+ i 1) (+ a 6000000000000000000)) a)) 0 0)))
+       (6000000000000000000 = (f 1)))
     ; ... and the lane keeps the calls no restart can reach -- nothing deopts after this one
     (: n (peep fires () 0)
        f (ev '(: (go i m a) (? (< i m) (go (+ i 1) m (tally (show (+ a i)))) a) go))

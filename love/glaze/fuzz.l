@@ -14,6 +14,12 @@
 ; lane -- probe ((from 'glaze) 'calloutinfo) &c before believing a shape covers a lane.
 ; the trailing `fires=` line is the proof of work: nonzero in the glazed run, zero in
 ; the other, or the diff is over nothing.
+;
+; three dimensions the value pools alone do not reach. gfz4 carries an EFFECT and its ledger
+; rides every line, so a lane whose deopt RESTARTS over a call-out diverges on the count even
+; where the answer agrees. the 100 arity runs an accumulating loop past fixnum range, which is
+; the only way an overflow guard -- and the deopt behind it -- is ever reached. and bleaf holds
+; a constant past that range, which cannot be laid as a tagged immediate at all.
 
 ; the free name is the instrument (bleaf), and file mode's help quits on every scare:
 ; a missing read answers the zero point and the case runs on, everything else stops the file
@@ -24,16 +30,18 @@
    (gfz1 i) (i * 2)                                ; two handing back a value the integer lane cannot hold
    (gfz2 i) (i < 2 ? " " i)
    (gfz3 i) (i < 2 ? '(1 2) i)
+   FZL (tablet 0)                                  ; gfz4's ledger: an EFFECT, so a lane whose deopt
+   (gfz4 i) (: _ (pin FZL 'n (1 + peep FZL 'n 0)) (i + 1))   ; restarts over one diverges on the count, not the answer
    _ (rng-set (wheel 20260729))                    ; fixed seed: the two runs must generate the same forms
    (pick l) (l (rand #l))
    ; the leaf pools. bleaf is the hostile one: k/acc are frame params where they are bound and free
    ; elsewhere (a free read scares to stderr and answers the zero point, stdout stays comparable)
    ileaf (_ \ pick '(x y 0 1 2 3 -1 7))
-   bleaf (_ \ pick '(k acc 0 1 2 " " "Q" 'nm '(1 2) 1.5 "" 3))
+   bleaf (_ \ pick '(k acc 0 1 2 " " "Q" 'nm '(1 2) 1.5 "" 3 -6000000000000000000))   ; the big is past fixnum: an immediate that cannot be tagged (NEGATIVE, so `*` on a text is () and not a repeat)
    fleaf (_ \ pick '(x 0.5 1.5 2.0 3 1))
    iop   (_ \ pick '(+ - * < > = // %))
    fop   (_ \ pick '(+ - *))
-   gfn   (_ \ pick '(gfz0 gfz1 gfz2 gfz3))
+   gfn   (_ \ pick '(gfz0 gfz1 gfz2 gfz3 gfz4))
    (xpr d lf op) (? (d < 1) (lf 0)                 ; an expression of depth d over a leaf and an operator generator
                     (rand 4 @ 0 (lf 0)
                               1 [(op 0) (xpr (d - 1) lf op) (xpr (d - 1) lf op)]
@@ -61,6 +69,6 @@
    (try f i a) (i % 14 @ 1 (f a a) 10 (f gfz0 a) (f a))   ; apply fully: two ints for the n-ary leaf, (f n) for the frame call-out, else one
    n0 (peep fires () 0)
    (run i) (: s (shape i)  f (ev s)
-              (puts (show i + " " + show s + " => " + show (try f i 0) + " | " + show (try f i 1) + " | " + show (try f i 4) + "\n")))
+              (puts (show i + " " + show s + " => " + show (try f i 0) + " | " + show (try f i 1) + " | " + show (try f i 4) + " | " + show (try f i 100) + " ~" + show (peep FZL 'n 0) + "\n")))
    _ (each ^3000 run)
    _ (puts ("fires=" + show (peep fires () 0 - n0) + "\n")))

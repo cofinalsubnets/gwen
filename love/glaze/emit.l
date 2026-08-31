@@ -287,7 +287,10 @@
    amble-lam (mint 0)                                             ; the inner-lambda site marker: (amble-lam i n v..) -- entry i of arity n, curried through the imports v..
    (amax a b) (a < b ? b a)
    (adistinct l) (l @ (a . u) (!(member? a u) && adistinct u) 1)
-   (aconst? e) (whole? e || id? e amble-nil)
+   ; a constant rides as the immediate tag(e) = 2e+1, so only one that fits the machine word
+   ; can: a big literal (or one folding left behind) would be laid TRUNCATED, silently.
+   (afix? e) (whole? e && (-4611686018427387904 <= e <= 4611686018427387903))
+   (aconst? e) (afix? e || id? e amble-nil)
    (aop2? op) (member? op '(+ - * // % & | ^ < <= > >= = id? link))
    (acmp? op) (member? op '(< <= > >= =))
    (aquote? e) (two? e && id? <e '\ && 2 = #e)            ; the reader's quote: (\ X) at exactly two -- a datum constant
