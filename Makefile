@@ -151,7 +151,7 @@ out/lib/glaze_z.h: $(glaze_h) $(holo_h) tools/mkgz.l $(love0)
 	@mkdir -p out/lib; t=$@.$$$$.tmp; \
 	  $(lcat_love) tools/mkgz.l src_glaze_z $(glaze_items) > $$t && test -s $$t \
 	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; touch $@; else mv -f $$t $@; echo 'MKGZ	'$@; fi
 # the baked corpus rides DEFLATED the same way: 114 KB of lcat'd text for 40 KB of
 # .rodata. only a love with NO image to wake ever reads it -- the shipped boot wakes and
 # never opens these -- so the inflate lands where seconds are already being spent. one
@@ -173,37 +173,37 @@ out/lib/cat_egg_z.h: out/lib/egg.h tools/mkgz.l $(love0)
 	@mkdir -p out/lib; t=$@.$$$$.tmp; \
 	  $(lcat_love) tools/mkgz.l ai_cat_egg_z $(cats_egg_items) > $$t && test -s $$t \
 	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; touch $@; else mv -f $$t $@; echo 'MKGZ	'$@; fi
 out/lib/cat_p1_z.h: out/lib/p1.h tools/mkgz.l $(love0)
 	@mkdir -p out/lib; t=$@.$$$$.tmp; \
 	  $(lcat_love) tools/mkgz.l ai_cat_p1_z $(cats_p1_items) > $$t && test -s $$t \
 	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; touch $@; else mv -f $$t $@; echo 'MKGZ	'$@; fi
 out/lib/cat_prel_z.h: out/lib/prel.h out/lib/ev.h tools/mkgz.l $(love0)
 	@mkdir -p out/lib; t=$@.$$$$.tmp; \
 	  $(lcat_love) tools/mkgz.l ai_cat_prel_z $(cats_prel_items) > $$t && test -s $$t \
 	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; touch $@; else mv -f $$t $@; echo 'MKGZ	'$@; fi
 out/lib/cat_post_z.h: out/lib/post.h tools/mkgz.l $(love0)
 	@mkdir -p out/lib; t=$@.$$$$.tmp; \
 	  $(lcat_love) tools/mkgz.l ai_cat_post_z $(cats_post_items) > $$t && test -s $$t \
 	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; touch $@; else mv -f $$t $@; echo 'MKGZ	'$@; fi
 out/lib/cat_modsa_z.h: out/lib/coin.h out/lib/rng.h out/lib/q.h out/lib/glob.h out/lib/kanren.h out/lib/overlay.h out/lib/uu.h tools/mkgz.l $(love0)
 	@mkdir -p out/lib; t=$@.$$$$.tmp; \
 	  $(lcat_love) tools/mkgz.l ai_cat_mods_a_z $(cats_modsa_items) > $$t && test -s $$t \
 	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; touch $@; else mv -f $$t $@; echo 'MKGZ	'$@; fi
 out/lib/cat_modsb_z.h: out/lib/bao.h out/lib/verbs.h out/lib/scan.h out/lib/re.h out/lib/peg.h tools/mkgz.l $(love0)
 	@mkdir -p out/lib; t=$@.$$$$.tmp; \
 	  $(lcat_love) tools/mkgz.l ai_cat_mods_b_z $(cats_modsb_items) > $$t && test -s $$t \
 	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; touch $@; else mv -f $$t $@; echo 'MKGZ	'$@; fi
 out/lib/cat_mods_%_z.h: out/lib/holo.h out/lib/%.h tools/mkgz.l $(love0)
 	@mkdir -p out/lib; t=$@.$$$$.tmp; \
 	  $(lcat_love) tools/mkgz.l ai_cat_mods_h_z @out/lib/holo.h @out/lib/$*.h > $$t && test -s $$t \
 	    || { rm -f $$t; echo "FAIL: $@ empty (mkgz failed?)"; exit 1; }; \
-	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; else mv -f $$t $@; echo 'MKGZ	'$@; fi
+	  if cmp -s $$t $@ 2>/dev/null; then rm -f $$t; touch $@; else mv -f $$t $@; echo 'MKGZ	'$@; fi
 # ⚠ the corpus SET stamp: ktests.l aggregates $t, a wildcard, so a DELETED test leaves every
 # remaining prereq older than the target and make keeps baking the ghost. Depend on the LIST:
 # rewritten only when membership changes, so it re-lays on add OR delete. love0 READS this file
