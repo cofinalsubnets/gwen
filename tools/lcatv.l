@@ -1,4 +1,4 @@
-; lcatv: bake a source file to a C string literal VERBATIM -- byte-for-byte, no
+; lcatv: bake a source file to a C string literal verbatim -- byte-for-byte, no
 ; form parsing, no show-reprint, no minification. lcat/lcat2 re-print each form
 ; through show; that round-trip subtly diverges for the test corpus when it is
 ; read back incrementally through a sip port (the reader loops instead of hitting

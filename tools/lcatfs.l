@@ -1,11 +1,11 @@
-; lcatfs: bake a file TREE into .rodata -- one `{"path", "bytes", len, ms},` row per
+; lcatfs: bake a file tree into .rodata -- one `{"path", "bytes", len, ms},` row per
 ; file, where lcatv bakes one file into one literal. The kernel's ramfs
 ; (src/kmain.c) serves reads straight off these rows, so a file nobody opens
-; costs a row and not one word of the bounded heap. Bytes are VERBATIM, lcatv's
+; costs a row and not one word of the bounded heap. Bytes are verbatim, lcatv's
 ; escaping and not lcat's show-reprint: the reader must read them back the way the
 ; host reads the file. argv = (this-file path..); each path is baked under the
 ; spelling it was given, so the caller decides what the tree looks like from inside.
-; ms is the SOURCE file's mtime on the (clock t) scale, which is what makes the
+; ms is the source file's mtime on the (clock t) scale, which is what makes the
 ; kernel's `stat` answer a date instead of a zero -- the bake is the only place that
 ; date exists, since the initrd carries no directory of its own.
 (: (eb c) (? (= c 10) (say out "\\n")

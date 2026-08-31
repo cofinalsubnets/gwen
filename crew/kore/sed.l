@@ -1,25 +1,25 @@
 ; crew/kore/sed.l -- sed-lite over the re.l engine: the stream editor's useful
 ; core. a toolbox file, no seat -- kore is its door; loads after re.l in the cat.
 ;
-;   sed [-n] [-E] [-i] [-e SCRIPT].. SCRIPT [FILE..]
+;   sed [-n] [-E] [-i] [-e script].. script [file..]
 ;
-; the dialect: commands separated by ; or newlines, each [ADDR[,ADDR]] VERB.
+; the dialect: commands separated by ; or newlines, each [addr[,addr]] verb.
 ; addresses: a line number, $ (the last line), /re/ (re.l's BRE, or its ERE under
-; -E; \/ for a literal /); a range ADDR,ADDR opens at the first, closes at the
-; first LATER line matching the second (a numeric end at-or-before the start
+; -E; \/ for a literal /); a range addr,addr opens at the first, closes at the
+; first later line matching the second (a numeric end at-or-before the start
 ; keeps just the one line, like GNU). verbs: p (print), d (delete), q (quit
-; after this line's print; one address only), and s/RE/REPL/[g][p] with any
+; after this line's print; one address only), and s/re/repl/[g][p] with any
 ; delimiter after the s. the replacement knows & (the whole match), \1..\9
 ; (group spans off refind, a repeated group reading as its last iteration),
 ; and \x for a literal x. -n holds the auto-print; p and the s p-flag still
 ; speak. -e stacks scripts in order, joined by newlines, and once any -e is
-; given every positional word is a FILE.
+; given every positional word is a file.
 ;
-; ⚠ -i CHANGES THE STREAM MODEL and that is GNU's doing, not a shortcut: without
-; it the files are ONE stream (line numbers run through, $ is the last line of
+; -i changes the stream model and that is GNU's doing, not a shortcut: without
+; it the files are one stream (line numbers run through, $ is the last line of
 ; the whole thing); with it each file is its own stream, edited and written back,
 ; so numbers restart and $ is per-file. the two walks share `srun`, which takes
-; its output PORT rather than saying into `out` -- that parameter is the whole of
+; its output port rather than saying into `out` -- that parameter is the whole of
 ; how -i captures. no backup suffix: GNU takes one only glued (-i.bak) and
 ; nothing in this tree asks for it.
 ;
@@ -50,7 +50,7 @@
                      (xgo (i + 1) (acc + string c)))))
            (xgo 0 ""))
        ; ate marks "a match ended exactly here": an empty match at that point is
-       ; DISCARDED (the POSIX rule -- s/x*/-/g on "xbz" is "-b-z-", one dash)
+       ; discarded (the POSIX rule -- s/x*/-/g on "xbz" is "-b-z-", one dash)
        (walk i acc ate hit)
         (refindm nodes ln i @ [_ ms me sp]
           (? (&& ate (me = ms) (ms = i))
@@ -140,11 +140,11 @@
                 ())))
        (rcmd 0 ()))
 
-   ; -- the cycle. op is the output PORT, which is how -i captures a file's own
+   ; -- the cycle. op is the output port, which is how -i captures a file's own
    ; edit instead of saying it into out --
    ; (srun cmds rd n? op) -> the exit remembered, 0. rd is a `urdj`, and its
    ; [line term? last?] is all the cycle ever needed of the whole text: `$` is last?,
-   ; and the missing final newline is term?. ⚠ THE READ IS A LINE AT A TIME now -- sed
+   ; and the missing final newline is term?. the read is a line at a time now -- sed
    ; of 50 MB held 8.1 GB when the cycle was handed `(lines txt)`.
    (srun cmds rd n? op)
     (: t (tablet 0)                                  ; the range toggles, keyed by command index
@@ -154,7 +154,7 @@
            (<a = 'last) last?
            (rehasm <>a ln))
        ; is command c (at index idx) selected on line no with pattern space ln?
-       ; a range opens on its first address and closes on a LATER line's second
+       ; a range opens on its first address and closes on a later line's second
        (sel? c idx no ln last?)
         (: a1 <c a2 <>c
            (? !(two? a2) (amatch a1 no ln last?)
@@ -183,10 +183,10 @@
                        _ (? (<r && <>pr) (: _ (say q ps2) (put q 10)) ())
                        (rline more (idx + 1) ps2 no q last?)))))
            [0 ps])
-       ; ⚠ THE LAST LINE OF AN UNTERMINATED SOURCE RIDES A JUG. the newline goes missing
-       ; after the LAST WRITE and not after every one -- `sed -n 'p;p'` keeps the inner
+       ; the last line of an unterminated source rides a jug. the newline goes missing
+       ; after the last write and not after every one -- `sed -n 'p;p'` keeps the inner
        ; one -- so the line is rendered whole and chomped once, whatever the commands did.
-       ; ⚠ and only the LAST line of the whole stream can lose it: an unterminated file
+       ; and only the last line of the whole stream can lose it: an unterminated file
        ; in the middle of the join is followed by more output, so it keeps its newline.
        (mline no)
         (urdj-line rd @ [x term? last?]
@@ -203,7 +203,7 @@
    ; -- sed: the flags, then one of the two stream models --
    (sed-main as)
     (: t (tablet 0)
-       o (uopts as t '(101) ())                      ; -e SCRIPT, stacking
+       o (uopts as t '(101) ())                      ; -e script, stacking
        _ (? (two? o) () (udie 1 "sed: bad option"))
        eps <>o rest <>>o
        _ (? (two? eps || two? rest) ()
@@ -219,7 +219,7 @@
                        _ (put err 10) 0)
        ; -i: each file its own stream, edited and written back. a file that will
        ; not open complains and the rest still flow, exactly as the joined lane.
-       ; ⚠ the ANSWER is still held whole, and must be: it overwrites its own input.
+       ; the answer is still held whole, and must be: it overwrites its own input.
        (inplace a bad)
         (a @ (f >< more)
            (: rd (urdj sed-miss [f])

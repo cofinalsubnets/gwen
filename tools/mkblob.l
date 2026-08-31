@@ -1,17 +1,17 @@
 ; tools/mkblob.l -- lay any file into an ELF object under a name of the caller's
 ; choosing, so a build can carry bytes no source tree holds.
 ;
-;   love tools/mkblob.l IN OUT.o SYM [ARCH]            arch defaults to x64
+;   love tools/mkblob.l in out.o sym [arch]            arch defaults to x64
 ;
 ; the object holds two symbols in .rodata and nothing else:
 ;
-;   <SYM>_len   an 8-byte little-endian length, at offset 0 (so it is 8-aligned)
-;   <SYM>       the bytes, right behind it
+;   <sym>_len   an 8-byte little-endian length, at offset 0 (so it is 8-aligned)
+;   <sym>       the bytes, right behind it
 ;
 ; tools/mksrc.l is the same lay under two fixed names, for the one blob every
 ; artifact carries; this is the door for the rest. src/doom.c reads a pair.
 ;
-; ⚠ NO (use 'holo) here, for mksrc's reason: it resolves off a NEST (~/.love),
+; no (use 'holo) here, for mksrc's reason: it resolves off a nest (~/.love),
 ; which a fresh seed tree does not have. make hands us holo the way it hands
 ; mksrc its own -- -l $(ho)/.mksys-cat.l.
 
@@ -25,14 +25,14 @@
    ; a little-endian 8-byte word, the width the C side reads it at
    (mkblob-le8 v i acc) (? (i = 8) acc (mkblob-le8 (v >> 8) (i + 1) (acc + [(v & 255)])))
 
-   ; a cross arch's backend JOINS at runtime (obj.l's law: registered, not merely
+   ; a cross arch's backend joins at runtime (obj.l's law: registered, not merely
    ; named), and an unbaked love has no holo at all -- say so.
    (mkblob-be arch)
     (? (lit? (from 'holo 'objelf)) (mkblob-be2 arch)
        (mkblob-die "no holo aboard -- this love is unbaked (make host bakes it)"))
    (mkblob-be2 arch)
     (? (lit? (peep backends arch ())) 0
-       ; the backend file IS the canonical arch word now -- one spelling, no map
+       ; the backend file is the canonical arch word now -- one spelling, no map
        (: f ("crew/holo/" + string arch + ".l")
           q (open f "r")
           (? q (: _ (mkblob-rdev (flow q)) (close q))
@@ -57,8 +57,8 @@
        _ (write-bytes dst ob)
        (say out ("MKBLOB\t" + dst + " (" + (show n) + " bytes)\n")))
 
-   ; ⚠ `argv` is a LIST whose head is this script's own path, so the arguments
-   ; start at the tail. ⚠ the arch arrives as TEXT and `name` interns it, so the
+   ; `argv` is a list whose head is this script's own path, so the arguments
+   ; start at the tail. the arch arrives as TEXT and `name` interns it, so the
    ; answer is the very symbol the backend table is keyed by.
    (mkblob-main av)
     (: n (tally av)

@@ -1,29 +1,29 @@
-; test/gate/moonfuzz.l -- moon's REFUSAL surface, fuzzed. run inside a woken mooncc
+; test/gate/moonfuzz.l -- moon's refusal surface, fuzzed. run inside a woken mooncc
 ; image, where the front end lives; clay arrives by (use 'clay), a module, so its
 ; helper names never touch the compiler's book.
 ;
-; the corpus (test/cc/) is C that COMPILES. this takes each file and BREAKS it --
+; the corpus (test/cc/) is C that compiles. this takes each file and breaks it --
 ; truncate, delete a byte, delete a run, flip a byte, insert punctuation, swap two,
 ; drop a line, double a line -- from a fixed seed, and asks what moon does with the
 ; wreckage. eight mutations over 111 files is a supply of ill-formed C nobody has to
 ; write by hand, and every one of them is C that was nearly valid, which is the shape
 ; a real mistake actually has.
 ;
-; THREE PROPERTIES, and they are different in kind:
+; three properties, and they are different in kind:
 ;
-;   P1 the front end SURVIVES. no mutation may scare (an internal raise reaching the
+;   p1 the front end survives. no mutation may scare (an internal raise reaching the
 ;      installed help) and none may hang. this is the hard red -- a compiler that
 ;      falls over on bad input has no diagnostics to speak of.
-;   P2 a refusal NAMES ITS CAUSE. every stage that says no must answer a gripe
-;, not a bare bad. this is NOT a red -- lex and cpp
-;      still answer bare (rungs left undone), so it is a CENSUS, printed by stage
-;      every run. the number falling IS the rung landing.
-;   P3 clay and the parser agree, on trees the corpus never had. for every mutant
+;   p2 a refusal names its cause. every stage that says no must answer a gripe
+;, not a bare bad. this is not a red -- lex and cpp
+;      still answer bare (rungs left undone), so it is a census, printed by stage
+;      every run. the number falling is the rung landing.
+;   p3 clay and the parser agree, on trees the corpus never had. for every mutant
 ;      that still parses, (cparse (clay-show ast)) == ast -- test_clay's G1 law, but
 ;      over mutated input, so the shower meets shapes 111 hand-written files cannot
 ;      reach. a red.
 ;
-; ⚠ A VACUOUS PASS IS A FAIL, the clay gate's lesson: a run where nothing parsed and
+; a vacuous pass is a fail, the clay gate's lesson: a run where nothing parsed and
 ; nothing refused proved nothing. the floors below are explicit.
 (:
    _ (use "crew/moon/clay.l")
@@ -40,7 +40,7 @@
    ; --- the scare trap. help resumes with its value (test/help.l), so a caught
    ; scare does not unwind -- it flips the flag and the stage carries on with the
    ; zero point. that is fine: the flag is read after the case either way, and a
-   ; stage that then loops is P1's other face, a hang, which the recipe's timeout
+   ; stage that then loops is p1's other face, a hang, which the recipe's timeout
    ; owns because nothing inside the process can.
    scared (tablet 0)
    _ (hear (\ a b (: _ (pin scared 0 1) 0)))
@@ -49,7 +49,7 @@
 
    ; --- the mutations. text in, text out, threading the rng state (test/fuzz.l's
    ; generator shape: st -> (value . st')). eight of them, chosen because each
-   ; breaks the source at a DIFFERENT stage: a truncation dies in the reader, a
+   ; breaks the source at a different stage: a truncation dies in the reader, a
    ; punctuation insert in the parser, a dropped line in the type checker.
    punct "(){}[];,*&+-/%<>=!?:#\\\"'"
    (linelo txt i) (: (go k) (? (k < 1) 0 ((txt (k - 1)) = 10) k (go (k - 1))) (go i))
@@ -78,11 +78,11 @@
               ((snip txt 0 lo) + (snip txt lo hi) + (snip txt lo n)))  ; double a line
        (link out st'))
 
-   ; --- the front end off TEXT, every stage's refusal kept apart and its CARRIER
+   ; --- the front end off TEXT, every stage's refusal kept apart and its carrier
    ; read. cc-parse's udie is deliberately not in the path: a refusal has to come
    ; back as a value here, since the whole point is counting how they arrive.
    ; answers ('bad stage carrier) or ('ok ast).
-   ; the include hook is the DRIVER'S, rooted at test/cc/ -- a stub that resolves
+   ; the include hook is the driver's, rooted at test/cc/ -- a stub that resolves
    ; nothing would have counted the corpus's own `#include <stdarg.h>` as a cpp
    ; refusal in every mutant of every file that has one, and the census would have
    ; been measuring the harness.
@@ -102,8 +102,8 @@
     (: _ (unscared ())
        r (front txt)
        sc (scared? ())
-       ; ⚠ the scare's stage is 'late when the front end still ANSWERED -- (el r 1)
-       ; there is the whole AST, and it is a census KEY. a red run has to stay
+       ; the scare's stage is 'late when the front end still answered -- (el r 1)
+       ; there is the whole AST, and it is a census key. a red run has to stay
        ; readable, so a tree never becomes one.
        (? sc ['scare (? (id? <r 'bad) (el r 1) 'late)]
           (id? <r 'bad)
@@ -121,7 +121,7 @@
                             ['diff 'clay]))))))))
 
    files (filter dotc? (readdir "test/cc"))
-   ; per file: MUTS mutants, from a seed keyed by the file's own index, so a red
+   ; per file: muts mutants, from a seed keyed by the file's own index, so a red
    ; names a (file, case) pair that reproduces on its own.
    muts 8
 
@@ -150,7 +150,7 @@
    (walk l i) (? (! (two? l)) 0 (: _ (runfile i <l) (walk >l (i + 1))))
    _ (walk files 0)
 
-   ; --- the report. the CENSUS first (P2, a measurement), then the reds (P1, P3).
+   ; --- the report. the census first (P2, a measurement), then the reds (P1, P3).
    stages '(lex cpp parse gen)
    nbare (foldl (\ a s (a + (cnt 'bare s))) 0 stages)
    nnamed (foldl (\ a s (a + (cnt 'named s))) 0 stages)
@@ -173,7 +173,7 @@
    _ (each '(scare diff badshape reparse)
         (\ v (each (rev (peep sins v ())) (\ f (say1 ("moonfuzz: " + (string v) + " " + f))))))
 
-   ; ⚠ the floors. a run where nothing refused, or nothing survived to reach clay,
+   ; the floors. a run where nothing refused, or nothing survived to reach clay,
    ; measured nothing and must not print pass.
    _ (? (|| ((nbare + nnamed) < 100) (nok < 100))
         (: _ (say1 ("moonfuzz: FAIL -- vacuous run (" + (show (nbare + nnamed))

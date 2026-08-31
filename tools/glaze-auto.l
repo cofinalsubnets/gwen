@@ -1,12 +1,12 @@
-; glaze-auto -- the AUTO-HOOK end to end: take the float benchmark's UNCHANGED source (the
+; glaze-auto -- the auto-hook end to end: take the float benchmark's unchanged source (the
 ; mand/col/grid mandelbrot nest from bench/benches/float.l), recognize it with `grok`, glaze it
 ; to native, and time it the way the bench does. demonstrates that ordinary interpreted source
-; gets LuaJIT-territory native code with NO hand-annotation -- the payoff the benches would read
+; gets LuaJIT-territory native code with no hand-annotation -- the payoff the benches would read
 ; once the recognizer is wired into ev's compile path.
 ;
 ; run:  out/host/love -l love/glaze/emit.l tools/glaze-auto.l   (emit.l leaks grok/jitfgrid as globals)
 
-(: ; --- the EXACT bodies from bench/benches/float.l (verbatim) ---
+(: ; --- the exact bodies from bench/benches/float.l (verbatim) ---
    mps   '(cx cy zx zy it)
    mbody '(? (&& (< it 100) (<= (+ (* zx zx) (* zy zy)) 4.0))
              (mand cx cy (+ (- (* zx zx) (* zy zy)) cx) (+ (* (* 2.0 zx) zy) cy) (+ it 1)) it)
@@ -15,7 +15,7 @@
    ; the interpreted reference (what the bench runs today): rebuild the nest and call grid(0,0)
    interp ((ev ['\ '_ [': ['mand 'cx 'cy 'zx 'zy 'it] mbody ['col 'px 'py 'acc] cbody ['grid 'px 'acc] gbody ['grid 0 0]]]) 0)
 
-   ; --- the AUTO-HOOK: recognize the nest from source and glaze it. NO change to the source. ---
+   ; --- the auto-hook: recognize the nest from source and glaze it. no change to the source. ---
    ng (grok '(\ _ 0) mps mbody cbody gbody 'amd64)
    _ (? (id? ng ()) (: _ (dot "grok did NOT recognize the nest\n") (exit 1)) 0)
    native (ng 0)

@@ -1,15 +1,15 @@
-; --- test/host/clay.l: CLAY, the C shower (crew/moon/clay.l) ----------------
-; the AUTHORING direction, which is the half G1 structurally cannot reach.
-; test/clay.l round-trips clay that came OUT of cparse, so it exercises exactly
+; --- test/host/clay.l: clay, the C shower (crew/moon/clay.l) ----------------
+; the authoring direction, which is the half G1 structurally cannot reach.
+; test/clay.l round-trips clay that came out of cparse, so it exercises exactly
 ; the subset cparse can emit -- and every form clay adds on top (a return type, a
 ; storage class, `const`, a typedef'd name, a symbolic array bound, a designated
 ; index that is not a number, a comment) is by definition absent from that subset.
-; those forms are what a GENERATOR writes, so they are checked here, against the
+; those forms are what a generator writes, so they are checked here, against the
 ; text they must produce.
 ;
 ; comparing generated C to expected C text is right here and wrong in test/clay.l,
 ; and the difference is what is being proven: there, that the shower and the parser
-; agree about a TREE; here, that the shower emits the C a human meant to write.
+; agree about a tree; here, that the shower emits the C a human meant to write.
 ;
 ; run standalone from the repo root:
 ;   cat test/00-init.l test/host/clay.l | out/host/love
@@ -29,7 +29,7 @@
  ((one '(gdecl (("p" (ptr char) ())))) = ("char *p;" + nl))
  ((one '(gdecl (("t" (arr (ptr char) 2) ())))) = ("char *t[2];" + nl))
  ((one '(gdecl (("m" (arr (arr int 2) 3) ())))) = ("int m[3][2];" + nl))
- ; a pointer to an ARRAY and an array of POINTERS differ by exactly the parens
+ ; a pointer to an array and an array of pointers differ by exactly the parens
  ((one '(gdecl (("q" (ptr (arr int 3)) ())))) = ("int (*q)[3];" + nl))
  ((one '(gdecl (("f" (ptr (fn int)) ())))) = ("int (*f)();" + nl))
  ; the unsigned scalars canonicalize to one symbol at parse; the spelling comes back
@@ -37,7 +37,7 @@
  ; an unsized bound is the flexible member, and prints as the empty bracket
  ((one '(gdecl (("v" (arr char 0) ())))) = ("char v[];" + nl)))
 
-; --- const binds to the DECLARATOR over a pointer and to the BASE otherwise.
+; --- const binds to the declarator over a pointer and to the base otherwise.
 ; `lvm_t *const m[16][16]` is the shape the dispatch matrices need, and getting it
 ; wrong is the difference between a const table and a table of consts.
 (assert
@@ -47,9 +47,9 @@
  ((one '(gdecl (("mx" (arr (arr (const (ptr (named "lvm_t"))) KN) KN) ())) (static)))
   = ("static lvm_t *const mx[KN][KN];" + nl)))
 
-; --- a SYMBOLIC bound and a symbolic designated index. cparse folds both to
+; --- a symbolic bound and a symbolic designated index. cparse folds both to
 ; numbers -- it has to, it is compiling -- and a generator wants neither folded:
-; the whole point of laying a table from love is that the C says [KCharm], the name
+; the whole point of laying a table from love is that the C says [kcharm], the name
 ; the enum gave it, and stays readable.
 (: cl-di '(gdecl (("v" (arr int 2) (init ((didx KMint (var "lvm_0")) (didx KNom (var "lvm_1")))))))
    cl-df '(gdecl (("s" (named "S") (init ((dfield "x" (num 1)) (num 2))))))
@@ -59,12 +59,12 @@
     ((one cl-df) = ("S s = { .x = 1, 2 };" + nl))))
 
 ; --- the return type is clay's 4th slot on `fn`. cparse never fills it, so every
-; function it hands back prints `int`; an AUTHORED one says what it means.
+; function it hands back prints `int`; an authored one says what it means.
 (assert
  ((one '(fn "f" (("a" int)) (blk ((ret (var "a")))))) = ("int f(int a) {" + nl + " return a;" + nl + "}" + nl))
  ((one '(fn "g" () (blk ((ret ()))) void)) = ("void g(void) {" + nl + " return;" + nl + "}" + nl)))
 
-; --- a NOTE is emit-only: authored in the generator, never captured from C. one
+; --- a note is emit-only: authored in the generator, never captured from C. one
 ; `//` per line, so a paragraph keeps its shape and generated love.c arrives with
 ; the prose the tree runs on rather than stripped of it.
 (assert
@@ -77,7 +77,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
    cl-inf ['gdecl [["d" 'double ['flo (1.0 / 0.0)]]]]
    (assert
     ((one '(tdef "lvm_t" (fn void))) = ("typedef void lvm_t();" + nl))
-    ; ...and the empty marker it emits INSTEAD refuses, rather than printing a `;`
+    ; ...and the empty marker it emits instead refuses, rather than printing a `;`
     ; that would round-trip green while saying nothing. the same for va_start's lost
     ; parameter and for a struct shape the tree does not carry.
     (gripe? (one '(tdef)))
@@ -85,11 +85,11 @@ here")) = ("// two lines" + nl + "// here" + nl)))
     ; C has no literal for an infinity, so it is not sayable
     (gripe? (one cl-inf))))
 
-; --- a struct or union DEFINITION, the other form cparse cannot emit ------------
-; a FIELD is parse's own member pair ((name ty)..), so a member type is a clay node
+; --- a struct or union definition, the other form cparse cannot emit ------------
+; a field is parse's own member pair ((name ty)..), so a member type is a clay node
 ; and brackets its own name exactly as a global does. the 3rd slot is 'union, which
-; changes the DEFINING keyword only -- moon's tag namespace holds both, so a union
-; is still REFERRED to as ('struct tag).
+; changes the defining keyword only -- moon's tag namespace holds both, so a union
+; is still referred to as ('struct tag).
 (: cl-sd '(sdef "P" (("x" int) ("next" (ptr (struct "P"))) ("row" (arr (named "lvm_t") KN))))
    cl-un '(sdef "pun" (("d" double) ("u" ullong)) union)
    (assert
@@ -98,15 +98,15 @@ here")) = ("// two lines" + nl + "// here" + nl)))
     ((one cl-un) = ("union pun {" + nl + " double d;" + nl + " unsigned long long u;" + nl + "};" + nl))))
 
 ; --- and the composition that was unreachable before it: define the shape, name
-; it, then USE it. a named tag is sayable on its own, because a reference standing
-; without a definition is either incomplete BY DESIGN (`struct S *p`) or resolved by
+; it, then use it. a named tag is sayable on its own, because a reference standing
+; without a definition is either incomplete by design (`struct S *p`) or resolved by
 ; the header the generated region sits inside -- which is how mx.h rides love.c.
 (: cl-tds '(prog ((sdef "P" (("x" int))) (tdef "P" (struct "P")) (gdecl (("v" (struct "P") ())))))
    (assert
     ((one cl-tds) = ("struct P {" + nl + " int x;" + nl + "};" + nl
                      + "typedef struct P P;" + nl + "struct P v;" + nl))
     ((one '(gdecl (("p" (ptr (struct "S")) ())))) = ("struct S *p;" + nl))
-    ; the ANONYMOUS tag is the one that stays unsayable, and it is not a judgement
+    ; the anonymous tag is the one that stays unsayable, and it is not a judgement
     ; call: parse mints it as ".anon0", which no C compiler will read back.
     (gripe? (one '(sdef ".anon0" (("x" int)))))
     (gripe? (one '(gdecl (("v" (ptr (struct ".anon0")) ())))))
@@ -114,7 +114,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
     (gripe? (one '(sdef "E" ())))))
 
 ; --- the five shapes of doc/misc/clay.md's rung 1, ~750 sites in love.c --------------
-; attributes ride fn's 5th slot as SPELLINGS -- love.h's macros used call-shaped,
+; attributes ride fn's 5th slot as spellings -- love.h's macros used call-shaped,
 ; so clay says "ai_noinline" and never what it expands to. emit-only by necessity:
 ; parse.l balance-skips a trailing attribute run, so none can come back through G1.
 (assert
@@ -154,25 +154,25 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 
 ; --- the preprocessor, doc/misc/clay.md's rung 2 ------------------------------------
 ; emit-only more firmly than a note is: cpp runs before the lexer, so no directive
-; survives to be parsed back. a BODY that is a clay expression renders at the
+; survives to be parsed back. a body that is a clay expression renders at the
 ; tightest context, which is macro hygiene falling out of the precedence table --
 ; the body cannot see where it is substituted, so it parenthesizes itself.
 (assert
  ((one '(cpp-def "ai_data_n" 9)) = ("#define ai_data_n 9" + nl))
  ((one '(cpp-def "countof(_)" (bin / (szof (var "_")) (szof (deref (var "_"))))))
   = ("#define countof(_) (sizeof(_) / sizeof(*_))" + nl))
- ; ...and a body that is TOKENS rather than an expression rides through as a
+ ; ...and a body that is tokens rather than an expression rides through as a
  ; spelling, the standing that `fn`'s attributes and `ret`'s prefix already have
  ((one '(cpp-def "ai_noicf" "__attribute__((noipa))")) = ("#define ai_noicf __attribute__((noipa))" + nl))
- ; presence is the ARITY: no body slot is a bare #define, the feature-test flag
+ ; presence is the arity: no body slot is a bare #define, the feature-test flag
  ((one '(cpp-def "AI_FLAG")) = ("#define AI_FLAG" + nl))
  ((one '(cpp-undef "AI_FLAG")) = ("#undef AI_FLAG" + nl))
- ; a macro is NAMED by an identifier -- a spelling that is not one would emit C
+ ; a macro is named by an identifier -- a spelling that is not one would emit C
  ; that no compiler reads
  (gripe? (one '(cpp-def "9bad" 1)))
  (gripe? (one '(cpp-undef "(x)"))))
 
-; --- #if / #elif / #else, over TOP-LEVEL items ----------------------------------
+; --- #if / #elif / #else, over top-level items ----------------------------------
 ; the arms are ((cond items)..) and the else is its own slot, so an else out of
 ; place has no spelling at all. `#ifdef X` needs no node: `defined` wears call
 ; syntax in C's own grammar, so it is a plain (call (var "defined") ..).
@@ -198,15 +198,15 @@ here")) = ("// two lines" + nl + "// here" + nl)))
         + "#else" + nl + "// c" + nl + "#endif" + nl))
     ; no arms is a syntax error, not a thin way to say a group that is always off
     (gripe? (one '(cpp-if ())))
-    ; ⚠ a refusal from INSIDE an arm has to come out as a gripe, never be
+    ; a refusal from inside an arm has to come out as a gripe, never be
     ; concatenated into the text -- which is what `+` on a form would quietly do
     (gripe? (one '(cpp-if ((1 ((tdef)))))))
     (gripe? (one '(cpp-if ((1 ((blk ())))))))))
 
 ; --- doc/misc/clay.md's rung 4: the three shapes the alpha cluster asks for ----------
-; a forward declaration with a REAL signature. cparse keeps a prototype's name and
+; a forward declaration with a real signature. cparse keeps a prototype's name and
 ; nothing else, so a bare (proto n) prints the same reconstruction a return-type-less
-; fn does; the appended slots mirror `fn`'s exactly and ONE `csig` lays both, so a
+; fn does; the appended slots mirror `fn`'s exactly and one `csig` lays both, so a
 ; declaration cannot drift from the definition it announces. two generated functions
 ; calling each other have no other way to be spelled.
 (assert
@@ -221,7 +221,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 ; --- an enum constant may name its own value, and the enum may carry no tag ------
 ; a lattice's constants take the positions C already gives them -- a roster that had
 ; to say its own indices would not be one. but C's spelling for a lone compile-time
-; constant is an ANONYMOUS enum, where the position means nothing and the value is
+; constant is an anonymous enum, where the position means nothing and the value is
 ; the whole point, and love.c's `enum { nf_maxcap = 64 }` is exactly that: the one
 ; way to bound an array in a struct without spending a macro on it.
 (assert
@@ -232,15 +232,15 @@ here")) = ("// two lines" + nl + "// here" + nl)))
  (gripe? (one '(edef "e" ())))
  (gripe? (one '(edef () ()))))
 
-; --- a member of an INDEXED thing -----------------------------------------------
+; --- a member of an indexed thing -----------------------------------------------
 ; `k[0].ap` and `(k + 0)->ap` are the same tree, so G1 cannot tell them apart and the
-; choice is clay's. love.c writes the first; an index binds like the POSTFIX it is
+; choice is clay's. love.c writes the first; an index binds like the postfix it is
 ; written as, so `dot` spends its arrow on the star and never on the bracket.
 (: (ex x) (cs ['gdecl [["r" 'int x]]])
    (assert
     ((ex '(dot (deref (bin + (var "k") (num 0))) "ap")) = ("int r = k[0].ap;" + nl))
     ((ex '(dot (deref (bin + (var "u") (num 2))) "m")) = ("int r = u[2].m;" + nl))
-    ; an index is an EXPRESSION context, so a negative literal spells there
+    ; an index is an expression context, so a negative literal spells there
     ((ex '(dot (deref (bin + (var "k") (un neg (num 1)))) "x")) = ("int r = k[-1].x;" + nl))
     ; ...while a plain deref keeps its arrow, and the two compose in either order
     ((ex '(dot (deref (var "p")) "f")) = ("int r = p->f;" + nl))
@@ -249,20 +249,20 @@ here")) = ("// two lines" + nl + "// here" + nl)))
 
 ; --- `for (;;)`, C's own spelling of forever ------------------------------------
 ; the general join lays `for (; ; )`, which reads as three omissions rather than one
-; idiom. the clauses that ARE there still take the general shape.
+; idiom. the clauses that are there still take the general shape.
 (assert
  ((one '(fn "f" () (blk ((for () () () (blk ((brk)))))) void))
   = ("void f(void) {" + nl + " for (;;) {" + nl + "  break;" + nl + " }" + nl + "}" + nl))
  ((one '(fn "g" () (blk ((for () (var "c") () (blk ((brk)))))) void))
   = ("void g(void) {" + nl + " for (; c; ) {" + nl + "  break;" + nl + " }" + nl + "}" + nl)))
 
-; --- clay-ok? is a SHAPE check, because gen.l trusts its input ------------------
+; --- clay-ok? is a shape check, because gen.l trusts its input ------------------
 (assert
  (1 = (cok '(bin + (num 1) (num 2))))
  (gripe? (cok '(bin + (num 1))))                  ; bin takes three
  (gripe? (cok '(nosuchtag 1)))
  (gripe? (cok '(blk ((ret (num 1) x y)))))        ; ret takes at most two: value + prefix
- ; the check reaches INSIDE a declarator list, which is where a generator's
+ ; the check reaches inside a declarator list, which is where a generator's
  ; mistakes actually land
  (gripe? (cok '(gdecl (("x" int (bin + (num 1)))))))
  ; the ATTRS slot holds spellings, not nodes, so the walk must not read them as tags
@@ -273,7 +273,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
  (1 = (cok '(proto "f" (("a" int)) void (static))))
  (gripe? (cok '(proto "f" (("a" (bin + (num 1)))))))
  (gripe? (cok '(proto)))                           ; wants a name
- ; a cpp arm's CONDITION and its body are both walked, three list levels down
+ ; a cpp arm's condition and its body are both walked, three list levels down
  (1 = (cok '(cpp-if (((var "A") ((cpp-def "X" 1)))))))
  (gripe? (cok '(cpp-if (((var "A") ((bin + (num 1))))))))
  (gripe? (cok '(cpp-def))))                        ; wants a name
@@ -284,16 +284,16 @@ here")) = ("// two lines" + nl + "// here" + nl)))
    (assert
     ((e '(bin * (bin + (var "a") (var "b")) (var "c"))) = ("int r = (a + b) * c;" + nl))
     ((e '(bin + (bin * (var "a") (var "b")) (var "c"))) = ("int r = a * b + c;" + nl))
-    ; - is LEFT associative: a - (b - c) needs the parens back
+    ; - is left associative: a - (b - c) needs the parens back
     ((e '(bin - (var "a") (bin - (var "b") (var "c")))) = ("int r = a - (b - c);" + nl))
     ((e '(bin - (bin - (var "a") (var "b")) (var "c"))) = ("int r = a - b - c;" + nl))
-    ; shifts bind TIGHTER than the comparisons, looser than the arithmetic
+    ; shifts bind tighter than the comparisons, looser than the arithmetic
     ((e '(bin shl (bin + (var "a") (var "b")) (num 1))) = ("int r = a + b << 1;" + nl))
     ((e '(bin eq (bin shr (var "a") (num 3)) (num 0))) = ("int r = a >> 3 == 0;" + nl))
     ; ?: is right-associative and binds looser than ||
     ((e '(cond (lor (var "a") (var "b")) (num 1) (cond (var "c") (num 2) (num 3))))
      = ("int r = a || b ? 1 : c ? 2 : 3;" + nl))
-    ; ⚠ - applied to a negation needs a SPACE, or the lexer reads a predecrement
+    ; - applied to a negation needs a space, or the lexer reads a predecrement
     ((e '(un neg (un neg (var "a")))) = ("int r = - -a;" + nl))
     ; a[i] is (deref (bin + a i)) -- cparse desugars indexing, and the sugar comes back
     ((e '(deref (bin + (var "a") (num 2)))) = ("int r = a[2];" + nl))
@@ -305,7 +305,7 @@ here")) = ("// two lines" + nl + "// here" + nl)))
    (assert
     ((one cl-str) = ("char *s = \"a\\n\\\"b\\\\\\001\";" + nl))))
 
-; --- ...and a CHARACTER literal, emit-only: cparse folds one to its number, so it
+; --- ...and a character literal, emit-only: cparse folds one to its number, so it
 ; exists for the sites where the number is the wrong thing to read. the two quotes
 ; swap roles against a string's -- the apostrophe is the delimiter here and the
 ; double quote is not -- and nothing else about the escapes changes.

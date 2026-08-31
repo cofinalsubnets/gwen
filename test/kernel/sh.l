@@ -6,7 +6,7 @@
 (use 'lush) ; the engine parts above just registered module 'lush
 
 (: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
-   ; wc pads its counts to the byte total's width, so read the NUMBER, not the face
+   ; wc pads its counts to the byte total's width, so read the number, not the face
    (numof s) ((: (go i acc) (? (<= (tally s) i) acc
                   (: c (s i) (? (&& (<= 48 c) (<= c 57))
                                 (go (+ i 1) (+ (* 10 acc) (- c 48)))

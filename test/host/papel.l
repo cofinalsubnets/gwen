@@ -1,29 +1,29 @@
 ; --- test/host/papel.l: the static site, exactly ---
-; NOT in the test/*.l corpus (it loads three crew files and splices their modules,
+; not in the test/*.l corpus (it loads three crew files and splices their modules,
 ; and it writes real files under /tmp).
 ;
 ; papel neither parses markdown nor decides what is stale -- lapiz owns the first
 ; and cook the second, and both are proved by their own gates. so what is left to
-; prove here is exactly what papel adds, the SITE: the facts about a page that are
+; prove here is exactly what papel adds, the site: the facts about a page that are
 ; only true because of the other pages.
-;   ANCHORS   every href="#x" papel emits has an id="x" on the same page. one parse
+;   anchors   every href="#x" papel emits has an id="x" on the same page. one parse
 ;             feeds the toc and the body, and this is the assert that says so; it is
 ;             the one invariant a second pass over the text would eventually break.
-;   SLUGS     stable, and deduped when two headings spell the same one.
-;   RELINK    a .md link becomes .html iff that page is IN the site. absolute,
+;   slugs     stable, and deduped when two headings spell the same one.
+;   relink    a .md link becomes .html iff that page is in the site. absolute,
 ;             anchored and outside-the-site links are left exactly as written --
 ;             papel may not invent a dead link markdown did not already have.
-;   TITLE     head-1, else the meta `title`, else the file name -- in that order.
-;   FRESH     a second build writes NOTHING; touching one source writes exactly two
+;   title     head-1, else the meta `title`, else the file name -- in that order.
+;   fresh     a second build writes nothing; touching one source writes exactly two
 ;             files (that page and the index). that is cook's law, but papel is the
 ;             one that has to declare the recipes right for it to hold.
 ;
 ; run:  cat test/00-init.l test/host/papel.l | out/host/love
-; (⚠ through STDIN, as the gate does -- `love test/host/papel.l` would seat a file
+; (through STDIN, as the gate does -- `love test/host/papel.l` would seat a file
 ;  whose basename is papel.l, and papel's own seat would fire on it.)
 
 ; --- the module seam: three modules, and papel adds nothing to the book ----------
-(: parse-before (member? 'parse (names ()))  ; the book BEFORE the load, for the leak delta
+(: parse-before (member? 'parse (names ()))  ; the book before the load, for the leak delta
  _ (use "crew/papel/papel.l")                ; the loader: papel wants lapiz + cook itself
  (assert
   (member? 'papel (from ()))
@@ -32,10 +32,10 @@
   (member? 'build (keys (from 'papel)))
   (lit? (from 'papel 'papel-main))
   (! (from 'papyrus))                          ; a missing module answers ()
-  ; the combinators are a MODULE nobody splices at boot: lapiz and cook each said (use 'peg),
-  ; so peg is loaded and reachable BY KEY. ⚠ `parse` itself CAN sit on the book -- the
+  ; the combinators are a module nobody splices at boot: lapiz and cook each said (use 'peg),
+  ; so peg is loaded and reachable by key. `parse` itself can sit on the book -- the
   ; crew layer (moon's front end) puts it there in the warm lane -- so the leak check is
-  ; a DELTA: loading papel must not have ADDED it.
+  ; a delta: loading papel must not have added it.
   (member? 'peg (from ()))
   (lit? (from 'peg 'seq))
   (= parse-before (member? 'parse (names ())))))
@@ -56,7 +56,7 @@
    (has? l x)     (member? x l)
    (uniq? l)      ((: (g l) (? (! (two? l)) 1 (member? <l >l) 0 (g >l))) l)
 
-   ; from a CLEAN slate: the freshness clauses below count files written, so a left-over
+   ; from a clean slate: the freshness clauses below count files written, so a left-over
    ; site from a previous run would make the first build a no-op and every count wrong.
    _ (hark ["rm" "-rf" dir])
    _ (mkdir dir 493)
@@ -94,15 +94,15 @@ Only a paragraph, so the title has to come from the meta block.
            _ (pin t 'quiet 1)
            t)
 
-   ; --- the build, and FRESHNESS ---------------------------------------------------
+   ; --- the build, and freshness ---------------------------------------------------
    ; 3 pages + the stylesheet + the index = 5 files; then nothing; then exactly the
    ; touched page and the index, which depends on every source's title.
    n1 (build conf)
    n2 (build conf)
-   ; rewrite one source byte-for-byte, to advance its mtime. ⚠ READ IT FIRST: `open "w"`
+   ; rewrite one source byte-for-byte, to advance its mtime. read it first: `open "w"`
    ; truncates, so reading inside the `say` would write the empty file back.
-   ; ⚠ AND LET THE COARSE CLOCK TICK FIRST (rest 5): the kernel stamps files off a
-   ; ~ms-granular clock, so a rewrite microseconds after the build lands in the SAME
+   ; and let the coarse clock tick first (rest 5): the kernel stamps files off a
+   ; ~ms-granular clock, so a rewrite microseconds after the build lands in the same
    ; tick as the outputs and a strict-older mtime compare (cook's, exactly make's)
    ; reads it fresh. the fork-free stat nif made cook fast enough to hit this; the
    ; old shell-out date was ~ms per file, an accidental cushion.
@@ -114,7 +114,7 @@ Only a paragraph, so the title has to come from the meta block.
    ; --- and the dev-server gate over it -------------------------------------------
    ; `refresh` is what the server calls per request: a source fingerprint, and `build`
    ; only when it moved. it must never answer work for an untouched tree (that was the
-   ; 1.5s page load), and must never MISS a real edit (that would be a dev server that
+   ; 1.5s page load), and must never miss a real edit (that would be a dev server that
    ; ignores you). the second is the one that matters, so it is checked both ways.
    box (tablet 0)
    r1 (refresh conf box)                                 ; first look -- nothing remembered yet
@@ -125,7 +125,7 @@ Only a paragraph, so the title has to come from the meta block.
    r4 (refresh conf box)
    _ (assert (0 = r1) (0 = r2) (2 = r3) (0 = r4))
 
-   ; ..and re-registering must not GROW the card. `build` declares its recipes every call,
+   ; ..and re-registering must not grow the card. `build` declares its recipes every call,
    ; and cook's merge used to append prerequisites each time -- so a dev server that
    ; rebuilds per source change climbed 28 ingredients a rebuild, forever, and `prep`
    ; walked all of them. unbounded memory and quadratic time out of a server sitting idle.
@@ -140,7 +140,7 @@ Only a paragraph, so the title has to come from the meta block.
    three (get-file "site/three.html")
    idx (get-file "site/index.html")
 
-   ; --- ANCHORS: every toc target exists as an id on the page ----------------------
+   ; --- anchors: every toc target exists as an id on the page ----------------------
    ; the property that says "one parse, two uses". it holds for the fixture and for
    ; every page of this tree's own docs, built below.
    (anchored? h) (: ids (finds h "id=\"")
@@ -151,13 +151,13 @@ Only a paragraph, so the title has to come from the meta block.
       ; and it is not vacuous: page one really has a contents, with the head-1 left
       ; out of it (it became the title) and both duplicate headings in.
       ((tally (finds one "href=\"#")) = 2)
-      ; SLUGS: deduped, stable, and never repeated on a page
+      ; slugs: deduped, stable, and never repeated on a page
       (has? (finds one "id=\"") "one")
       (has? (finds one "id=\"") "shared-name")
       (has? (finds one "id=\"") "shared-name-1")
       (uniq? (finds one "id=\"")))
 
-   ; --- RELINK: rewritten inside the site, untouched outside ------------------------
+   ; --- relink: rewritten inside the site, untouched outside ------------------------
    hrefs (finds one "href=\"")
    _ (assert
       (has? hrefs "two.html")                    ; in the site -> .html
@@ -165,14 +165,14 @@ Only a paragraph, so the title has to come from the meta block.
       (has? hrefs "https://example.com/x.md")    ; absolute -> left alone
       (! (has? hrefs "two.md")))
 
-   ; --- TITLE: the three sources, in order ------------------------------------------
+   ; --- title: the three sources, in order ------------------------------------------
    _ (assert
       (0 < tally (finds one "<h1 id=\""))        ; from the head-1
       (has? (finds two "content=\"") "Two From Meta")
       ((from 'papel 'ptitle) ((from 'lapiz 'mdread) (get-file "src/two.md")) "x") = "Two From Meta"
       ((from 'papel 'ptitle) ((from 'lapiz 'mdread) (get-file "src/three.md")) "three.md") = "three.md")
 
-   ; --- the INDEX lists every page, each with its blurb ------------------------------
+   ; --- the index lists every page, each with its blurb ------------------------------
    _ (: ih (finds idx "href=\"")
         _ (assert (has? ih "one.html") (has? ih "two.html") (has? ih "three.html")
                   ; the blurb is the first paragraph, clipped on a word boundary
@@ -186,8 +186,8 @@ Only a paragraph, so the title has to come from the meta block.
 
    ; --- the real thing: this tree's own docs -----------------------------------------
    ; every markdown page in the tree through the whole pipe, and the anchor property has
-   ; to hold on all of them. README.md is deliberately in: it is the widest markdown here.
-   ; ⚠ mdsof does not recurse, so a directory that grows a subtree needs naming here.
+   ; to hold on all of them. readme.md is deliberately in: it is the widest markdown here.
+   ; mdsof does not recurse, so a directory that grows a subtree needs naming here.
    rconf (: t (tablet 0)
             _ (pin t 'out (dir + "/love"))
             _ (pin t 'title "love")

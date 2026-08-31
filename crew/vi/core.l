@@ -1,4 +1,4 @@
-; crew/vi/core.l -- the vi engine, pure: a state tablet stepped one BYTE at a
+; crew/vi/core.l -- the vi engine, pure: a state tablet stepped one byte at a
 ; time (vstep), rendered to one escape-sequence frame (vframe). no port, no
 ; tty, no file io in here -- the face (crew/vi/vi.l) reads keys, performs the
 ; write requests the ex commands leave on the state, and blits frames; the
@@ -15,20 +15,20 @@
 ; uread's shape, the face consumes it), 'doe (a READ request, same shape: :e/:o
 ; leave it, the face reads and calls vload), 'w 'h (the view).
 ;
-; the SYNTAX PAINT rides four more keys and crew/vi/hue.l: 'hl (paint? -- born
+; the syntax paint rides four more keys and crew/vi/hue.l: 'hl (paint? -- born
 ; on for a .l name, :hl flips it), 'pens (the class -> escape tablet; the FACE
 ; installs it, so this file still touches no getenv and no file), 'book (the
 ; vocabulary, folded once at the first paint), 'hlcar (the cached per-line
-; "starts inside a string" carry, [gen flags] -- ⚠ the wrapper is not
+; "starts inside a string" carry, [gen flags] -- the wrapper is not
 ; decoration, gen 0 over an empty buffer is a real cached value, so a bare one
 ; could not say "no cache"), 'hlgen (bumped by the three line mutators -- vput,
 ; vsplice, vrest -- and nothing else touches 'lines).
 ;
 ; the dialect: motions h j k l 0 ^ $ w b e f F t T G gg, counts, operators
 ; d c y (doubled = linewise; with j/k/G/gg linewise, else within the line),
-; x X D C s r J, i a I A o O, p P (lin + chr), u and ^R, / ? n N (BRE, over
+; x X D C s r J, i a I a o O, p P (lin + chr), u and ^R, / ? n N (BRE, over
 ; re.l), : with w [NAME] e[!] [NAME] o [NAME] q q! wq x hl and a line number,
-; ZZ, ^F ^B ^D ^U paging.
+; zz, ^F ^B ^D ^U paging.
 ; out of scope, documented: visual mode, named registers, ., macros, :s
 ; (sed exists), tabs render raw (the terminal's stops, not ours), no
 ; horizontal scroll (long lines clip at the view's edge).
@@ -37,7 +37,7 @@
 (use 'lint)  ; lint-scan, spliced for this module's compile
 (:
    ; -- the small floor --
-   ; lists do NOT index by application (a number list would church-tower), so
+   ; lists do not index by application (a number list would church-tower), so
    ; the row walk is explicit; "" past the end keeps every reader total
    (vln st) (st 'lines (st 'row))
    (vlen st) (tally (vln st))
@@ -46,7 +46,7 @@
                  (go i) (? (i < n && (ln i = 32 || ln i = 9)) (go (i + 1)) i)
                  (: k (go 0) (? (k < n) k (0 < n) (n - 1) 0)))
    ; every edit to 'lines bumps the generation, which is what lets the paint's
-   ; string carry be recomputed once per EDIT instead of once per keystroke
+   ; string carry be recomputed once per edit instead of once per keystroke
    (vgen st) (pin st 'hlgen (st 'hlgen + 1))
    (vput st r ln) (: _ (pin st 'lines (: (go l i) (? !(two? l) ()
                                                      ((? (i = r) ln <l) >< go >l (i + 1)))
@@ -66,9 +66,9 @@
    (vrest st fr) (: _ (pins st 'lines <fr 'row <>fr)
                      _ (vgole st <>>fr) _ (pin st 'dirty 1) (vgen st))
 
-   ; the PURE half of :e -- the face reads the file and hands the lines over, this
+   ; the pure half of :e -- the face reads the file and hands the lines over, this
    ; starts the buffer over on them: cursor home, no history, not dirty. the paint
-   ; is re-decided from the NEW name, so :e-ing a .l from a .md lights up and the
+   ; is re-decided from the new name, so :e-ing a .l from a .md lights up and the
    ; other way round goes plain, and the generation bump drops the cached carry
    ; along with the old buffer it described.
    (vload st ls nm)
@@ -91,7 +91,7 @@
        (go (st 'lines) 0 ()))
 
    ; -- the word motions: (row col) -> (row col), crossing lines when free --
-   (vwfwd st r c)                                  ; next word START
+   (vwfwd st r c)                                  ; next word start
     (: ls (st 'lines) n #ls
        (at r2 c2) (: ln (ls r2) (c2 < #ln ? (vcl (ln c2)) 0))
        (skipk r2 c2 k)                             ; over the current run of class k
@@ -105,7 +105,7 @@
        k (at r c)
        p (? (k = 0) [r c] (skipk r c k))
        (skipb <p <>p))
-   (vwend st r c)                                  ; next word END (inclusive target)
+   (vwend st r c)                                  ; next word end (inclusive target)
     (: ls (st 'lines) n #ls
        (skipb r2 c2) (: ln (ls r2)
                         (? (c2 < #ln) (? (vcl (ln c2) = 0) (skipb r2 (c2 + 1)) [r2 c2])
@@ -117,7 +117,7 @@
           (: k (vcl (ln c2))
              (run j) (? ((j < #ln) && (vcl (ln j) = k)) (run (j + 1)) (j - 1))
              [r2 (run c2)])))
-   (vwback st r c)                                 ; previous word START
+   (vwback st r c)                                 ; previous word start
     (: ls (st 'lines)
        (skipb r2 c2) (? (c2 < 0) (0 < r2 ? (: pr (r2 - 1) (skipb pr (#(ls pr) - 1)))
                                            '(0 0))
@@ -259,7 +259,7 @@
              (vclampn st))))
 
    ; -- search (re.l): hunt for 'pat from the cursor, dir 1 fwd / -1 back --
-   (vlast st ln bound)                             ; last match START in ln with start < bound
+   (vlast st ln bound)                             ; last match start in ln with start < bound
     (: (go i best) (: r (refind (st 'pat) ln i)
                       (? !(two? r) best
                          (: ms <>r
@@ -285,14 +285,14 @@
         (pin st 'row <hit, vgole st <>hit, st)
         (vmsg st $ "not found: " + st 'pattx)))
 
-   ; -- libra ⚖, on the BUFFER ------------------------------------------------
-   ; both of libra's weighings run in here, because both are PURE functions over
+   ; -- libra ⚖, on the buffer ------------------------------------------------
+   ; both of libra's weighings run in here, because both are pure functions over
    ; text (lib/lint.l rides ahead of this file in the cat). the point is the
-   ; BUFFER rather than the file on disk: it answers for what you are looking at,
+   ; buffer rather than the file on disk: it answers for what you are looking at,
    ; not for what you last saved, which is exactly when you want to be told.
    ; one scanner under libra's three faces and this one, so what pulchritude says
    ; is what `make lint` will refuse -- there is no second implementation to
-   ; drift. ⚠ lint counts line and col from ONE and the buffer from ZERO.
+   ; drift. lint counts line and col from one and the buffer from zero.
    (vlint st)
     (: ws (lint-scan (unlines (st 'lines)))
        (? !(two? ws) (vmsg st "balance clean")
@@ -307,7 +307,7 @@
 
    ; -- the ex line --
    ; :e / :o -- put another file in the buffer. this file touches no io, so the
-   ; ex line leaves a REQUEST ('doe, uread's shape) exactly the way :w leaves
+   ; ex line leaves a request ('doe, uread's shape) exactly the way :w leaves
    ; 'dow, and the face performs it and calls vload. `!` forces over a dirty
    ; buffer. (vim's real `:o` is open mode -- a line-editor face we do not have
    ; and would not want; `:o NAME` reads as `:e NAME` here, which is what the
@@ -430,7 +430,7 @@
        _ (pin st 'cnt 0)
        (? (member? c '(104 108 48 94 36 119 101 98 106 107 71))   ; h l 0 ^ $ w e b j k G
            (motion (vmot st (? ((c = 119) &&                      ; the vi special case:
-                                (: o (st 'op)                     ; cw changes the WORD only,
+                                (: o (st 'op)                     ; cw changes the word only,
                                    (two? o && (<o = 99))))
                               101 c)                              ; ... so cw rides e
                           n rawc))
@@ -550,21 +550,21 @@
        _ (st 'top + body - 1 < st 'row ? (pin st 'top (st 'row - (body - 1))))
        top (st 'top) ls (st 'lines) nl #ls
        (clip ln) (w < tally ln ? (snip ln 0 w) ln)
-       ; ⚠ the STATUS line clips from the LEFT. its TAIL is what carries the
+       ; the status line clips from the left. its tail is what carries the
        ; news -- the row,col, the ": 12 lines", the end of the : you are typing --
        ; and a deep path would otherwise push every word of it off the screen
        ; (which it did: `:e some/long/path.l` confirmed into the void). `<` marks
        ; the cut, the way vim marks a name it had to shorten. the TEXT lines
-       ; still clip RIGHT: that is the no-horizontal-scroll rule and it stays.
+       ; still clip right: that is the no-horizontal-scroll rule and it stays.
        (clipl ln) (: k (tally ln) (? (w < k) ("<" + snip ln ((k - w) + 1) k) ln))
-       ; -- the paint. escapes are ZERO WIDTH, so CLIP first and paint the clip:
+       ; -- the paint. escapes are zero width, so clip first and paint the clip:
        ; every column worked out below is the plain one, cursor included. off,
        ; this whole lane vanishes and the frame is the byte-for-byte old one.
        paint (st 'hl && tablet? (st 'pens))
        bk (? paint (: b (st 'book)
                       (? (tablet? b) b (: n (hue-book ()) _ (pin st 'book n) n)))
              ())
-       ; the carry says which lines START inside a string (papel.l's css is forty
+       ; the carry says which lines start inside a string (papel.l's css is forty
        ; lines of one literal); it is cached against the generation, so an edit
        ; pays for it and a keystroke that only moves the cursor does not
        car (? paint (: c (st 'hlcar)
@@ -581,7 +581,7 @@
                  (st 'mode = 's) ((? (0 < st 'dir) "/" "?") + st 'cmd)
                  (0 < tally (st 'msg)) (st 'msg)
                  ((? (0 < tally (st 'file)) (st 'file) "[no name]") + (? (st 'dirty) " [+]" "") + (? (st 'mode = 'i) " -- INSERT --" "") + "  " + show (st 'row + 1) + "," + show (st 'col + 1)))
-       ; ⚠ in ex and search mode you are typing on the STATUS line, so that is
+       ; in ex and search mode you are typing on the status line, so that is
        ; where the cursor goes -- one past what you have typed, prefix included.
        ; it used to stay back in the text, which made `:` look like it had not
        ; taken: the line grew with no cursor on it.

@@ -1,4 +1,4 @@
-; tools/mkgz.l -- concatenate texts and lay them DEFLATED as a C string literal, so a
+; tools/mkgz.l -- concatenate texts and lay them deflated as a C string literal, so a
 ; blob the binary reads once and only at bake time costs its compressed size in .rodata.
 ;
 ;   love tools/mkgz.l SYM ITEM ...            > OUT.h

@@ -1,9 +1,9 @@
 ; tools/mkman.l -- markdown -> roff(man), through the lapiz lens (crew/lapiz/lapiz.l).
-; the man pages are WRITTEN in doc/*.md and this generates doc's roff at build time, so
+; the man pages are written in doc/*.md and this generates doc's roff at build time, so
 ; there is only one source to keep true. run from the repo root:
-;   love tools/mkman.l FILE.md [love_version.h]
+;   love tools/mkman.l file.md [love_version.h]
 ; (the (use 'lapiz) below splices the baked module)
-; @VERSION@ is the one placeholder the prose carries and the second argument is where the
+; @version@ is the one placeholder the prose carries and the second argument is where the
 ; build keeps the version, so the fill lands here and the chain needs no sed. with no
 ; second argument the placeholder rides through, which is what a hand run wants.
 (use 'lapiz)

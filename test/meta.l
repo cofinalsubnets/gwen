@@ -1,5 +1,5 @@
 (: ; self evaluator test
- evr '(: ; expression for the evaluator -- QUOTED source: operators stay plain
+ evr '(: ; expression for the evaluator -- quoted source: operators stay plain
          ; symbols in a quote (data), and meta_eval has no opfix, so this
          ; source is written in core form (nil?, not !)
   (meta_eval x) (?

@@ -1,21 +1,21 @@
 ; --- test/host/baotest.l: the editor + repl + parseall unit battery ---
 ; the multi-line line editor (ed*), the history zipper (uphist/downhist/mkframe/
-; detach), joinln/flatten/splitat, and parseall used to be USER-VISIBLE book globals
+; detach), joinln/flatten/splitat, and parseall used to be user-visible book globals
 ; only because the corpus (the old test/repl.l + test/replio.l) tested them by name.
-; They live INSIDE bao's closure (love/bao.l), off the global book -- and the CHECKS
+; They live inside bao's closure (love/bao.l), off the global book -- and the checks
 ; live here, where checks belong, reaching them through bao's test door:
 ;
 ;   (bao 'parts) -- the editor primitives as a tablet, the shape `from`
 ;   hands back for a module. (B 'edleft) reaches one, (keys B) lists them. Nothing
 ;   is defined globally to make this work, and the battery reads as ordinary asserts.
 ;
-; bao is the BAKED shell core (in the host egg) and `bao` is public, so this file
+; bao is the baked shell core (in the host egg) and `bao` is public, so this file
 ; needs no -l:
 ;
 ;   cat test/00-init.l test/host/baotest.l | out/host/love
 ;
 ; (wired into `make test_hostnif`.) green dots = pass.
-; k4/k7 pack the CPS continuation's (u l r d [hu hd cur]) arguments into a
+; k4/k7 pack the cps continuation's (u l r d [hu hd cur]) arguments into a
 ; comparable list, exactly as the old test/repl.l did.
 
 (: B ((from 'bao 'bao) 'parts)
@@ -97,8 +97,8 @@
      ((k7 () '(9) () () () () new) = (downhist k7 () () () () () [new] ())))
   (: cur (mkframe () [49] () ())
      ((k7 () () () () [cur] () ()) = (downhist k7 () [49] () () () () cur)))
-   ; --- parseall: a line is ONE expression; floats; the more-sentinel ---
-   ; a SINGLE datum is returned as-is in a one-list (no extra wrap), so a leading
+   ; --- parseall: a line is one expression; floats; the more-sentinel ---
+   ; a single datum is returned as-is in a one-list (no extra wrap), so a leading
    ; monadic stays fused: "+(-3)" -> (mono (+ (-3))) -> -3, not the head-position (+ -3).
   ('((1 2 3)) = (parseall '(49 32 50 32 51)))            ; "1 2 3" -> the application
   ('((1 2)) = (parseall '(40 49 32 50 41)))              ; "(1 2)" -> the one form, as-is
@@ -107,7 +107,7 @@
   !(two? (parseall '(40 49)))
   (1.5 = <(parseall '(49 46 53)))
   (1000.0 = <(parseall '(49 101 51)))
-  (two? <(parseall '(49 46 50 46 51)))      ; "1.2.3": a digit-led RUN factors now (test/glued.l), no longer a nom
+  (two? <(parseall '(49 46 50 46 51)))      ; "1.2.3": a digit-led run factors now (test/glued.l), no longer a nom
    ; the more-sentinel: an unclosed shape is m (not two?); a complete datum is
   !(two? (parseall '(40 43 32 49)))                   ; "(+ 1" unclosed
   (two? (parseall '(49 32 43)))                       ; "1 +" complete (the curry partial)

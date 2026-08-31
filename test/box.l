@@ -3,7 +3,7 @@
 ; value fits the tag again. 2^61 (2305843009213693952) is the largest power of
 ; two still a fixnum; 2^62 is the smallest power of two that must be boxed.
 ;
-; NB: a literal >= 2^62 can't round-trip through the reader (the tag overflows
+; nb: a literal >= 2^62 can't round-trip through the reader (the tag overflows
 ; / strtol clamps), so the box is never written directly — it is always built
 ; by arithmetic, and checks either fold it back into fixnum range or compare
 ; two identically-built boxes.
@@ -18,7 +18,7 @@
  (= 2305843009213693952 (>> (<< 1 62) 1))
  (charm? (- (<< 1 62) (<< 1 62)))       ; box - box = 0, a fixnum
  (= 0 (- (<< 1 62) (<< 1 62)))
- ; -2^62 is exactly FIX_MIN, so it stays a fixnum (the tagged range is
+ ; -2^62 is exactly fix_min, so it stays a fixnum (the tagged range is
  ; asymmetric: [-2^62, 2^62-1]); one less overflows into a box
  (charm? (- 0 (<< 1 62)))
  !(charm? (- (- 0 (<< 1 62)) 1))
@@ -36,10 +36,10 @@
 
  ; --- masked shift-right byte extraction with bit 63 set (the rd64 idiom:
  ; the mask discards the arithmetic-vs-logical shift difference) ---
- !(charm? (<< 171 56))                       ; 0xAB << 56 sets bit 63 -> box
- (= 171 (& (>> (<< 171 56) 56) 255))          ; top byte reads back as 0xAB
- (= 205 (& (>> (| (<< 171 56) (<< 205 48)) 48) 255))  ; byte 6 of 0xABCD... = 0xCD
- (= 171 (& (>> (| (<< 171 56) (<< 205 48)) 56) 255))  ; byte 7 = 0xAB
+ !(charm? (<< 171 56))                       ; 0xab << 56 sets bit 63 -> box
+ (= 171 (& (>> (<< 171 56) 56) 255))          ; top byte reads back as 0xab
+ (= 205 (& (>> (| (<< 171 56) (<< 205 48)) 48) 255))  ; byte 6 of 0xabcd... = 0xcd
+ (= 171 (& (>> (| (<< 171 56) (<< 205 48)) 56) 255))  ; byte 7 = 0xab
 
  ; --- multiply stays exact within z, then divides back down ---
  (= 2200000000 (/ (* 2200000000 2200000000) 2200000000))

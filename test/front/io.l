@@ -1,18 +1,18 @@
-; test/front/io.l -- the laws of the WOULD-BLOCK park, gated at last.
+; test/front/io.l -- the laws of the would-block park, gated at last.
 ;
-; these run under test/front/main.c, the test-only frontend. the PARK itself is
+; these run under test/front/main.c, the test-only frontend. the park itself is
 ; ordinary now -- every quiet device on every frontend comes through it, so the
-; whole corpus walks it -- but the SHARP case still cannot be reached from inside
+; whole corpus walks it -- but the sharp case still cannot be reached from inside
 ; a normal love: `ai_ready` says go and the device then says no. the scheduler's
 ; readiness question and the device's answer are separated by no yield point, so
 ; only a second process sharing the open file description can lose that race --
 ; or a frontend that lies, which is what this one is for.
 ;
-; the fault lives in TEST code. love carries no switch, no env var and no nif for
+; the fault lives in test code. love carries no switch, no env var and no nif for
 ; it, which is the standing rule.
 ;
-; `(stall p k)` arms k would-block answers on the device's readn WHILE `ai_ready`
-; keeps saying yes. what must then hold: the reading task PARKS and re-runs the op
+; `(stall p k)` arms k would-block answers on the device's readn while `ai_ready`
+; keeps saying yes. what must then hold: the reading task parks and re-runs the op
 ; rather than spinning the vm or losing the byte it was about to get.
 
 (: (take p n)                       ; n bytes off p as text, stopping at the end
@@ -26,7 +26,7 @@
 ; --- law 1: a stalled read loses nothing --------------------------------------
 ; three would-block answers stand between the reader and three bytes that are
 ; already queued. every one of them must park and re-run, and the bytes must come
-; back in order. against a refill that WAITED instead of parking, the frontend's
+; back in order. against a refill that waited instead of parking, the frontend's
 ; deadline-free wait exits 97 and the gate says so.
 (: p (dev ())
    _ (feed p "abc")
@@ -36,7 +36,7 @@
 ; --- law 2: the park yields, it does not stop the vm --------------------------
 ; the shape defect 5 was diagnosed on: one task reading a device that keeps
 ; answering would-block, one task doing something else. the reader must give the
-; scheduler its turn. under the blocking refill the WHOLE process froze -- ticker,
+; scheduler its turn. under the blocking refill the whole process froze -- ticker,
 ; reader and all -- which is what made it worth a rung.
 (: p (dev ())
    _ (feed p "xy")
@@ -52,15 +52,15 @@
              (0 < (peep n 0 0))))       ; the peer ran while the reader waited
 
 ; --- law 3: would-block is not the end ----------------------------------------
-; the two answers that used to share the -1 sentinel. an EMPTY device that has been
-; shut answers END; an empty device that has not is merely quiet, and a stall in
+; the two answers that used to share the -1 sentinel. an empty device that has been
+; shut answers end; an empty device that has not is merely quiet, and a stall in
 ; front of the end must not be mistaken for it.
 (: p (dev ())
    _ (stall p 2)
    _ (shut p)
    _ (assert ((see p) = -1)))
 
-; and the end survives a re-read -- ⚠ a DEVICE law, not a port one: nothing above
+; and the end survives a re-read -- a device law, not a port one: nothing above
 ; readn remembers the end, so a shut device owes -1 to every ask (love.h's readn
 ; contract). this reddens if a device ever answers the end once and then goes quiet.
 (: p (dev ())
@@ -79,8 +79,8 @@
 
 ; --- law 5: cue? agrees with the park -----------------------------------------
 ; `cue?` is the dual of the park guard and must answer the same three terms. a shut
-; device is READY -- the end is an answer -- and a stall does not change that,
-; because the stall is a lie the DEVICE tells, not a fact about the stream.
+; device is ready -- the end is an answer -- and a stall does not change that,
+; because the stall is a lie the device tells, not a fact about the stream.
 (: p (dev ())
    _ (shut p)
    _ (assert (cue? p)))
@@ -101,12 +101,12 @@
              (string cl = "one")))      ; forced twice, same answer: `once` holds
 
 ; --- law 7: a short write loses nothing ---------------------------------------
-; ⚠ THE ONE THIS FRONTEND WAS BUILT FOR that no gate could reach before. io_wdrain
-; used to zero the pending length BEFORE the stroke and throw writen's count away,
+; the one this frontend was built for that no gate could reach before. io_wdrain
+; used to zero the pending length before the stroke and throw writen's count away,
 ; so a device that took part of a run reported a clean write of bytes it never got
-; -- silent truncation, on every port, on the ordinary EPIPE/ENOSPC path. `wcap`
+; -- silent truncation, on every port, on the ordinary epipe/enospc path. `wcap`
 ; makes the device take one byte per ask; every byte must still arrive, in order.
-; ⚠ the bytes go in through `put`, which PARKS them in the port's write run --
+; the bytes go in through `put`, which parks them in the port's write run --
 ; that run is what io_wdrain strokes and what used to be zeroed before the stroke.
 ; `say` would take the direct lane and never touch it.
 (: p (dev ())
@@ -115,10 +115,10 @@
    _ (flush p)
    _ (assert ((sent p) = "abcdefgh")))
 
-; --- law 8: a stalled write keeps its residue and its ORDER --------------------
+; --- law 8: a stalled write keeps its residue and its order --------------------
 ; a device that lands nothing for a while must not lose the run, and the bytes that
 ; wait must not be overtaken by the bytes behind them. that second half is the trap:
-; a refusal parks the byte in the PORT's buffer while the next stroke would go
+; a refusal parks the byte in the port's buffer while the next stroke would go
 ; straight to the device, so a two-lane writer shuffles its own stream.
 ; two refusals: one to the bulk stroke, one to the flush that follows it. the run
 ; waits in the port and the third ask -- this flush -- carries the whole of it.
@@ -136,10 +136,10 @@
    _ (flush p)
    _ (assert ((sent p) = "onetwosix")))
 
-; --- law 9: flush DELIVERS -- the residue finishes on its own -----------------
+; --- law 9: flush delivers -- the residue finishes on its own -----------------
 ; rung 4 made the write door answer short, so a flush that took its answer left
-; bytes behind and "flush" quietly meant "try". it means DELIVER again: the run
-; that will not go parks the TASK and the op re-runs until the port is empty.
+; bytes behind and "flush" quietly meant "try". it means deliver again: the run
+; that will not go parks the task and the op re-runs until the port is empty.
 ; five refusals stand between these bytes and the device; every one must be
 ; outlived, and none of them may stop the vm.
 (: p (dev ())
@@ -165,9 +165,9 @@
    _ (assert ((sent p) = "xyz")
              (0 < (peep n 0 0))))       ; the peer ran while the writer waited
 
-; --- law 11: the write run is a BUFFER, not a queue --------------------------
+; --- law 11: the write run is a buffer, not a queue --------------------------
 ; rung 4 made the door answer short and hand the remainder to the port, which is
-; what stopped bytes being lost -- and it also meant `say` NEVER REFUSES. a peer
+; what stopped bytes being lost -- and it also meant `say` never refuses. a peer
 ; that stops reading used to hold the writer at its own rate through a blocking
 ; write(2); nothing replaced that, so the run grew by a whole string per say and
 ; kept growing. now a say that would push the run past its own size waits for the
@@ -195,18 +195,18 @@
    _ (assert (hi <= 4096)                 ; 8192 with the park taken back out
              ((tally (sent p)) = 9000)))
 
-; --- law 13: a catcher PARKS, so the scheduler gets to sleep -----------------
-; ⚠ NOT A DEVICE LAW, and it is here because this is the only frontend that can
+; --- law 13: a catcher parks, so the scheduler gets to sleep -----------------
+; not a device law, and it is here because this is the only frontend that can
 ; ask the question. `catch` used to clear its own park and come back always
-; runnable, so find_runnable answered it on every pass and the scheduler NEVER
-; REACHED ITS WAIT -- one core burnt, and every peer parked on a quiet fd polled
+; runnable, so find_runnable answered it on every pass and the scheduler never
+; reached its wait -- one core burnt, and every peer parked on a quiet fd polled
 ; at full speed instead of slept on. That is the arc's invariant inverted: not
 ; something else waiting, but the scheduler prevented from waiting.
-; ⚠ THE PARK HAS TWO HALVES AND ONE SHAPE CANNOT REACH BOTH, which is why 13 and
-; 14 look alike and are not. This one is the catcher's OWN yield: it must not take
+; the park has two halves and one shape cannot reach both, which is why 13 and
+; 14 look alike and are not. This one is the catcher's own yield: it must not take
 ; yield_sw's "still runnable, keep going" arm, because Ip is still pointing at the
 ; catch and keeping going means running the catch again, and again.
-; ⚠ the `rest 0` is load-bearing -- it lets the peer reach its own park first, so
+; the `rest 0` is load-bearing -- it lets the peer reach its own park first, so
 ; that when the catcher yields there is nothing runnable left in the tree. Drop it
 ; and the peer is fresh and runnable, the catcher's yield never reaches the arm at
 ; all, and the law proves nothing.
@@ -217,7 +217,7 @@
    _ (assert (0 < ((naps ()) - n0))))    ; 0 with that arm's guard taken back out
 
 ; --- law 14: and find_runnable must not answer a catcher either ---------------
-; the other half, on some OTHER task's yield. A CHAIN is what reaches it: the
+; the other half, on some other task's yield. a chain is what reaches it: the
 ; sleeper is the last to yield here and it yields with a deadline, so law 13's arm
 ; is never even offered and only the find_runnable clause can keep this green.
 (: n0 (naps ())
@@ -226,14 +226,14 @@
    _ (catch a)
    _ (assert (0 < ((naps ()) - n0))))    ; 0 with the find_runnable clause out
 
-; --- law 15: the park still ANSWERS, on an exit and on a freeze ---------------
+; --- law 15: the park still answers, on an exit and on a freeze ---------------
 ; a catcher wakes on its peer's exit and reaps the value, which is the whole of
 ; what catch promised before it went and did it by spinning.
 (: t (twirl (\ _ (: _ (rest 20) 41)) ())
    _ (assert ((catch t) = 41)))
 
-; and a caught peer FROZEN OUT FROM UNDER the catcher must wake it too. freeze
-; unsplices the node, so the pid goes GONE rather than dormant -- a park that
+; and a caught peer frozen out from under the catcher must wake it too. freeze
+; unsplices the node, so the pid goes gone rather than dormant -- a park that
 ; waited for dormancy alone would wait out the 5 s that never comes, and this
 ; frontend would exit 97 on the deadlock rather than hang.
 (: t (twirl (\ _ (rest 5000)) ())

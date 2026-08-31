@@ -1,16 +1,16 @@
 ; --- init: a service supervisor modeled in love (a runnable sketch) ---
-; the EXECUTABLE companion to the "love as pid 1" idea -- the Tier-1 init (runit/s6/
+; the executable companion to the "love as pid 1" idea -- the Tier-1 init (runit/s6/
 ; dinit class: own unit format, no D-Bus): a perceive->decide->act supervisor with a
-; watchdog over checkpointable state, driving PROCESSES + signals over the host
+; watchdog over checkpointable state, driving processes + signals over the host
 ; kernel's stack.
 ;
-; like boot/tag.l this is a SKETCH -- it models the parts that STAY love so
-; the shape runs and is probed on the host. there are now TWO lanes:
-;   (demos 0) -- the MODELED supervisor: a deterministic tour where a "service" is a
+; like boot/tag.l this is a sketch -- it models the parts that stay love so
+; the shape runs and is probed on the host. there are now two lanes:
+;   (demos 0) -- the modeled supervisor: a deterministic tour where a "service" is a
 ;     green task and a crash is a `scare` the watchdog `help` welps to () (the SAME
 ;     shape recovery inle uses), so the dep graph / restart policy / checkpoint run
 ;     with no OS processes. (the oneshot lane here is already real via the `hark` nif.)
-;   (real 0) -- the REAL supervisor: services are OS processes. src/posix.c adds the
+;   (real 0) -- the real supervisor: services are OS processes. src/posix.c adds the
 ;     two missing primitives -- (spawn argv) forks+execs and returns a pid to track,
 ;     (glean _) is the SIGCHLD core (waitpid(-1) -> (pid . status), restart per policy).
 ;     same supervisor shape, now over real children. (demos 0) ends by calling it.
@@ -19,16 +19,16 @@
 ; (the file only DEFINES -- a plain load prints nothing; -l preloads it into the shared
 ; global scope so the -e call finds `demos`/`real`.)
 ;
-; what an ACTUAL pid1 still needs is small and core-clean (src/posix.c via the AiNif
-; glob, no love.c/love.h edit -- the same discipline as ain/bao). DONE: fork/execve +
-; the non-blocking waitpid reaper (spawn/glean). REMAINING: signalfd (SIGCHLD/SIGTERM
+; what an actual pid1 still needs is small and core-clean (src/posix.c via the AiNif
+; glob, no love.c/love.h edit -- the same discipline as ain/bao). done: fork/execve +
+; the non-blocking waitpid reaper (spawn/glean). remaining: signalfd (SIGCHLD/SIGTERM
 ; become perceive events, merged with timers by ai_wait_fds exactly like {nic, clock}),
-; mount (early /proc, /sys, devtmpfs), and the cgroup-v2 writes. everything BELOW that
+; mount (early /proc, /sys, devtmpfs), and the cgroup-v2 writes. everything below that
 ; is this file -- the dependency graph, the restart policy, the checkpoint -- already love.
 
 (: (note s) (: _ (puts s) (puts "\n"))               ; the narrator: a line to the console
 
-   ; --- a unit is an IMMUTABLE list (name kind cmd restart deps) --- show/read
+   ; --- a unit is an immutable list (name kind cmd restart deps) --- show/read
    ; checkpoints it for free (the inle.md rule: state is a love value, persistence is
    ; show/read). `kind` is 'oneshot (a real argv for `hark`) or 'service (a thunk modeling
    ; the long-running process). `restart` is 'no | 'on-fail | 'always (systemd's Restart=).
@@ -42,15 +42,15 @@
    (rev l) (foldl (\ a x (link x a)) () l)            ; prepend-fold = reverse
 
    ; --- the registry --- a live book name->status ('up | 'done | 'failed; absent =
-   ; 'down). MUTABLE (a book), the one place state is shared while units come and go;
+   ; 'down). mutable (a book), the one place state is shared while units come and go;
    ; `snap` reads it back to the honest list for the checkpoint. a unit is "started"
    ; once it is up (a service running) or done (a oneshot that completed).
    (up? reg name) (: s (peep reg name 'down) (? (id? s 'up) 1 (id? s 'done)))
 
-   ; --- the watchdog: supervise one SERVICE (Restart=) --- twirl the thunk (the modeled
+   ; --- the watchdog: supervise one service (Restart=) --- twirl the thunk (the modeled
    ; process); if it faults, the `help` below welps the task to (), so `catch` comes back
-   ; falsey and we RESTART per policy, counting attempts in `cnt`. clean exit (a truthy
-   ; return) -> up. give up after `tries-cap`. on metal: fork+exec, and THIS loop is the
+   ; falsey and we restart per policy, counting attempts in `cnt`. clean exit (a truthy
+   ; return) -> up. give up after `tries-cap`. on metal: fork+exec, and this loop is the
    ; SIGCHLD handler re-spawning the pid per its Restart= -- identical control flow.
    tries-cap 3
    (supervise name thunk policy cnt)
@@ -63,14 +63,14 @@
                     (supervise name thunk policy cnt))
                  (: _ (note (+ "    " (+ (show name) " gave up"))) ())))))
 
-   ; --- act: bring ONE unit up --- a oneshot really forks/execs/waits a child (the wire
-   ; out to a real process: `hark` returns (exit-code . captured-stdout), so the REAL exit
+   ; --- act: bring one unit up --- a oneshot really forks/execs/waits a child (the wire
+   ; out to a real process: `hark` returns (exit-code . captured-stdout), so the real exit
    ; status drives done/failed). a service is supervised. returns the registry with this
    ; unit's status pinned.
    (start1 reg cnt u)
      (: name (u-name u)
         (? (id? (u-kind u) 'oneshot)
-             (: res  (hark (u-cmd u))                  ; REAL child (src/main.c fork+exec+wait)
+             (: res  (hark (u-cmd u))                  ; real child (src/main.c fork+exec+wait)
                 code (cap res)  text (cup res)         ; (exit . stdout)
                 _    (note (+ "  [oneshot] " (+ (show name) (+ " -> \"" (+ text (+ "\" (exit " (+ (show code) ")")))))))
                 (pin reg name (? (= code 0) 'done 'failed)))
@@ -79,7 +79,7 @@
               (pin reg name (? ok 'up 'failed)))))
 
    ; --- decide+act: dependency-ordered boot --- bring `name` up, but its After= deps
-   ; FIRST (a DFS over the graph; up? dedups so a shared dep starts once). `boot` folds
+   ; first (a DFS over the graph; up? dedups so a shared dep starts once). `boot` folds
    ; the whole unit list through it. this is the topological start systemd orders by
    ; Requires=/After=; a real init would also detect cycles (no progress -> raise).
    (ensure reg cnt units name)
@@ -90,8 +90,8 @@
    (boot units) (: cnt (tablet 0)
                    (foldl (\ reg u (ensure reg cnt units (u-name u))) (tablet 0) units))
 
-   ; --- shutdown --- stop in REVERSE start order (dependents before their deps), the
-   ; mirror of boot. modeled as a status flip; on metal: SIGTERM, wait, SIGKILL on a
+   ; --- shutdown --- stop in reverse start order (dependents before their deps), the
+   ; mirror of boot. modeled as a status flip; on metal: sigterm, wait, sigkill on a
    ; timeout, each in its cgroup.
    (stop1 reg name) (: _ (note (+ "  stop " (show name))) (pin reg name 'down))
    (shutdown reg names) (foldl stop1 reg names)
@@ -106,10 +106,10 @@
 ; log the fault to the journal here). mirrors repl.l's shell-help, quieter.
 (hear welp)
 
-; --- the REAL supervisor (needs src/posix.c: spawn + glean; kill via bao's `still`) ---
-; the same supervisor, now over OS PROCESSES. spawn each unit (a pid to track), then
+; --- the real supervisor (needs src/posix.c: spawn + glean; kill via bao's `still`) ---
+; the same supervisor, now over OS processes. spawn each unit (a pid to track), then
 ; poll `glean` -- the SIGCHLD core -- mapping each dead pid back to its unit and
-; restarting on a NONZERO exit per policy. on metal this poll is driven by signalfd
+; restarting on a nonzero exit per policy. on metal this poll is driven by signalfd
 ; through ai_wait_fds (perceive), exactly as {nic, clock} is in inle; here a rest-paced
 ; loop stands in. a real service's `cmd` is its argv (hark by spawn); `pids` maps
 ; pid->name, `tries` counts restarts. the dep graph / checkpoint above carry over
@@ -119,7 +119,7 @@
         _   (pin pids pid (u-name u))
         _   (note (+ "  spawn " (+ (show (u-name u)) (+ " pid=" (show pid)))))
         pid)
-   ; the glean loop: poll until every service has SETTLED (live hits 0) or steps run
+   ; the glean loop: poll until every service has settled (live hits 0) or steps run
    ; out. each reaped (pid . status): a 0 exit (or a give-up) settles the unit; a
    ; nonzero exit under Restart=on-fail, within the cap, respawns it (live unchanged).
    (rloop units pids tries live steps)
@@ -146,14 +146,14 @@
         _ (rloop units pids tries (tally units) 500)
         (note "-- all real children reaped --")))
 
-; --- the PERCEIVE lane (Linux: src/posix.c sigfd/sigtake + the core `await`) ---
-; the supervisor's perceive becomes a real PARK on a signalfd, not a poll loop.
+; --- the perceive lane (Linux: src/posix.c sigfd/sigtake + the core `await`) ---
+; the supervisor's perceive becomes a real park on a signalfd, not a poll loop.
 ; (await sig) cooperatively yields until a signal lands; the scheduler folds the
-; parked sigfd and a heartbeat TASK's timer into ONE ai_wait_fds -- the {nic, clock}
-; merge, now {signals, clock}, so the heartbeat TICKS WHILE the supervisor sleeps on
+; parked sigfd and a heartbeat task's timer into one ai_wait_fds -- the {nic, clock}
+; merge, now {signals, clock}, so the heartbeat ticks while the supervisor sleeps on
 ; the fd. on SIGCHLD we drain glean (it COALESCES, so loop) and restart per policy; a
-; SIGTERM (blocked -> queued to the fd: a graceful EVENT, not a kill) ends the loop.
-; Linux signal numbers: SIGCHLD 17, SIGTERM 15. run: out/host/love -l init/init.l -e "(perceive 0)"
+; sigterm (blocked -> queued to the fd: a graceful EVENT, not a kill) ends the loop.
+; Linux signal numbers: SIGCHLD 17, sigterm 15. run: out/host/love -l init/init.l -e "(perceive 0)"
 (: sig-chld 17  sig-term 15
    (heart n ms) (? (< n 1) 0 (: _ (rest ms) _ (note "  . beat") (heart (- n 1) ms)))
 
@@ -171,10 +171,10 @@
                       (harvest units pids tries live))
                    (harvest units pids tries (- live 1))))))
 
-   ; perceive: PARK on the sigfd, act on the signal, until all settle or a TERM.
+   ; perceive: park on the sigfd, act on the signal, until all settle or a TERM.
    (watch sig units pids tries live)
      (? (< live 1) (note "  all services settled")
-        (: _  (await sig)                                ; PARK -- cooperative; merges with the heartbeat
+        (: _  (await sig)                                ; park -- cooperative; merges with the heartbeat
            ev (sigtake sig)
            (? (id? (cap ev) sig-term) (note "  SIGTERM: a queued EVENT, not a kill -> shut down")
               (id? (cap ev) sig-chld) (watch sig units pids tries (harvest units pids tries live))
@@ -187,18 +187,18 @@
               units [(unit 'slow 'service ["sh" "-c" "sleep 0.15; exit 0"] 'on-fail ())
                      (unit 'flap 'service ["sh" "-c" "exit 1"]             'on-fail ())]
               _ (note "-- PERCEIVE: park on a signalfd; a heartbeat task ticks alongside (the merge) --")
-              hb (twirl (\ _ (heart 5 40)) 0)             ; heartbeat TASK: parks on the clock
+              hb (twirl (\ _ (heart 5 40)) 0)             ; heartbeat task: parks on the clock
               _ (each units (\ u (rstart pids u)))
               _ (watch sig units pids tries (tally units))
               _ (catch hb)                               ; join the heartbeat (the orphan law)
               0))))
 
-; --- pid1 BRINGUP (Linux): mount the early filesystems + place a process in a cgroup --
+; --- pid1 bringup (Linux): mount the early filesystems + place a process in a cgroup --
 ; what a real pid1 does before spawning the console shell: mount proc/sysfs/devtmpfs,
-; set up cgroup-v2, then (spawn (sh)). mounting needs privilege -- a real pid1 IS root,
-; so it just calls (mount ...). here we DEMONSTRATE it unprivileged via (newns 0) (a
+; set up cgroup-v2, then (spawn (sh)). mounting needs privilege -- a real pid1 is root,
+; so it just calls (mount ...). here we demonstrate it unprivileged via (newns 0) (a
 ; private user+mount namespace, root-in-ns): tmpfs mounts cleanly; proc/sysfs additionally
-; need a pid-ns, so they EPERM here but work as pid1. cgroup-v2 placement is no special
+; need a pid-ns, so they eperm here but work as pid1. cgroup-v2 placement is no special
 ; nif -- mkdir the group, then write the pid to cgroup.procs (a plain file write via the
 ; `open` port), shown against the real tree (works under root / a delegated subtree).
 (: (cg-write path s)                                     ; write s to a cgroup control file
@@ -213,7 +213,7 @@
         _ (note (? e "-- pid1 bringup: (no unpriv userns here; a real pid1 is root) --"
                      "-- pid1 bringup: private user+mount ns (root-in-ns) --"))
         _ (try-mount "tmpfs" "/tmp/love-run"  "tmpfs")       ; works unprivileged -> proves mount
-        _ (try-mount "proc"  "/tmp/love-proc" "proc")        ; needs a pid-ns too -> EPERM here
+        _ (try-mount "proc"  "/tmp/love-proc" "proc")        ; needs a pid-ns too -> eperm here
         _ (note "-- cgroup-v2: mkdir a group, write a pid to cgroup.procs --")
         _ (: d "/sys/fs/cgroup/love.demo"
              _ (mkdir d 493)
@@ -221,17 +221,17 @@
              (note (+ "  place self in " (+ d (? (id? r 'ok) " -> ok" " -> needs root / a delegated subtree")))))
         0))
 
-; --- BOOT AS PID 1 (a container) ------------------------------------------------
+; --- boot as PID 1 (a container) ------------------------------------------------
 ; the milestone the file is named for: love running as process 1. launch it in a
 ; private pid+user+mount namespace -- `make init-container`, or any runtime that
-; makes the entrypoint pid 1 (docker/systemd-nspawn). then love IS init:
+; makes the entrypoint pid 1 (docker/systemd-nspawn). then love is init:
 ;   * getpid is 1.
 ;   * mount works -- we are root in a PID namespace, so proc mounts cleanly (the
-;     EPERM in boot-system was the no-pid-ns case; here every mount is `ok`).
-;   * love REAPS REPARENTED ORPHANS -- pid 1's defining duty. when a process's parent
+;     eperm in boot-system was the no-pid-ns case; here every mount is `ok`).
+;   * love reaps reparented orphans -- pid 1's defining duty. when a process's parent
 ;     dies the kernel reparents its children to pid 1, which must waitpid them or
 ;     they leak as zombies forever. (glean _) is waitpid(-1), so love harvests a pid it
-;     NEVER SPAWNED. run NOT as pid 1, the orphan reparents elsewhere and never shows.
+;     never spawned. run not as pid 1, the orphan reparents elsewhere and never shows.
 ; (pid1 0) is the deterministic proof tour; (perceive 0) is the live supervisor
 ; (park on the signalfd, restart per policy, SIGTERM -> graceful shutdown).
 (: (mount1 src tgt typ)                                  ; mount as pid1 (root in a pid-ns: it works)
@@ -239,9 +239,9 @@
         (note (+ "  mount " (+ typ (+ " on " (+ tgt (? r (+ " -> errno " (show r)) " -> ok")))))))
 
    ; drain glean until `target` children are collected (or steps run out). classify
-   ; each dead pid by `pids`: present -> a child WE started; absent -> a REPARENTED
-   ; ORPHAN (only pid 1 sees those). a non-pair glean -- () none pending (now the real
-   ; zero point) or -ECHILD none left -- just paces the loop.
+   ; each dead pid by `pids`: present -> a child we started; absent -> a reparented
+   ; orphan (only pid 1 sees those). a non-pair glean -- () none pending (now the real
+   ; zero point) or -echild none left -- just paces the loop.
    (glean-tour pids got target steps)
      (? (? (< steps 1) 1 (>= got target)) got
         (: ev (glean 0)
@@ -268,7 +268,7 @@
         _ (note (+ "-- reaped " (+ (show n) " children, one a reparented orphan -- love supervised pid 1 --")))
         0))
 
-; --- the demos, as a CALLABLE function (not auto-run) ---
+; --- the demos, as a callable function (not auto-run) ---
 (: (demos _)
    (: cr (tablet 0)                                  ; per-name attempt counter for the flaky service
       ; a flaky service: crashes until its k-th start, then runs clean ('ok) -- models a
@@ -283,7 +283,7 @@
        (unit 'app     'service (svc 'app 3)      'on-fail ['netd 'dbusd])       ; crashes twice, then up
        (unit 'brittle 'service (svc 'brittle 9)  'no      ())                   ; crashes, Restart=no -> failed
        (unit 'hello   'oneshot ["echo" "-n" "init: a real child says hi"]
-                                                 'no      ['app])]              ; a REAL forked child, after app
+                                                 'no      ['app])]              ; a real forked child, after app
       _   (note "-- love-init: bring up the unit graph (deps first; services modeled, oneshot real) --")
       reg (boot units)
       _   (note "-- final state (the checkpoint -- a show/read-able value) --")
@@ -292,4 +292,4 @@
       _   (note "-- graceful shutdown (reverse start order) --")
       _   (shutdown reg (rev (map u-name units)))
       _   (note "")
-      (real 0)))                                       ; ... and the same supervisor over REAL processes
+      (real 0)))                                       ; ... and the same supervisor over real processes

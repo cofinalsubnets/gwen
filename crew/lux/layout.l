@@ -1,16 +1,16 @@
-; crew/lux/layout.l -- layouts as DATA records, messages as SYMBOLS. A layout answers
-; two questions, both PURE (no X, no sockets -- so this rides the corpus on every
+; crew/lux/layout.l -- layouts as data records, messages as symbols. a layout answers
+; two questions, both pure (no X, no sockets -- so this rides the corpus on every
 ; target, crew/lux/law.l asserts the geometry):
 ;
 ;   (lay-tile lay rect z) -> (placements lay')   ; place the zipper's row in the rect
 ;   (lay-msg  lay msg  z) -> lay' | ()            ; () = "I don't take this message"
 ;
 ; rect is (x y w h); a placement is (win x y w h) -- the shape crew/lux/lux.l's render
-; already configures. `z` is the focus zipper (crew/lux/core.l), so a layout sees BOTH
+; already configures. `z` is the focus zipper (crew/lux/core.l), so a layout sees both
 ; the ordered row (zrow) and the focus (zfoc). Messages ride sendMessage: () back
 ; means unhandled, so a modifier stack (rung 4) falls through cleanly. This rung
 ; ships xmonad's ResizableTall (nmaster/ratio/per-slave heights), Full, and the
-; ||| choice + NextLayout. A body-LESS `:` -- the vocabulary leaks to the driver.
+; ||| choice + NextLayout. a body-less `:` -- the vocabulary leaks to the driver.
 (:
    ; --- geometry: a rect is (x y w h); splits return rect lists ---
    (rct x y w h) [x y w h]
@@ -61,7 +61,7 @@
           (msg = 'expand)     (rt-set lay 2 (mn2 0.95 (ratio + delta)))
           (msg = 'inc-master) (rt-set lay 1 (lay 1 + 1))
           (msg = 'dec-master) (rt-set lay 1 (mx2 1 (lay 1 - 1)))
-          ((msg = 'mirror-shrink) || (msg = 'mirror-expand))                     ; nudge the FOCUSED slave's height
+          ((msg = 'mirror-shrink) || (msg = 'mirror-expand))                     ; nudge the focused slave's height
           (: row (zrow z) n #row nm (rt-nm lay n)
              slaves (drop nm row) idx (posof (zfoc z) slaves)
              (? (idx < 0) lay                                                    ; a master is focused: no slave to resize
@@ -89,7 +89,7 @@
    (dw-msg lay msg z) (? (msg = 'expand) (rt-set lay 1 (lay 1 * 1.1))       ; expand/shrink nudge the spiral ratio
                           (msg = 'shrink) (rt-set lay 1 (mx2 1.05 (lay 1 / 1.1))) ())
 
-   ; --- modifiers: layout -> layout. A modifier record holds an inner layout;
+   ; --- modifiers: layout -> layout. a modifier record holds an inner layout;
    ;     it transforms the inner's placements and/or intercepts its own messages,
    ;     delegating the rest (() from lay-msg = unhandled, so the stack composes) ---
    (with-border p b) [(p 0) (p 1) (p 2) (p 3) (p 4) b]    ; a 6th field: the border width hint
@@ -103,7 +103,7 @@
                            [pls2 ['smart <>res]])
    (sb-msg lay msg z) (: r (lay-msg (lay 1) msg z) (r ? ['smart r] ()))
 
-   ; MIRROR (mkToggle (single MIRROR)): transpose every output rect. Starts OFF ---
+   ; mirror (mkToggle (single MIRROR)): transpose every output rect. Starts off ---
    (mirror inner) ['mirror 0 inner]
    (mir-place p rect) (: base [(p 0) (rx rect + (p 2 - ry rect)) (ry rect + (p 1 - rx rect)) (p 4) (p 3)]
                          (keep-border p base))                                    ; reflect across the rect's diagonal
@@ -114,11 +114,11 @@
              [(map (p \ mir-place p rect) <res) ['mirror on <>res]])))
    (mir-msg lay msg z)
     (: on (lay 1) inner (lay 2)
-       (? (msg = 'mirror) ['mirror (on ? 0 1) inner]                             ; Toggle MIRROR
+       (? (msg = 'mirror) ['mirror (on ? 0 1) inner]                             ; Toggle mirror
           (: r (lay-msg inner msg z) (r ? ['mirror on r] ()))))
 
    ; toggleLayouts Full: hold the inner layout + a flag; ToggleLayout flips to
-   ;     Full (focus owns the whole rect) and back. Starts OFF. ---
+   ;     Full (focus owns the whole rect) and back. Starts off. ---
    (toggle-full inner) ['toggle-lay 0 inner]
    (tf-tile lay rect z)
     (: on (lay 1) inner (lay 2)
@@ -141,14 +141,14 @@
    (mn-msg lay msg z)
     (: mins (lay 1) inner (lay 2)
        (? (two? msg && (<msg = 'minimize-window)) ['minimize (<>msg >< mins) inner]
-          (two? msg && (<msg = 'restore-window))                                  ; un-hide a NAMED window (a taskbar activate)
+          (two? msg && (<msg = 'restore-window))                                  ; un-hide a named window (a taskbar activate)
           (? (any (w \ w = <>msg) mins)
              ['minimize (filter (w \ !(w = <>msg)) mins) inner] ())
           (msg = 'restore) ['minimize (two? mins ? >mins ()) inner]            ; un-hide the most recent
           (: r (lay-msg inner msg z) (r ? ['minimize mins r] ()))))
 
    ; windowNavigation: pure 2D geometry. nav-target names the window nearest the
-   ;     focus in a direction ('left/'right/'up/'down); the DRIVER refocuses or
+   ;     focus in a direction ('left/'right/'up/'down); the driver refocuses or
    ;     swaps to it (Go / Swap dir), since focus/swap are StackSet ops, not
    ;     layout state. nav-swap gives the (focus target) pair to exchange. ---
    (pcx p) (p 1 + (p 3 // 2))  (pcy p) (p 2 + (p 4 // 2))
@@ -176,11 +176,11 @@
    ; map over two lists in lockstep (prel has none) ---
    (map2 f a b) (two? a && two? b ? (f <a <b >< map2 f >a >b) ())
 
-   ; --- the dispatch: case on the record tag. The tag can also be a CLOSURE --
-   ;     the OPEN lane: <lay a function answering ('tile lay rect z) ->
+   ; --- the dispatch: case on the record tag. The tag can also be a closure --
+   ;     the open lane: <lay a function answering ('tile lay rect z) ->
    ;     (placements lay') and ('msg lay msg z) -> lay' | (), so a layout
    ;     defined at the lux repl (or anywhere) enters the dispatch as plain
-   ;     DATA, no table edit -- the stumpwm move. Modifiers wrap it like any
+   ;     data, no table edit -- the stumpwm move. Modifiers wrap it like any
    ;     builtin (their delegation only calls lay-tile/lay-msg). ---
    (lay-tile lay rect z) (: k <lay (? (k = 'rtall) (rt-tile lay rect z)
                                             (k = 'full)  (full-tile lay rect z)

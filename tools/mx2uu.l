@@ -1,19 +1,19 @@
-; tools/mx2uu.l -- EMIT test/uumx.l: love's `+` and `*` dispatch matrices, read
-; from THE TABLE (src/mx.l) and lifted to uu terms, so the BAND LATTICE is a
+; tools/mx2uu.l -- emit test/uumx.l: love's `+` and `*` dispatch matrices, read
+; from the table (src/mx.l) and lifted to uu terms, so the band lattice is a
 ; theorem in the tree's own prover and not only in Rocq. Run on the host binary:
 ;
 ;   love tools/mx2uu.l > test/uumx.l        (or: make uumx)
 ;
-; the uu twin of tools/mx2coq.l, and the band partition is DERIVED the same way
-; -- kinds grouped by row+column equality across BOTH matrices at once -- so the
+; the uu twin of tools/mx2coq.l, and the band partition is derived the same way
+; -- kinds grouped by row+column equality across both matrices at once -- so the
 ; two exports cannot disagree about what a band is. what differs is the metatheory
 ; and the shape of the proof: Rocq closes each square by vm_compute, uu closes it
-; by CONVERSION, `idpath true` against a bounded forall the kernel runs. the terms
+; by conversion, `idpath true` against a bounded forall the kernel runs. the terms
 ; then re-export through uu2coq/uu2lean, so mx.l's shape lands in three kernels.
 ;
 ; the lift: a kind is its index in the enum roster (0..14, mx.l's own order, which
-; IS the dispatch lattice), a lane its index in appearance order, a band its class
-; id. a square is a GRID -- a list of rows, one per kind -- and not a flat list
+; is the dispatch lattice), a lane its index in appearance order, a band its class
+; id. a square is a grid -- a list of rows, one per kind -- and not a flat list
 ; indexed by arithmetic: every walk here rides `npred`, which the eager NbE prices
 ; at O(index), so a 225-long row costs 225x what a 15-long one does and the whole
 ; corpus feels it. hence mvec/mlist, nvec/nlist's shape one type up.
@@ -21,8 +21,8 @@
 ; can name a cell instead of counting to it. untrusted like every translator here:
 ; a wrong lift can miss a law, never fake one, and each row prints under its kind.
 ;
-; load the table FIRST, in its own top-level form: the next form's bare mx-kinds /
-; mx-add / mx-mul references resolve at ITS compile, which must follow this run.
+; load the table first, in its own top-level form: the next form's bare mx-kinds /
+; mx-add / mx-mul references resolve at its compile, which must follow this run.
 (: _ (reads (open "src/mx.l" "r")) ())
 
 (:
@@ -39,7 +39,7 @@
    (cell m i j) (at (at m i) j)
    (rrow m i) (map (\ j (cell m i j)) ridx)
    (rcol m j) (map (\ i (cell m i j)) ridx)
-   ; a kind's dispatch signature: its row AND column in BOTH matrices -- equal
+   ; a kind's dispatch signature: its row and column in both matrices -- equal
    ; signature = same band. mx2coq derives the partition from this same datum.
    (sig i) (list (rrow addm i) (rcol addm i) (rrow mulm i) (rcol mulm i))
    (idxin x l k) (? (! (two? l)) -1 (<l = x) k (idxin x >l (k + 1)))
@@ -53,7 +53,7 @@
    (members c) (filter (\ i (c = (band i))) ridx)
 
    ; --- the noms the artifact wears ---
-   (kn i) ("mx" + string (at kinds i))               ; mxKCharm ..
+   (kn i) ("mx" + string (at kinds i))               ; mxkcharm ..
    ; the table spells a lane as its C symbol (lvm_addn); the prefix says nothing
    ; here, so it comes off -- mxLaddn, matching mx.v's Laddn.
    (ln x) (: t (string x) ("mxL" + (? ("lvm_" = (snip t 0 4)) (snip t 4 (tally t)) t)))

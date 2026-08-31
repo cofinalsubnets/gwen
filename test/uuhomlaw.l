@@ -1,22 +1,22 @@
-; test/uuhomlaw.l -- the LAWS of the destination die, proved of the terms
-; test/uuhomgen.l GENERATED from doc/misc/proto/dest.l (loaded just before this by
+; test/uuhomlaw.l -- the laws of the destination die, proved of the terms
+; test/uuhomgen.l generated from doc/misc/proto/dest.l (loaded just before this by
 ; sort order; machine + skeleton in test/uuhom.l, kernel in test/uu.l). dest.l
-; pins these laws by ASSERT on its emissions; here each is a THEOREM of the
+; pins these laws by assert on its emissions; here each is a theorem of the
 ; lifted terms -- the semantic ones forall machine states (neutral state, the
 ; balanced shuttle computing through it), the shape ones decidable on the data.
-; a dest.l edit that breaks one fails a PROOF at `make test`, and the laws
+; a dest.l edit that breaks one fails a proof at `make test`, and the laws
 ; export to Rocq + Lean with the corpus (test_uugen / test_uulean).
-; guard: substrate + generated terms must land in GLOB first; fail by name if not.
+; guard: substrate + generated terms must land in glob first; fail by name if not.
 (assert (member? 'vof (names ())) (two? (peep GLOB 'drun 0)) (two? (peep GLOB 'ds1ck 0)))
 
-; --- the member store & the home write collapse: ONE si, ONE alu ---
+; --- the member store & the home write collapse: one si, one alu ---
 (assert
  (defq dl-onesi
    (paths nlist ds1ck (ncons 4 (ncons 18 (ncons 1 (ncons 15 nnil)))))
    (idpath ds1ck))
  (defq dl-onealu (paths nat (nlen ds2ck) 4) (idpath 4)))
 
-; --- and the collapse is SOUND: the home write lands the same r8, forall states ---
+; --- and the collapse is sound: the home write lands the same r8, forall states ---
 (assert
  (defq dl-mig-asn
    (pi R hst (pi F hst (pi K hst
@@ -54,7 +54,7 @@
                  (mrg (drun ds4cvargs (mmk R F K 0)) 5)))))
    (lam R (lam F (lam K (idpath (mrg (drun ds4ckargs (mmk R F K 0)) 5)))))))
 
-; --- the degenerate die: a leaf under () compiles BYTE-FOR-BYTE as cv does --
+; --- the degenerate die: a leaf under () compiles byte-for-byte as cv does --
 ; --- data equality, the law that makes migration lane-by-lane ---
 (assert
  (defq dl-lane-k (paths nlist de5kcv de5kck) (idpath de5kck))

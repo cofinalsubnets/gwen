@@ -1,26 +1,26 @@
 ; --- test/host/hash.l: the digests in src/hash.c, held to what publishes them ---
-; NOT in the test/*.l corpus: sha256, md5 and cksum are host nifs, so none is visible
+; not in the test/*.l corpus: sha256, md5 and cksum are host nifs, so none is visible
 ; to the love0 bake. crew/kore's cksum, md5sum and sha256sum are these three plus a
-; line of output, and test/gate/kore.sh holds THOSE to GNU coreutils -- so this file is
+; line of output, and test/gate/kore.sh holds those to GNU coreutils -- so this file is
 ; the half of the rope that does not need another implementation on the box.
 ;
-;   VECTORS   RFC 1321's md5 suite and FIPS 180-4's sha-256 examples, verbatim. a digest
+;   vectors   RFC 1321's md5 suite and fips 180-4's sha-256 examples, verbatim. a digest
 ;             with no love twin has nothing else to be right against.
-;   CKSUM     ..except this one, which gets a twin: the POSIX crc is short enough to
-;             state in love, so `hash-ckwalk` below IS the statement of the polynomial
-;             and the C is held to it at every length 0..129. ⚠ the walk is written from
+;   cksum     ..except this one, which gets a twin: the POSIX crc is short enough to
+;             state in love, so `hash-ckwalk` below is the statement of the polynomial
+;             and the C is held to it at every length 0..129. the walk is written from
 ;             the standard and not from the C: same poly 0x04c11db7, register the other
-;             way round from crc32's, seed 0, and the byte COUNT walked through after
+;             way round from crc32's, seed 0, and the byte count walked through after
 ;             the message, low byte first, which is why an empty file is 4294967295.
-;   LENGTHS   the block is 64 bytes and the length rides the last 8 of it, so 55/56 and
+;   lengths   the block is 64 bytes and the length rides the last 8 of it, so 55/56 and
 ;             119/120 are where a padding off by one shows, at both digests.
-;   MISUSE    value ops: a wrong shape answers (), it does not digest.
-;   STREAM    <X>-init/feed/done is the SAME digest resumable -- all three of them --
+;   misuse    value ops: a wrong shape answers (), it does not digest.
+;   stream    <X>-init/feed/done is the same digest resumable -- all three of them --
 ;             and its oracle is the one-shot beside it: fed in chunks of every awkward
 ;             size, at every length where the padding could slip, it must answer what
 ;             the one-shot answers. a second spelling of the compression function is
 ;             exactly what this must not be, so the test is agreement and not another
-;             vector. ⚠ the state's WIDTH is the only thing telling the three apart,
+;             vector. the state's width is the only thing telling the three apart,
 ;             so the misuse cases feed each nif the other two's cask.
 ;
 ; run:  cat test/00-init.l test/host/hash.l | out/host/love
@@ -49,7 +49,7 @@
  ((md5 hash-mixed) = "d174ab98d277d9f5a5611c2c9f419d9f")
  ((md5 hash-nums) = "57edf4a22be3c955ac49da2e2107b67a"))
 
-; --- sha-256, FIPS 180-4 ---
+; --- sha-256, fips 180-4 ---
 (assert
  ((sha256 "") = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
  ((sha256 "abc") = "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
@@ -95,7 +95,7 @@
              (hash-shape >ls)))))
 (assert (hash-shape '(0 1 54 55 56 57 63 64 65 118 119 120 127 128 129 200)))
 
-; --- MISUSE: value ops, so a wrong shape answers () ---
+; --- misuse: value ops, so a wrong shape answers () ---
 (assert
  !(string? (md5 7))
  !(string? (md5 ()))
@@ -107,8 +107,8 @@
  !(charm? (cksum (cask 8))))
 
 ; --- the three resumable digests: each stream against its own one-shot ---------------
-; the state is a cask the caller owns, and ⚠ THE WIDTH IS THE TYPE -- 105 for sha-256,
-; 89 for md5, 12 for cksum. A cask of any other size, or a feed of anything that is not
+; the state is a cask the caller owns, and the width is the type -- 105 for sha-256,
+; 89 for md5, 12 for cksum. a cask of any other size, or a feed of anything that is not
 ; a string, is a misuse and answers (); which is what stops one digest's state being
 ; fed to another's nif and answering a number that looks like an answer.
 (: sha-st 105
@@ -170,11 +170,11 @@
  ((md5-stream "abc" 1) = "900150983cd24fb0d6963f7d28e17f72")
  ((md5-stream hash-112 7) = (md5 hash-112))
  ((md5-stream (hash-bytes 100000) 1000) = (md5 (hash-bytes 100000)))
- ; ⚠ cksum folds the LENGTH in at the end, so the empty file is 4294967295 and not 0 --
+ ; cksum folds the length in at the end, so the empty file is 4294967295 and not 0 --
  ; the one place a streamed digest could plausibly answer "nothing fed" and be wrong
  ((ck-stream "" 4) = 4294967295) ((ck-stream "" 4) = (cksum ""))
  ((ck-stream (hash-bytes 100000) 1000) = (cksum (hash-bytes 100000)))
- ; misuse, and ⚠ CROSSWISE: a state of the wrong width is refused, which is the only
+ ; misuse, and crosswise: a state of the wrong width is refused, which is the only
  ; thing between three digests that all take a cask and a string
  (nil? (md5-init (cask sha-st))) (nil? (sha256-init (cask md5-st)))
  (nil? (cksum-init (cask sha-st))) (nil? (md5-init (cask ck-st)))

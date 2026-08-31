@@ -1,6 +1,6 @@
 ; rove -- quay's roguelike engine: delving below decks.
 ;
-; a DECK is one floor of the hold: tiles in a cask (0 rock, 1 floor, 2 the
+; a deck is one floor of the hold: tiles in a cask (0 rock, 1 floor, 2 the
 ; hatch down), carved by delve -- rooms lashed by L-corridors, the functional
 ; rng threaded through so a seed reproduces the deck -- with a seen cask
 ; remembering what the lantern has shown. fov is line-of-sight over bresenham
@@ -49,7 +49,7 @@
                (? (w <= rw + 2 || h <= rh + 2) (try (n - 1))
                 ; the span a room of width rw can start at, keeping a 1-cell border: x is
                 ; 1 + roll(w - rw - 1), so the far edge lands at w-2 at worst. (this read `+ 1`
-                ; while the additive band folded RIGHT and w - (rw + 1) is the same number --
+                ; while the additive band folded right and w - (rw + 1) is the same number --
                 ; the hand made the arithmetic say what it means.)
                 (: x (1 + roll sb (w - rw - 1)) y (1 + roll sb (h - rh - 1))
                    rm [x y rw rh]
@@ -109,7 +109,7 @@
  ; --- the painter: one frame said into a port as painted cells ---
  ; glyph/hue per cell -- an ent on a lit cell, else loot, else the tile: lit
  ; tiles bright, remembered ones dim, the dark a bare space. one SGR per hue
- ; CHANGE, threaded down the frame; the port is any jug, so frames gate headless.
+ ; change, threaded down the frame; the port is any jug, so frames gate headless.
  pens {}
  (pen n) (: s (peep pens n ())
             (string? s ? s

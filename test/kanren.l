@@ -1,9 +1,9 @@
-; kanren -- the machinery lives in love/kanren.l, a REGISTERED MODULE (unify + its
+; kanren -- the machinery lives in love/kanren.l, a registered module (unify + its
 ; ufail/ufail? contract and the macro-emitted var/s_plus/s_star/===/=/= stay global;
 ; walk/est/query/streams/rel ride the registry -- (from 'kanren) is the curried
-; accessor). this file is the assert suite + the relational-algebra demo. ONE
+; accessor). this file is the assert suite + the relational-algebra demo. one
 ; body-having `:` -- the accessor binds and `unord_eq` (an unordered list equality;
-; search order is not specified) stay LOCAL, per the corpus law (and the registry
+; search order is not specified) stay local, per the corpus law (and the registry
 ; retired the old re-sweep-mark poisoning hazard outright).
 (: K (from 'kanren)
    est (K 'est)  query (K 'query)  rel (K 'rel)  sX (K 'sX)  slist (K 'slist)
@@ -17,15 +17,15 @@
  (unord_eq '(1 2 3) '(2 1 3))
  (unord_eq '(2 1 3) (stake 3 (sX 1 (sX 2 (sX 3 sno)))))
  (unord_eq '(6 4 2) (slist (smap (* 2) (sX 1 (sX 2 (sX 3 sno))))))
- ; a STREAM IS A COLIST: () empty, (x >< s) mature, a thunk immature. so a finite
+ ; a stream is a colist: () empty, (x >< s) mature, a thunk immature. so a finite
  ; realized one is just its list, and `sX`/`sno` are `link`/`()` under other names.
  (= '(1 2 3) (sX 1 (sX 2 (sX 3 sno))))
  (= 3 (scount (sX 1 (sX 2 (sX 3 sno)))))
  (: s1 (sX 1 (sX 2 (sX 3 sno)))
     s2 (smap (+ 3) s1)
   (unord_eq '(1 2 3 4 5 6) (slist (s_plus s1 s2))))
- ; the two disjunctions differ AT A DELAY, which is the only place fairness can be
- ; spent or kept: s_plus SWAPS there (so the other side runs while this one thinks),
+ ; the two disjunctions differ at a delay, which is the only place fairness can be
+ ; spent or kept: s_plus swaps there (so the other side runs while this one thinks),
  ; s_app just waits for the left to finish.
  (: d (\ _ '(1 2))
   (&& (= '(3 4 1 2) (slist (s_plus d '(3 4))))
@@ -47,8 +47,8 @@
    (: (never s) ((||| (\ _ sno) (zz never)) s)
       (at_least n) (||| (est a n) (zz (at_least (+ n 1))))
     (||| never (est a 0) (at_least 1))))))
- ; --- A NOM IS DATA WHEREVER IT IS NOT A VAR'S TAIL. a variable is (label . nom),
- ;     so the test is on the TAIL: a nom in any other position -- an atom under a
+ ; --- a nom is data wherever it is not A VAR'S tail. a variable is (label . nom),
+ ;     so the test is on the tail: a nom in any other position -- an atom under a
  ;     binder, one a relation minted -- is an ordinary term and unifies as itself.
  (: n (nom 0) v (var 'v)
     r (unify empty_dict ['app n v] ['app n 'y])
@@ -59,14 +59,14 @@
  (id? () (query 0 '(a) (\\\ a (&&& (est a 1) (dif a 1)))))              ; ..and the other order too
  (= '((a 1)) (query 0 '(a) (\\\ a (&&& (est a 1) (dif a 2)))))          ; can never be equal -> nothing to watch
  (id? () (query 0 '(a b) (\\\ a b (&&& (dif a b) (est a b)))))         ; two holes told apart, then joined
- ; a disequality over a PAIR is one constraint, not two: it fails only when BOTH halves land
+ ; a disequality over a pair is one constraint, not two: it fails only when both halves land
  (: g (\ a b (&&& (dif [a b] [1 2]) (est a 1)))
   (&& (= '((a 1 b 3)) (query 0 '(a b) (\\\ a b (&&& (g a b) (est b 3)))))
       (id? () (query 0 '(a b) (\\\ a b (&&& (g a b) (est b 2)))))))
  ; --- absento: x occurs nowhere in t, now or ever ---
  (= '((t (1 2))) (query 0 '(t) (\\\ t (&&& (absent 'x t) (est t '(1 2))))))
  (id? () (query 0 '(t) (\\\ t (&&& (absent 'x t) (est t '(1 x))))))
- (id? () (query 0 '(t) (\\\ t (&&& (est t '(1 (x))) (absent 'x t)))))   ; and it looks DEEP
+ (id? () (query 0 '(t) (\\\ t (&&& (est t '(1 (x))) (absent 'x t)))))   ; and it looks deep
  ; --- a type constraint over any predicate: (apt nom? x) is symbolo ---
  (= '((a foo)) (query 0 '(a) (\\\ a (&&& (apt nom? a) (est a 'foo)))))
  (id? () (query 0 '(a) (\\\ a (&&& (apt nom? a) (est a 1)))))
@@ -75,11 +75,11 @@
  (= '((a 2)) (query 0 '(a) (\\\ a (ifte (&&& (est a 1) (est a 3)) (\ st (sun st)) (est a 2)))))
  (= 1 (tally (query 0 '(a) (\\\ a (sole (||| (est a 1) (est a 2)))))))            ; commit to the first answer
  (= '((a 1)) (query 0 '(a) (\\\ a (&&& (est a 1) (naf (est a 2))))))              ; a=1, and 1 is not 2
- (id? () (query 0 '(a) (\\\ a (&&& (est a 1) (naf (est a 1))))))                  ; ..but it IS 1
- ; --- ties: a binder is a love LAMBDA, so alpha-equivalence is the language's ---
+ (id? () (query 0 '(a) (\\\ a (&&& (est a 1) (naf (est a 1))))))                  ; ..but it is 1
+ ; --- ties: a binder is a love lambda, so alpha-equivalence is the language's ---
  (= (tie (\ x [x 'y])) (tie (\ z [z 'y])))                    ; alpha-equal binders are `=`, and so unify
  (nil? (= (tie (\ x [x 'y])) (tie (\ x [x 'w]))))
- (= '((b y)) (query 0 '(b) (\\\ b (est (tie (\ x [x b])) (tie (\ x [x 'y]))))))   ; unify UNDER the binder
+ (= '((b y)) (query 0 '(b) (\\\ b (est (tie (\ x [x b])) (tie (\ x [x 'y]))))))   ; unify under the binder
  (id? () (query 0 '(b) (\\\ b (&&& (est (tie (\ x [x b])) (tie (\ x [x 'y])))     ; ..and the store still holds
                                    (dif b 'y)))))
  ; the bound atom reifies as a1, a2, .. in first-sight order -- the answer reads
@@ -89,10 +89,10 @@
  (= '(prod elem (mu A))
     (caup (cap (query 0 '(A) (\\\ A (est A ['prod 'elem A])))))))
 
- ; --- DEMO: relations read as algebra. `===` unifies, `=/=` separates; + is OR, *
- ; is AND. so a relation is a polynomial in unifications -- facts SUM,
- ; sub-relations MULTIPLY; a CNF formula is literally a product of sums. ---
- _ (: ; a plant cladogram -- `diverges` is a SUM of (a===ancestor * b===clade) facts:
+ ; --- demo: relations read as algebra. `===` unifies, `=/=` separates; + is or, *
+ ; is and. so a relation is a polynomial in unifications -- facts sum,
+ ; sub-relations multiply; a cnf formula is literally a product of sums. ---
+ _ (: ; a plant cladogram -- `diverges` is a sum of (a===ancestor * b===clade) facts:
    (diverges a b) (((a === 'spermatophytes) * (b === 'angiosperms))   ; seed plants -> flowering plants
                  + ((a === 'angiosperms)    * (b === 'monocots))      ; angiosperms split into
                  + ((a === 'angiosperms)    * (b === 'eudicots)))     ;   monocots | eudicots
@@ -103,7 +103,7 @@
     (unord_eq '((g monocots) (g eudicots)) (query 0 '(g) (\\\ g (load (descends 'spermatophytes g)))))  ; two splits below seed plants
     ; a clade is not its own daughter: =/= is the ring's separation, infix like ===
     (unord_eq '((k eudicots)) (query 0 '(k) (\\\ k (load ((diverges 'angiosperms k) * (k =/= 'monocots))))))
-    ; SAT: a CNF formula (x|y)&(!x|z) is literally a PRODUCT of SUMS of literals
+    ; SAT: a cnf formula (x|y)&(!x|z) is literally a product of sums of literals
     (: sat (query 0 '(x y z) (\\\ x y z (load
               ((boolean x) * (boolean y) * (boolean z)
                 * ((x === 1) + (y === 1))

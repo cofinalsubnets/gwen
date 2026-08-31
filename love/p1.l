@@ -5,15 +5,15 @@
    (p1-cup cl) (: t (cup cl) (? (lit? t) (t ()) t))
 
    ; --- char classes (love.c's op_break / ioread1sym terminators) -----------
-   ; --- THE CLASS TABLE ------------------------------------------------------
-   ; ONE 256-byte string, a bitmask per char, so a membership test is an index
+   ; --- the class table ------------------------------------------------------
+   ; one 256-byte string, a bitmask per char, so a membership test is an index
    ; and an `&` where it used to be a scan over a class string -- with a fresh
    ; closure and a `tally` minted per call, which is what made it the reader's
    ; whole cost (`p1-tend?` walked 15 chars for every character of every token).
-   ; ⚠ BIT 0 IS LEFT UNUSED ON PURPOSE: a string indexed PAST ITS END answers the
+   ; bit 0 is left unused on purpose: a string indexed past its end answers the
    ; charm 1, so a char outside 0..255 would match whichever class held bit 0.
    ; with bit 0 empty, (& 1 m) is 0 for every mask below and an out-of-range
-   ; charm matches NOTHING -- which is exactly what the scan it replaces said.
+   ; charm matches nothing -- which is exactly what the scan it replaces said.
    ;   2 ws   4 opc   8 tend   16 open   32 close   64 sign   128 gstop
    (p1-cin? s c) (: n (tally s)
                     (go k) (? (<= n k) () (= (s k) c) 1 (go (+ k 1)))
@@ -27,17 +27,17 @@
                    (? (? (= c 12) 1 (p1-cin? " \t\n\r;)]}" c)) 128 0)))))))
    p1-cls (: (go k acc) (? (< k 0) (string acc) (go (- k 1) (link (p1-bits k) acc)))
              (go 255 ()))
-   ; ⚠ 12 IS SPELLED OUT, here and in every class below: love's escapes are
-   ; n t r e 0 x and NOTHING ELSE, so "\f" in a love string is the LETTER f --
+   ; 12 is spelled out, here and in every class below: love's escapes are
+   ; n t r e 0 x and nothing else, so "\f" in a love string is the letter f --
    ; which would quietly make f whitespace and eat it out of `ieee-inf`.
    (p1-ws? c)   (& (p1-cls c) 2)
    (p1-dig? c)  (? (<= 48 c) (<= c 57) ())
    (p1-hex? c)  (? (p1-dig? c) 1 (? (<= 97 (p1-low c)) (<= (p1-low c) 102) ()))
    (p1-low c)   (? (? (<= 65 c) (<= c 90) ()) (+ c 32) c)
-   ; op_break complemented: the chars that FUSE into one operator run.
+   ; op_break complemented: the chars that fuse into one operator run.
    (p1-opc? c)  (& (p1-cls c) 4)
-   ; a name-led token ends here (love.c's ioread1sym switch). ⚠ ' is absent --
-   ; a name keeps a trailing/internal prime (x', n''); a LEADING ' is quote and
+   ; a name-led token ends here (love.c's ioread1sym switch). ' is absent --
+   ; a name keeps a trailing/internal prime (x', n''); a leading ' is quote and
    ; never reaches the token lane.
    (p1-tend? c) (& (p1-cls c) 8)
 
@@ -63,7 +63,7 @@
      (? (nil? (link? cl)) n
         (p1-digits (cup cl) radix (+ (* n radix) (p1-dval (cap cl)))))
    ; the three predicates, love.c's is_dec_int / is_hex_int / is_oct_int. they
-   ; are EXHAUSTIVE over what a base-0 strtol took whole, which is why a token
+   ; are exhaustive over what a base-0 strtol took whole, which is why a token
    ; that is none of them (0x, 08, 1e5, abc) goes on to the float lane.
    (p1-all? p cl) (? (nil? (link? cl)) 1 (p (cap cl)) (p1-all? p (cup cl)) ())
    (p1-oct? c)  (? (<= 48 c) (<= c 55) ())
@@ -86,7 +86,7 @@
         (p1-all? p1-oct? (cup cl)))
    ; a token charlist -> (1 . its number), or () if it is not one. the sign is
    ; peeled first so every base agrees about it.
-   ; ⚠ THE WRAPPER IS THE PRESENCE, NEVER THE NET. -5 and 0 both net to nothing,
+   ; the wrapper is the presence, never the net. -5 and 0 both net to nothing,
    ; so a bare answer tested with nil? calls every negative and every zero "not
    ; a number" -- silently, and only for the literals most likely to matter.
    (p1-int cl)
@@ -112,11 +112,11 @@
    (p1-runend l i best)
      (? (nil? (link? l)) best
         (p1-runend (cup l) (+ i 1) (? (p1-opc? (cap l)) (+ i 1) best)))
-   ; an OPERATOR RUN: a maximal run of operator chars, read as one plain symbol
-   ; and factored later by opfix. ⚠ a trailing '-' right before a digit is the
+   ; an operator run: a maximal run of operator chars, read as one plain symbol
+   ; and factored later by opfix. a trailing '-' right before a digit is the
    ; next number's sign, not part of the run -- the run sheds it and the '-' is
    ; put back, so `!-5` is ! then -5.
-   ; ⚠ @ may START a run (@- and friends) but never EXTEND one: past the first char it
+   ; @ may start a run (@- and friends) but never extend one: past the first char it
    ; is the tuple sigil, so `!@0` is ! then @0 and not the symbol !@.
    (p1-run cl acc)
      (? (? (link? cl) (? (= (cap cl) 64) (nil? (link? acc)) (p1-opc? (cap cl))) ())
@@ -132,7 +132,7 @@
               (link (p1-rev acc ()) cl))))
 
    ; --- an atom: integer, then the named floats, then float, then symbol -----
-   ; ⚠ and the float lane asks the TYPE, not the value: gem answers nil on a
+   ; and the float lane asks the type, not the value: gem answers nil on a
    ; token it could not parse, and nil is the charm 0 -- indistinguishable by
    ; net from the float 0.0 it answers for "0.0". gem? separates them.
    (p1-atom tok)
@@ -156,7 +156,7 @@
            (? (= c 34) (link (string (p1-rev acc ())) r)
               (nil? (= c 92)) (p1-str r (link c acc))
               (nil? (link? r)) 'torn
-              (= (cap r) 120)                              ; \xHH
+              (= (cap r) 120)                              ; \xhh
                 (? (nil? (? (link? (p1-cup r)) (link? (p1-cup (p1-cup r))) ())) 'torn
                    (p1-str (p1-cup (p1-cup (p1-cup r)))
                            (link (+ (* (p1-dval (cap (p1-cup r))) 16)
@@ -165,7 +165,7 @@
 
    ; --- the wraps -----------------------------------------------------------
    ; the value surface, the printer's read-back contract: ' and @ each wrap the
-   ; next datum. a SPLICING wrap (hash tuple list) over a list splices instead:
+   ; next datum. a splicing wrap (hash tuple list) over a list splices instead:
    ; {k v} is (hash k v), not (hash (k v)).
    (p1-splice? w) (? (= w 'hash) 1 (? (= w 'tuple) 1 (= w 'list)))
    (p1-wrap w d)
@@ -173,8 +173,8 @@
         (? (= d ()) (= w 'tuple) ()) (link 'iota (link 0 ()))      ; @() -> (iota 0)
         (? (p1-splice? w) (? (link? d) 1 (? (= d ()) (nil? (= w 'hash)) ())) ()) (link w d)
         (link w (link d ())))
-   ; A BRACKET IS ITS WRAP: [a b] is (list a b) and {k v} is the map -- each brace
-   ; and bracket is its wrap's ONLY spelling, so the splice law carries the empties
+   ; a bracket is its wrap: [a b] is (list a b) and {k v} is the map -- each brace
+   ; and bracket is its wrap's only spelling, so the splice law carries the empties
    ; too ([] -> (list), {} -> (tablet 0)) and the box is {x}.
    ; p1-lift reaches here too, with the wrap the sigil named instead.
    (p1-open w cl)
@@ -183,22 +183,22 @@
 
    ; --- the parser ----------------------------------------------------------
    ; (p1-read1 cl head) -- head is true when the next datum would be a list's
-   ; FIRST, which the valence law needs: the : and ? special forms consume the
+   ; first, which the valence law needs: the : and ? special forms consume the
    ; whole list, so a run glued at head does not fuse for those two.
    (p1-read1 cl0 head)
      (: cl (p1-skip cl0)
         (? (nil? (link? cl)) ()
            (: c (cap cl) r (p1-cup cl)
               ; a numeral has to start somewhere (rung 1): + and - are operator
-              ; runs like every other punctuation, EXCEPT that a digit -- or a
-              ; `.`, for -.5 -- right after them makes the token a NUMBER.
+              ; runs like every other punctuation, except that a digit -- or a
+              ; `.`, for -.5 -- right after them makes the token a number.
               numlead (? (& (p1-cls c) 64) (? (link? r) (? (p1-dig? (cap r)) 1 (= (cap r) 46)) ()) ())
               (? (= c 40) (p1-list r 1 ())
                  (& (p1-cls c) 16) (p1-open (? (= c 91) 'list 'hash) r)
                  (& (p1-cls c) 32) ()
                  (= c 34) (p1-str r ())
                  (= c 39) (p1-lift (name "\\") r head)
-                 ; @ glued to an operator char is an operator RUN (@- and friends), not the
+                 ; @ glued to an operator char is an operator run (@- and friends), not the
                  ; tuple sigil: a datum cannot start with one. the run's own shed rule keeps
                  ; @-5 a number, exactly as it keeps !-5.
                  (= c 64) (? (? (link? r) (p1-opc? (cap r)) ()) (p1-op cl)
@@ -210,14 +210,14 @@
                  (: tr (p1-tok cl ())
                     (link (p1-atom (cap tr)) (cup tr)))))))
 
-   ; a wrap takes the next datum; an unfinished one is MORE, never EOF.
-   ; ⚠ a CONSTRUCTOR sigil over an open form RENAMES the wrap rather than stacking
+   ; a wrap takes the next datum; an unfinished one is more, never EOF.
+   ; a constructor sigil over an open form renames the wrap rather than stacking
    ; on it: @[1 2] is @(1 2). the constructors are exactly the splicing wraps, and
    ; stacking is what they cannot mean -- @[a b] would otherwise splice the
    ; bracket's own list in and read (tuple list a b), a wrong value with nothing
-   ; to raise. ' and \ are NOT constructors: they take the next datum whatever it
-   ; is, so '[a b] stays the FORM (list a b) quoted.
-   ; ⚠ @ reads GLUE (p1-read1): spaced it is the plain symbol, the head of the
+   ; to raise. ' and \ are not constructors: they take the next datum whatever it
+   ; is, so '[a b] stays the form (list a b) quoted.
+   ; @ reads glue (p1-read1): spaced it is the plain symbol, the head of the
    ; match form. the other sigils reach across the space.
    (p1-lift w cl head)
      (: s (p1-skip cl)
@@ -227,8 +227,8 @@
               (? (nil? (link? d)) 'torn
                  (link (p1-wrap w (cap d)) (cup d))))))
 
-   ; THE VALENCE LAW, reader half: a run GLUED to the datum after it is MONADIC
-   ; -- the run becomes a wrap UNDER a mono wrap, so the emission is the nested
+   ; the valence law, reader half: a run glued to the datum after it is monadic
+   ; -- the run becomes a wrap under a mono wrap, so the emission is the nested
    ; (mono (run d)), which opfix factors against book['operators] arity 0 -- a spaced
    ; run is the plain symbol, dyadic by opfix's default. head fuses too, so
    ; (<x = y) is (= (cap x) y) and (?x ..) is bit x applied -- no head is exempt.
@@ -244,7 +244,7 @@
            (: d (p1-read1 rest ())
               (? (nil? (link? d)) 'torn
                  (link (link 'mono (link (link sym (link (cap d) ())) ())) (cup d))))))
-   ; a digit-led token carrying a sigil is a RUN, not a name: 2?<>x is 2?<>
+   ; a digit-led token carrying a sigil is a run, not a name: 2?<>x is 2?<>
    ; around x. a digit breaks p1-run, so the run is cut from the whole token,
    ; one past its last sigil. the numeral lane wins first.
    (p1-nop cl)
@@ -268,8 +268,8 @@
    (p1-glued? cl)
      (? (link? cl) (: c (cap cl) (nil? (& (p1-cls c) 128))) ())
 
-   ; a list: datums until the close. an empty one IS the zero point. ⚠ THE THREE
-   ; CLOSERS ARE ONE: ) ] } each just end the open form, so the opener alone picks
+   ; a list: datums until the close. an empty one is the zero point. the three
+   ; closers are one: ) ] } each just end the open form, so the opener alone picks
    ; the wrap and a crossed pair reads silently -- matching them is libra's job,
    ; not the reader's (a reader of a subset, not a validator).
    (p1-list cl0 head acc)
@@ -284,7 +284,7 @@
    ; p1-flow lays a port's readable run down as ordinary conses and closes it on a
    ; thunk for the next, which p1-cup fires like any other tail. the thunk must
    ; memoize: p1 forces a position more than once on purpose (the `#!` lookahead,
-   ; the \xNN lane), and a re-drinking tail would take the next gulp instead, losing
+   ; the \xnn lane), and a re-drinking tail would take the next gulp instead, losing
    ; the bytes between. it wraps its answer (1 v) and reads it back with link?, since
    ; a promise of nothing is the ordinary case at eof. these are prel's flow/once
    ; written again -- prel is not loaded when p1 runs.
@@ -297,7 +297,7 @@
    ; device -- it parks the task and refills -- `unsee` hands it back, and `chug`
    ; takes it plus the run the port has in hand. one chug per gulp: the run is the
    ; port's own, so a file arrives 4096 at a time and never all at once.
-   ; ⚠ the steps are PINNED IN ORDER, never nested as arguments: an n-ary call evals
+   ; the steps are pinned in order, never nested as arguments: an n-ary call evals
    ; right to left, so a nested (go .. (chug p)) would draw the byte before it
    ; chugged. `go` lays the text down backwards onto the tail handed in, so the
    ; thunk is what the list closes on and there is no second pass.
@@ -327,7 +327,7 @@
      (: n (tally s)
         (go k acc) (? (< k 0) acc (go (- k 1) (link (s k) acc)))
         (go (- n 1) ()))
-   ; the BOOT'S door, whole text -> every form: what ai_egg_ calls to read ev.l.
+   ; the boot's door, whole text -> every form: what ai_egg_ calls to read ev.l.
    (p1-text s) (p1-reads (p1-chars s))
 
    _ (seal-hook 0 p1-text)

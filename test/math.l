@@ -46,7 +46,7 @@
     (near 1.0 (log (1 e)))
     (near 5.5 (log (5.5 e)))
 
-    ; --- power IS application: (n b) = b**n; a float numeral forces the float lane ---
+    ; --- power is application: (n b) = b**n; a float numeral forces the float lane ---
     (= 1 (0 2))                  ; 2^0 (const-1)
     (= 2 (1 2))                  ; 2^1 (identity)
     (= 1024 (10 2))              ; 2^10 (exact, ipow)
@@ -62,7 +62,7 @@
     (id? sin sine) (id? cos cosine) (id? fabs abs)
     (= (tan 0.7) (tangent 0.7))                  ; tangent is a lambda: the glaze respins it, so ask the VALUE
     (= 3.0 (sqrt 9.0)) (very-near e (exp 1))
-    ; one exponent, three spellings -- and it is the TOWER, not the inexact leaf `fpow`
+    ; one exponent, three spellings -- and it is the tower, not the inexact leaf `fpow`
     ; underneath it: exact on whole exponents, elementwise on an array one.
     (= (power 2 10) (2 ** 10)) (= (pow 2 10) (2 ** 10)) (= 1024 (power 2 10))
     (= 8.0 (power 2.0 3.0)) (= (gem-tray '(2) '(4.0 9.0)) (power @(2.0 3.0) 2))

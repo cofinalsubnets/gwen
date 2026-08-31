@@ -1,17 +1,17 @@
 ; crew/lux/core.l -- the pure StackSet: the window model, no X and no sockets. This is
-; xmonad's StackSet.hs, single-screen: a focus ZIPPER per workspace, a SHEAF of
-; workspaces with one current, and a FLOATING map (window -> rect) beside the
+; xmonad's StackSet.hs, single-screen: a focus zipper per workspace, a sheaf of
+; workspaces with one current, and a floating map (window -> rect) beside the
 ; tiled stacks. Pure -- so it rides the corpus on every target (crew/lux/law.l asserts
 ; the invariants), and the driver (crew/lux/lux.l) + the X layers build on it.
 ;
-; ⚠ tools/wm2uu.l reads THIS FILE AS DATA and keys on the post-opfix tree --
+; tools/wm2uu.l reads this file as data and keys on the post-opfix tree --
 ; cap/cup chains (the glued accessors factor to them), ></+/!=, and the literal
 ; shape (cap (cup (cup z))). a rewrite that changes the tree, even value-equal,
 ; must teach the translator first or test/host/overlay.l's leg 6 stops certifying.
 ;
-; a body-LESS top-level `:` -- every binding LEAKS to the global scope, so the
+; a body-less top-level `:` -- every binding leaks to the global scope, so the
 ; other crew/lux/ files see this vocabulary once concatenated. names shadow no
-; nif; the WM vocabulary is `z*` (the zipper) and `ws*`/admit/evict/shiftto/
+; nif; the wm vocabulary is `z*` (the zipper) and `ws*`/admit/evict/shiftto/
 ; shiftwin (the sheaf).
 (:
    ; --- the app's own list utilities ---
@@ -23,7 +23,7 @@
                           !i <ring                                 ; absent (or ()): start at the head
                           (ring ((i - 1 + d + n) % n))))
 
-   ; --- the zipper: a workspace's tiled stack. () or (focus up down), up REVERSED
+   ; --- the zipper: a workspace's tiled stack. () or (focus up down), up reversed
    ;     (nearest-first), so focus motion is O(1) at either end. ---
    (zmk f up dn) [f up dn]
    (zfoc z) (two? z ? <z)                                     ; the focused window (() if empty)
@@ -74,7 +74,7 @@
    (wsmap sh f) (wsset sh (wscur sh) (f (wsget sh (wscur sh))))    ; reshape the current zipper
 
    ; --- floating (xmonad's W.float / W.sink), a pure alist. An entry is
-   ;     (window rect tag): a float lives ON a workspace (its home tag), shown
+   ;     (window rect tag): a float lives on a workspace (its home tag), shown
    ;     only there -- xmonad's model, and what keeps a fullscreen float off
    ;     the other workspaces. ---
    (wsunfl w fl) (filter (p \ <p != w) fl)                       ; drop w from the floating alist
@@ -89,7 +89,7 @@
    (wssink sh w) (wsmap (wsmake (wscur sh) (wsboard sh) (wsunfl w (wsfloat sh))) (zins w))   ; sink: floating -> the current tiled stack
 
    ; --- managing windows across the whole sheaf ---
-   (wstiled sh) (foldl (\ a p (a + zrow <>p)) () (wsboard sh))     ; every TILED window, all workspaces
+   (wstiled sh) (foldl (\ a p (a + zrow <>p)) () (wsboard sh))     ; every tiled window, all workspaces
    (wswins sh) (wstiled sh + map cap (wsfloat sh))                 ; every managed window (tiled + floating)
    (wsknownw? sh w) (any (x \ x = w) (wswins sh))
    (wsring sh) (wsrow sh + map cap (wsvisfl sh))                   ; the focus ring: the tiled row, then the floats at home

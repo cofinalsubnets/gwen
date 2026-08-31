@@ -18,7 +18,7 @@
  (= 1 (rank oa-a))   (= 5 (tally oa-a))
  (= 5 (cap (shape oa-a)))
  (nil? (top-tray 0 0))                                ; rank-0 demotes to its lone cell -- nil-filled here
- (= 1 (top-tray 0 '(1)))                              ; ... or the value: a one-cell array IS that value
+ (= 1 (top-tray 0 '(1)))                              ; ... or the value: a one-cell array is that value
  (nil? (top-tray '(2 2 2 2 2 2 2 2 2) 0))             ; over-rank rejected
 
  ; --- holds arbitrary values verbatim (no boxing/coercion) ---
@@ -37,7 +37,7 @@
  (? oa-a 1 0)                                     ; oa-a has truthy elems -> 1
 
  ; --- print: an object array prints as the @(…)/(array …) surface form like any
- ;     other; the type is re-INFERRED on read-back, so an o array of plain
+ ;     other; the type is re-inferred on read-back, so an o array of plain
  ;     numbers re-reads at its natural tier (z) -- inferred, not pinned ---
  (= "@(10 20 30)" (show (top-tray '(3) '(10 20 30))))
 
@@ -50,7 +50,7 @@
 
 ; --- elementwise arithmetic: transparent bignums, full broadcasting ----------
 ; the whole point of g_O: ops route through the promoting scalar dispatch, so a
-; bignum array adds/multiplies EXACTLY where an z array would wrap.
+; bignum array adds/multiplies exactly where an z array would wrap.
 (: oa-x   (top-tray '(3) [(100 2) 2 3])
    oa-y   (top-tray '(3) [1 (100 2) 4])
    oa-sum (+ oa-x oa-y)

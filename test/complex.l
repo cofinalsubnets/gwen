@@ -5,7 +5,7 @@
 ; - + - * / promote a real operand to (r, 0); % is undefined (-> nil).
 ; - sticky: never demotes to a real, even when im is 0 (eql-distinct keys).
 ; - ordered: < <= > >= sort a complex lexicographically by (re, im); a real r is
-;   (r, 0). `=` bridges to reals. (A rank-N c array operand stays elementwise.)
+;   (r, 0). `=` bridges to reals. (a rank-N c array operand stays elementwise.)
 ; - accessors re / im / conj / abs / arg; abs is type-aware.
 
 (: (near? a b eps) (< (- (? (< a b) (- b a) (- a b)) 0) eps)
@@ -45,17 +45,17 @@
  (= (conj (2 ~ 3)) (2 ~ -3))
  (= 7 (re 7))                              ; re of a real is itself
  (nil? (im 7))                             ; im of a real is 0
- (= 5 (conj 5))                            ; conj LIFTS a real to (r ~ 0) = r (the tower bridges)
+ (= 5 (conj 5))                            ; conj lifts a real to (r ~ 0) = r (the tower bridges)
 
- ; --- the two lanes of `~`, the valence law: GLUED it is conj, SPACED it is twin.
+ ; --- the two lanes of `~`, the valence law: glued it is conj, spaced it is twin.
  ;     glued ~x lifts a real to (r, 0) and conjugates a complex ---
  (= (5 ~ 0) ~5)   (twin? ~5)                 ; ~r lifts a real to (r, 0) -- a true complex
  (= (0 ~ 0) ~0)   (= (-3.5 ~ 0) ~-3.5)       ; ~0 -> (0, 0); lift works on a negative real
  (= (conj (2 ~ 3)) ~(2 ~ 3))                 ; ~z conjugates -- glued ~ generalizes conj
  (= (2 ~ -3) ~(2 ~ 3))   (= i ~(0 ~ -1))     ; ~(r ~ i) = (r ~ -i)
 
- ; --- the band is the TIGHTEST there is, above house, so a twin binds before any
- ;     operator, coined ones too: its parts are ATOMS and a compound part owes parens ---
+ ; --- the band is the tightest there is, above house, so a twin binds before any
+ ;     operator, coined ones too: its parts are atoms and a compound part owes parens ---
  (= (9.0 ~ 12.0) (1 + 2 ~ 3 * 4))               ; (2~3) first, then * 4, then 1 +
  ((1 ~ 2) = (1 ~ 2))   !((1 ~ 2) < (1 ~ 2))
 
@@ -84,11 +84,11 @@
  ;     and now works on a complex (via power); twin rejects a complex part ---
  (nil? (% i 2))
  (nil? (sine i))   (near 0.7071067811865476 (re ((/ 1 2) i)))   (nil? (twin 1 i))
- ; power IS defined on complex: w^z = exp(z Log w). i^2 = -1, i^i = e^(-pi/2) (real)
+ ; power is defined on complex: w^z = exp(z Log w). i^2 = -1, i^i = e^(-pi/2) (real)
  (near -1 (re (2 i)))   (? word (near 0 (im (2 i))) 1)   ; im residue exceeds near's tol under f32 powf
  (near 0.20787957635076193 (re (i i)))   (near 0 (im (i i)))
 
- ; --- the truth gate is the REAL part, not the total order (the pure-phase law): spec.l ---
+ ; --- the truth gate is the real part, not the total order (the pure-phase law): spec.l ---
 
  ; --- complex meets bignum: the bignum narrows to double (floating domain) ---
  (twin? (+ i B100))
@@ -142,12 +142,12 @@
  (= (11 ~ 2) (peep (+ @(10 20) ca-v) 0 0))       ; z @(10 20) lifts to (10,0)/(20,0)
  (= (23 ~ 4) (peep (+ ca-v @(10 20)) 1 0))
 
- ; --- `=` over complex arrays -> a BOOLEAN (whole-array); the ORDERINGS -> a mask ---
+ ; --- `=` over complex arrays -> a boolean (whole-array); the orderings -> a mask ---
  (= ca-v ca-v)
  !(= ca-v (twin-tray '(2) [(9 ~ 9) (3 ~ 4)]))   ; one cell differs -> false, never a mask
  (aall (= ca-v ca-v))                           ; aall is the identity on the boolean
  ; a complex tray orders exactly as its cells do -- (re,im) lexicographic, the order that
- ; makes `sort` total (cmp3). A TRAY FOLLOWS ITS SCALAR; these once answered nil.
+ ; makes `sort` total (cmp3). a tray follows its scalar; these once answered nil.
  (aall (= @(1 0) (< ca-v (twin-tray '(2) [(1 ~ 5) (0 ~ 0)]))))  ; re tie -> im 2<5 ; 3>0
  (aall (= @(0 1) (> ca-v (twin-tray '(2) [(1 ~ 5) (0 ~ 0)]))))
  (aall (<= ca-v ca-v))   (aall (>= ca-v ca-v))
@@ -172,7 +172,7 @@
 
  ; --- pin / nil?: the invariant (nil? x) == (= 0 (pin x)) holds here too ---
  (= 0 (sat ca-z))   (nil? ca-z)
- !!ca-v   (= 4 (sat ca-v))                        ; the sum (4 ~ 6) clamps by its REAL part: ceil 4
+ !!ca-v   (= 4 (sat ca-v))                        ; the sum (4 ~ 6) clamps by its real part: ceil 4
  (= (? (nil? ca-v) 1 0) (? (= 0 (sat ca-v)) 1 0))
  (= (? (nil? ca-z) 1 0) (? (= 0 (sat ca-z)) 1 0))
 

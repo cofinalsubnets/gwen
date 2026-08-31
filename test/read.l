@@ -9,7 +9,7 @@
   (3 = (read (zs "(1 + 2)")))                  ; infix factors through the charm lane
   (7 = (read (zs "(1 + 2 * 3)")))              ; right-assoc, same as ev
   (197 = (read (zs "($\"ab\" + 2)")))          ; one binds tightest, same as ev
-  (1 = (read (zs "(!0)")))                     ; sigils factor mid-form; a BARE "!0" is
+  (1 = (read (zs "(!0)")))                     ; sigils factor mid-form; a bare "!0" is
                                               ; two datums -- wrapping a whole line is a
                                               ; shell's move (the repl's), not read's
   ('x = (read (zs "'x")))                      ; quote is the reader's
@@ -21,12 +21,12 @@
   !(read (zs "(+ 1"))                          ; an unfinished shape is nothing
   (1 = (read (zs "1")))
   ; reads: the stream shell -- a port is the hot charms; every form evals,
-  ; the last value is the value. the host/love0/kernel runners ARE reads.
+  ; the last value is the value. the host/love0/kernel runners are reads.
   (42 = (reads (tap (zs "(: zq 41) (zq + 1)"))))  ; defines land: the second form reads the first's
   !(reads (tap (zs "")))
   (7 = (reads (tap (zs "1 2 (3 + 4)"))))))     ; forms eval in order; the last one answers
 
-; the colist lift (`char`) + realizer are now CLOSURE-PRIVATE inside read; what stays
+; the colist lift (`char`) + realizer are now closure-private inside read; what stays
 ; observable is that read drinks any input: chars (above), a port, or a hand-built charms.
 (: (zs2 s) ((: (g i) (? (< i (tally s)) (link (s i) (g (+ 1 i))))) 0)
  (assert

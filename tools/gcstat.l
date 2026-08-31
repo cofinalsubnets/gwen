@@ -1,4 +1,4 @@
-; tools/gcstat.l -- weigh a GENERATIONAL collector empirically: measure infant
+; tools/gcstat.l -- weigh a generational collector empirically: measure infant
 ; mortality (how much of each collection's scan was already dead) and copy
 ; amplification (how many times the live set gets recopied) on real workloads.
 ; the gauge counters are always on:
@@ -28,7 +28,7 @@
 
   ; --- workloads --------------------------------------------------------------
   (sq x) (* x x)   (odd x) (= 1 (% x 2))
-  ; deforest: the map/filter/fold LIST pipeline -- 3 intermediate lists/interp.
+  ; deforest: the map/filter/fold list pipeline -- 3 intermediate lists/interp.
   (deforest n) (foldl (+) 0 (map sq (filter odd (jot n))))
   ; primes: trial division -- integer/branch bound, near-zero allocation.
   (prime? n) ((: (go d) (? (< n (* d d)) 1 (? (= 0 (% n d)) 0 (go (+ d 1))))) 2)

@@ -1,9 +1,9 @@
-; crew/sat/flat -- the CDCL solver over FLAT state, with FOUR DOMAIN-SPECIFIC NATIVE
-; KERNELS: at solver-build time the hot loops are assembled through crew/holo/ (neutral IR,
-; section offsets baked as immediates -- each kernel is SPECIALIZED to the instance's
+; crew/sat/flat -- the CDCL solver over flat state, with four domain-specific native
+; kernels: at solver-build time the hot loops are assembled through crew/holo/ (neutral IR,
+; section offsets baked as immediates -- each kernel is specialized to the instance's
 ; nvars, cached per nv) and installed via the `nif` seam:
 ;   bcp  (fx ar wn)        two-watched-literal propagation      -> conflict cid | -1
-;   conf (fx ar wn confl)  the WHOLE conflict: 1-UIP absorb (+ inline VSIDS bumps),
+;   conf (fx ar wn confl)  the whole conflict: 1-uip absorb (+ inline VSIDS bumps),
 ;                          self-subsumption minimization (in-place compaction), glue,
 ;                          backjump, learnt-clause commit + watches, asserting assign
 ;                                                              -> (cid<<6)|glue | -1 at level 0
@@ -12,28 +12,28 @@
 ;   fbvag (bx ba bo bp)    one BVA grow step over the flat intake state (its own
 ;                          arena family; the layout comment sits above fbvag3)
 ;                                                              -> best key | count = M_cls
-; the interpreted twins (fbcp3/fconf3/fdec3/fbvag3) over the SAME memory are the deopt
+; the interpreted twins (fbcp3/fconf3/fdec3/fbvag3) over the same memory are the deopt
 ; fallbacks, the arm64/no-`nif` engine (the seam rides `(from 'glaze 'nif)` -- main.c's
 ; seal pulls nif off the book, and the glaze module is the door it keeps), and the
 ; differential oracle: the `fknob` box forces the twins and `fboth` gates verdict
-; equality. lisp keeps only the cold path: restarts, learnt-DB reduction, decay/rescale.
-; Run AFTER sat.l (it reuses the leaked oracle + instances):
+; equality. lisp keeps only the cold path: restarts, learnt-db reduction, decay/rescale.
+; Run after sat.l (it reuses the leaked oracle + instances):
 ;   cat crew/sat/sat.l crew/sat/flat.l | love
 ; the story, the kernel contract, and the measured results:.
 ;
-; a literal is ENCODED: +v -> 2v, -v -> 2v+1 (neg = xor 1, var = >>1). val[v] holds
-; the TRUE encoded literal itself (0 = free) so lit-val is a load + a compare. VSIDS
-; activities are INTEGERS (vinc starts 256, grows *21//20 per conflict; when it tops
+; a literal is encoded: +v -> 2v, -v -> 2v+1 (neg = xor 1, var = >>1). val[v] holds
+; the true encoded literal itself (0 = free) so lit-val is a load + a compare. VSIDS
+; activities are integers (vinc starts 256, grows *21//20 per conflict; when it tops
 ; 2^24 every activity shifts right 8 -- decay-by-shift, ratios kept, ancient bumps
-; fade to 0, which is the point). words are 8-byte slots whose LOW 4 bytes carry the
+; fade to 0, which is the point). words are 8-byte slots whose low 4 bytes carry the
 ; value (getw/putw touch only those; the high bytes stay zero from the zeroed cask,
 ; so the kernels' 64-bit ld/st and the byte accessors agree exactly).
 ; fx layout (word offsets; nv = nvars):
 ;   w0 top  w1 qhead  w2 level  w3 nv  w4 aru  w5 wnu  w6 vinc  w7 kernel scratch
-;   TRO=8 trail | LVO lvl | RSO rsn (0 none, else cid+1) | WHO watch heads (2nv+2,
-;   by encoded lit) | VAO val | ACO activity | PHO saved phase (0 never, 1 pos, 2 neg)
-;   | SEO seen scratch (conf clears it on entry; also reused as a level-mark set)
-; a clause at arena offset cid is [size, lit0..], watches ALWAYS slots cid+1/cid+2;
+;   tro=8 trail | lvo lvl | rso rsn (0 none, else cid+1) | who watch heads (2nv+2,
+;   by encoded lit) | vao val | aco activity | pho saved phase (0 never, 1 pos, 2 neg)
+;   | seo seen scratch (conf clears it on entry; also reused as a level-mark set)
+; a clause at arena offset cid is [size, lit0..], watches always slots cid+1/cid+2;
 ; a watch node at offset p is [cid, next] (0 = nil; words 0-1 of both arenas reserved).
 ; the conf caller pre-ensures arena room (aru+nv+3 words) and node room (wnu+4): the
 ; kernels never grow a cask.
@@ -52,7 +52,7 @@
    (pho-of nv) (aco-of nv + (nv + 1))
    (seo-of nv) (pho-of nv + (nv + 1))
    ; --- the twin assign, self-contained (offsets from fx w3) ----------------------
-   (fasg fx el rv)                                          ; set el TRUE at the current level, reason rv (0 = decision)
+   (fasg fx el rv)                                          ; set el true at the current level, reason rv (0 = decision)
     (: nv (getw fx 3) v (el >> 1) t (getw fx 0)
        _ (putw fx (vao-of nv + v) el)
        _ (putw fx (lvo-of nv + v) (getw fx 2))
@@ -69,7 +69,7 @@
           (: n2 ((: (go m) (? (m >= need) m (go (2 * m)))) (2 * tally c))
              nu (cask n2) _ (pour nu 0 c 0 (tally c)) _ (pin s k nu) 0)))
    (fassign s el rv) (fasg (peep s 'fx ()) el rv)
-   ; --- clause DB (lisp side: initial load + reduction; aru/wnu live in fx) --------
+   ; --- clause db (lisp side: initial load + reduction; aru/wnu live in fx) --------
    (fadd s lits)                                            ; append [size, lits..] to the arena; -> cid (word offset)
     (: n #lits fx (s 'fx) aru (getw fx 4)
        _ (fens s 'ar (8 * (aru + (n + 1))))
@@ -87,22 +87,22 @@
        _ (putw fx (who + el) wnu) (putw fx 5 (wnu + 2)))
    (fenq s el rv)                                           ; level-0 fact: assign if free, flag bad if already false
     (: m (flv s el) (? (m = 1) 0 (m = -1) (pin s 'bad 1) (fassign s el rv, 0)))
-   (fload s c0)                                             ; a source clause (signed lits) into the DB + watches
+   (fload s c0)                                             ; a source clause (signed lits) into the db + watches
     (? (1 = taut? c0) 0
        (: c (dedup-lits c0)
           (? (atom? c) (pin s 'bad 1)
              (atom? >c) (: cid (fadd s (enc <c >< ())) (fenq s (enc <c) (cid + 1)))
              (: cid (fadd s (map enc c))
                 _ (fwatch s cid (enc <c)) (fwatch s cid (enc <>c))))))
-   ; --- the interpreted BCP twin: (fbcp3 fx ar wn) -> conflict cid or -1 ----------
+   ; --- the interpreted bcp twin: (fbcp3 fx ar wn) -> conflict cid or -1 ----------
    (fbcp3 fx ar wn)
     (: nv (getw fx 3) who (who-of nv) vao (vao-of nv)
        lv (\ el (: m (getw fx (vao + (el >> 1))) (? (m = 0) 0 (m = el) 1 -1)))
-       prop1 (\ f                                           ; f just became FALSE: re-examine wh[f]
+       prop1 (\ f                                           ; f just became false: re-examine wh[f]
         ((: (go p prev)
             (? (p = 0) -1
                (: cid (getw wn p)
-                  (? (0 = getw ar cid)                                   ; TOMBSTONE (freduce): unlink, walk on
+                  (? (0 = getw ar cid)                                   ; tombstone (freduce): unlink, walk on
                      (: nx (getw wn (p + 1))
                         _ (? (prev = 0) (putw fx (who + f) nx) (putw wn (prev + 1) nx))
                         (go nx prev))
@@ -121,16 +121,16 @@
                               _ (putw wn (p + 1) (getw fx (who + e))) _ (putw fx (who + e) p)
                               (go nx prev))
                            (0 = lv oth) (: _ (fasg fx oth (cid + 1)) (go (getw wn (p + 1)) p))     ; unit: force oth
-                           cid))))))))                                   ; oth false too: CONFLICT
+                           cid))))))))                                   ; oth false too: conflict
          (getw fx (who + f)) 0))
        ((: (drain _)
            (? (getw fx 1 >= getw fx 0) -1
               (: p (getw fx (8 + getw fx 1)) _ (putw fx 1 (1 + getw fx 1))
                  confl (prop1 (p ^ 1))
                  (? (confl > -1) confl (drain ()))))) ()))
-   ; --- the interpreted CONFLICT twin: (fconf3 fx ar wn confl) --------------------
+   ; --- the interpreted conflict twin: (fconf3 fx ar wn confl) --------------------
    ; the whole conflict handler, phase for phase what the conf kernel does:
-   ;   0 level 0 -> -1        1 clear seen           2 1-UIP (absorb + trail walk),
+   ;   0 level 0 -> -1        1 clear seen           2 1-uip (absorb + trail walk),
    ;   asserting lit to ar[cid0+1], tail collected at ar[cid0+2..]
    ;   3 minimize (self-subsumption; dropped lits STAY seen), compact in place
    ;   3b reason-side bump: unseen vars in the learnt lits' reasons get act += vinc
@@ -181,7 +181,7 @@
                         (? (red = 1) (mn (rd + 1) wr)
                            (: _ (putw ar wr el) (mn (rd + 1) (wr + 1)))))))
                (cid0 + 2) (cid0 + 2))
-           ; reason-side bump (cadical's bumpreason): every UNSEEN var in a learnt
+           ; reason-side bump (cadical's bumpreason): every unseen var in a learnt
            ; literal's reason gets an activity bump -- focuses VSIDS one step past the
            ; learnt, the decisive lever on factored/tree instances (php8 ~4000 -> ~1500
            ; conflicts). seen still holds the analysis marks here (czero follows).
@@ -228,7 +228,7 @@
                    (putw fx 5 (wnu + 4))))
            _ (fasg fx (getw ar (cid0 + 1)) (cid0 + 1))
            ((cid0 << 6) | (? (glue > 63) 63 glue)))))
-   ; --- the interpreted DECIDE twin: (fdec3 fx) -> the decided var, 0 = SAT -------
+   ; --- the interpreted decide twin: (fdec3 fx) -> the decided var, 0 = SAT -------
    (fdec3 fx)
     (: nv (getw fx 3) vao (vao-of nv) aco (aco-of nv) pho (pho-of nv)
        v ((: (go v best ba)
@@ -242,8 +242,8 @@
              _ (putw fx 2 (1 + getw fx 2))
              _ (fasg fx (? (ph = 1) (2 * v) (1 + (2 * v))) 0) v)))
    ; ===============================================================================
-   ; the NATIVE kernels. lvm ABI: g=rdi(r6) Ip=rsi(r5) Hp=rdx(r2) Sp=rcx(r1); params
-   ; TAGGED on Sp[i]. cask guard (deopts BEFORE any push -> machine sp balanced on
+   ; the native kernels. lvm ABI: g=rdi(r6) Ip=rsi(r5) Hp=rdx(r2) Sp=rcx(r1); params
+   ; tagged on Sp[i]. cask guard (deopts BEFORE any push -> machine sp balanced on
    ; every path): fixnum test + ap word vs (apof (cask 1)); byte base = [[v+8]+16].
    ; epilogue: tag acc, st Sp[0], Ip+16 -> lvm_ret. deopt (arity>=2): Ip <- interp
    ; body (args still on Sp). callee-saved r3/r11-r14 pushed after the guards.
@@ -256,7 +256,7 @@
    epi-ir '((shl r0 1) (or r0 r0 1) (st r1 0 r0) (add r5 r5 16) (ld r7 r5 0) (jmpr r7))
    deopt2-ir '((label deopt) (ld r7 r5 8) (lea r5 r7 16) (ld r7 r5 0) (jmpr r7))   ; arity>=2
    deopt1-ir '((label deopt) (ld r7 r5 8) (mov r5 r7) (ld r7 r5 0) (jmpr r7))      ; arity 1
-   ; --- kernel 1: BCP -- (bcp fx ar wn). registers: r11=fx r12=ar r13=wn r14=f
+   ; --- kernel 1: bcp -- (bcp fx ar wn). registers: r11=fx r12=ar r13=wn r14=f
    ; (callee-saved) r3=cid, r9=p r10=prev r0/r7/r8 scratch. ---------------------------
    (fbcp-ir nv)
     (: tro8 64 who8 (8 * who-of nv) vao8 (8 * vao-of nv)
@@ -276,7 +276,7 @@
               '(label node)
               '(cmp r9 0) '(br eq drain)
               '(ldx r3 r13 r9 8 0)
-              '(ldx r0 r12 r3 8 0) '(cmp r0 0) '(br ne live)    ; size 0 = TOMBSTONE (freduce):
+              '(ldx r0 r12 r3 8 0) '(cmp r0 0) '(br ne live)    ; size 0 = tombstone (freduce):
               '(ldx r0 r13 r9 8 8)                              ; unlink the dead node, walk on
               '(cmp r10 0) '(br ne dprev)
               ['stx 'r11 'r14 8 who8 'r0] '(jmp dnext)
@@ -337,7 +337,7 @@
               '(label ret)
               '(pop r14) '(pop r13) '(pop r12) '(pop r11) '(pop r3)]
             + epi-ir + deopt2-ir))
-   ; --- kernel 2: the CONFLICT handler -- (conf fx ar wn confl). ---------------------
+   ; --- kernel 2: the conflict handler -- (conf fx ar wn confl). ---------------------
    ; registers: r11=fx r12=ar r13=wn (pushed), r3 scratch (pushed), r14 counter/glue
    ; (pushed); r9 write index, r10 trail/read index, r0/r7/r8 scratch; fx w7 (byte 56)
    ; holds the current skip-var. the twin above is the spec, phase for phase.
@@ -412,13 +412,13 @@
               '(ld r8 r11 56) '(cmp r0 r8) '(br eq mcknx)
               ['ldx 'r8 'r11 'r0 8 lvo8] '(cmp r8 0) '(br eq mcknx)
               ['ldx 'r8 'r11 'r0 8 seo8] '(cmp r8 0) '(br ne mcknx)
-              '(add sp sp 8) '(jmp mkeep)                         ; a fresh lit -> NOT redundant
+              '(add sp sp 8) '(jmp mkeep)                         ; a fresh lit -> not redundant
               '(label mcknx) '(add r7 r7 1) '(jmp mck)
               '(label mred) '(add sp sp 8) '(jmp mnnext)
               '(label mkeep) '(ldx r0 r12 r10 8 0) '(stx r12 r9 8 0 r0) '(add r9 r9 1)
               '(label mnnext) '(add r10 r10 1) '(jmp mn)
               '(label mnend) '(add sp sp 8)]                      ; r9 = wend after compaction
-       ; phase 3b: reason-side bump -- every UNSEEN var in a learnt literal's reason
+       ; phase 3b: reason-side bump -- every unseen var in a learnt literal's reason
        ; gets act += vinc (seen still holds the analysis marks; w7 free as scratch).
        + ['(ld r10 r11 32) '(add r10 r10 1)                   ; j = cid0+1
               '(label rb) '(cmp r10 r9) '(br ge rbe)
@@ -496,7 +496,7 @@
               '(label fin)
               '(pop r14) '(pop r13) '(pop r12) '(pop r11) '(pop r3)]
             + epi-ir + deopt2-ir))
-   ; --- kernel 3: DECIDE -- (dec fx). caller-saved regs only, no pushes. -------------
+   ; --- kernel 3: decide -- (dec fx). caller-saved regs only, no pushes. -------------
    (fdec-ir nv)
     (: tro8 64 lvo8 (8 * lvo-of nv) rso8 (8 * rso-of nv) vao8 (8 * vao-of nv)
        aco8 (8 * aco-of nv) pho8 (8 * pho-of nv) bufk (apof (cask 1))
@@ -528,15 +528,15 @@
    ; twin, phase for phase. registers: r11=bx r12=ba r13=bo r14=bp (callee-saved),
    ; r10=l, r9 the chain cursor, r0/r3/r7/r8 scratch; bx header words 14+ are the
    ; spill frame (cid/n/limi/limj/x/pnext/tail), so the walk fits the register
-   ; file. byte offsets: w3=24 pnu, w5=40 l, w6=48 chain-in, w7=56 mode, w8=64 LO,
-   ; w9=72 HI, w11=88 best, w12=96 count, w13=104 chain-out, w14..w20=112..160.
+   ; file. byte offsets: w3=24 pnu, w5=40 l, w6=48 chain-in, w7=56 mode, w8=64 lo,
+   ; w9=72 hi, w11=88 best, w12=96 count, w13=104 chain-out, w14..w20=112..160.
    (bva-p1-ir pco8)                                         ; pass-1 match block (m=r0): count + running best
     (: An (mint 0) Ax (mint 0)
        [['ldx 'r3 'r11 'r0 8 pco8] '(add r3 r3 1) ['stx 'r11 'r0 8 pco8 'r3]
          '(ld r7 r11 96)
          '(cmp r3 r7) ['br 'gt An]
          '(cmp r3 r7) ['br 'ne Ax]
-         '(ld r7 r11 88) '(cmp r0 r7) ['br 'ge Ax]          ; ties -> LOWEST key
+         '(ld r7 r11 88) '(cmp r0 r7) ['br 'ge Ax]          ; ties -> lowest key
          ['label An] '(st r11 88 r0) '(st r11 96 r3)
          ['label Ax]])
    (bva-p2-ir pco8)                                         ; pass-2 match block: reset on sight + collect best's cids
@@ -622,7 +622,7 @@
        ; build mode: chain occ[l]'s live in-band clauses, walk order (tail-append)
        + ['(ld r10 r11 40)
              ['ldx 'r9 'r11 'r10 8 hho8]                      ; q = heads[l]
-             '(ld r8 r11 64) '(ld r10 r11 72)                ; LO / HI
+             '(ld r8 r11 64) '(ld r10 r11 72)                ; lo / hi
              '(label bq) '(cmp r9 0) '(br eq bend)
              '(ldx r0 r13 r9 8 0) '(ldx r7 r13 r9 8 8) '(mov r9 r7)
              '(ldx r3 r12 r0 8 0)
@@ -657,24 +657,24 @@
        + epi-ir + deopt2-ir))
    fkers (tablet 0)                                         ; nv -> (bcp conf dec), one assemble per nvars
    fknob {0}                                                ; pin 1 to force the interpreted twins (the differential switch)
-   fmaxl0 {2000}                                            ; the initial learnt-DB cap (the gate lowers it to force reductions)
+   fmaxl0 {2000}                                            ; the initial learnt-db cap (the gate lowers it to force reductions)
    frp0 {4}                                                 ; rephase-wheel cadence in restarts (pin 0 = off)
    fcmp0 {1048576}                                          ; arena-words threshold for the real compaction
    fru0 {400}                                               ; the luby restart unit (conflicts per luby-1 block)
    fst0 {10000}                                             ; the stable/focused mode budget in conflicts (x3/2 per switch)
-   ; --- DRAT proof emission: pin a JUG into fdrat0 and every UNSAT solve leaves a
-   ; checkable refutation in it -- each learnt commit a RUP line, each tombstoned
+   ; --- drat proof emission: pin a jug into fdrat0 and every UNSAT solve leaves a
+   ; checkable refutation in it -- each learnt commit a rup line, each tombstoned
    ; learnt a `d` line, each BVA application its extended-resolution lines (RAT on
    ; the fresh variable), and fcdcl caps an UNSAT verdict with the empty clause.
-   ; the proof checks against the ORIGINAL formula: in-gate by fd-check (below),
+   ; the proof checks against the original formula: in-gate by fd-check (below),
    ; externally by drat-trim (crew/sat/dratcheck.sh).
    fdrat0 {0}                                               ; 0 off; a jug records the proof
-   (fdlit el) (: v (el >> 1) (? (1 = (el & 1)) (0 - v) v))  ; encoded -> signed DIMACS literal
+   (fdlit el) (: v (el >> 1) (? (1 = (el & 1)) (0 - v) v))  ; encoded -> signed dimacs literal
    (fdsay j pre c)                                          ; one proof line: prefix, lits, the closing 0
     (: _ (say j pre)
        _ (foldl (\ _ l (: _ (say j (show l)) (say j " "))) 0 c)
        (say j "0\n"))
-   ; the seam itself, bound ONCE, through the MODULE: main.c's seal pulls `nif` off the book on
+   ; the seam itself, bound once, through the module: main.c's seal pulls `nif` off the book on
    ; every boot -- the glaze folded it into its closures and keeps it as a member, so this is the
    ; one door left.
    nifseam (from 'glaze 'nif)
@@ -690,7 +690,7 @@
                      (fnif (fconf-ir nv) fconf3 4)
                      (fnif (fdec-ir nv) fdec3 1)]
                 _ (pin fkers nv ks) ks))))
-   bvkers (tablet 0)                                        ; NB -> (fbvag), the grow-step kernel, one assemble per bucket
+   bvkers (tablet 0)                                        ; nb -> (fbvag), the grow-step kernel, one assemble per bucket
    (fbvagk NB2)
     (? !(id? love-arch 'amd64) ()
        (: hit (peep bvkers NB2 ())
@@ -698,10 +698,10 @@
              (: ks (fnif (fbvag-ir NB2) fbvag3 4 >< ())
                 _ (pin bvkers NB2 ks) ks))))
    (fmk formula nvars)                                      ; build the flat solver state
-    ; the LAYOUT nv is nvars rounded up to a power-of-2 bucket, so the kernel cache
+    ; the layout nv is nvars rounded up to a power-of-2 bucket, so the kernel cache
     ; (keyed per layout) survives BVA's varying variable counts. phantom vars above
     ; the real count are sound: never watched, activity 0 (decided dead last, after
-    ; every real var -- the ascending scan keeps the FIRST max), popped clean.
+    ; every real var -- the ascending scan keeps the first max), popped clean.
     (: s (tablet 0) nv ((: (go k) (? (k >= nvars) k (go (2 * k)))) 16)
        fx (cask (8 * (seo-of nv + (nv + 1))))
        _ (putw fx 3 nv, putw fx 4 2, putw fx 5 2, putw fx 6 256)
@@ -718,7 +718,7 @@
                  'conf (use ? <>ks fconf3)
                  'dec  (use ? <>>ks fdec3))
        _ (foldl (\ _ c (fload s c)) 0 formula) s)
-   ; --- the cold path: restarts, decay, learnt-DB reduction (lisp side) -----------
+   ; --- the cold path: restarts, decay, learnt-db reduction (lisp side) -----------
    (fbackjump s lvl)                                        ; pop + unassign above lvl (restarts: lvl = 0)
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0) lvo (peep s 'lvo 0) rso (peep s 'rso 0)
        vao (peep s 'vao 0) pho (pho-of nv)
@@ -745,11 +745,11 @@
        ((: (go v st) (? (v > nv) st
              (: p (random st 2) _ (putw fx (pho + v) (1 + <p)) (go (v + 1) >p))))
         1 st))
-   (fbest s)                                                ; restore the BEST-TRAIL phases (the deepest basin seen)
+   (fbest s)                                                ; restore the best-trail phases (the deepest basin seen)
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv) b (peep s 'bph ())
        ((: (go v) (? (v > nv) 0
              (: p (getw b v) _ (? (p = 0) 0 (putw fx (pho + v) p)) (go (v + 1))))) 1))
-   (fsnap s)                                                ; snapshot the ASSIGNMENT's polarities at a new deepest trail
+   (fsnap s)                                                ; snapshot the assignment's polarities at a new deepest trail
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0) vao (vao-of nv) b (peep s 'bph ())
        ((: (go v) (? (v > nv) 0
              (: el (getw fx (vao + v))
@@ -759,11 +759,11 @@
     (: fx (peep s 'fx ()) nv (peep s 'nvars 0) pho (pho-of nv)
        ((: (go v) (? (v > nv) 0
              (: p (getw fx (pho + v)) _ (putw fx (pho + v) (? (p = 1) 2 1)) (go (v + 1))))) 1))
-   ; learnt-DB REDUCTION at a level-0 restart, by TOMBSTONE: the worst-glue half
-   ; (glue <= 3 immortal) gets its arena SIZE word zeroed, and both kernels' bcp walk
+   ; learnt-db reduction at a level-0 restart, by tombstone: the worst-glue half
+   ; (glue <= 3 immortal) gets its arena size word zeroed, and both kernels' bcp walk
    ; unlinks a dead clause's watch nodes lazily on the next visit -- no arena
    ; compaction, no watch rebuild, so a reduction is O(learnts) lisp. a dead clause's
-   ; words stay intact (mark, not corrupt), but the size-0 check runs FIRST in the
+   ; words stay intact (mark, not corrupt), but the size-0 check runs first in the
    ; walk, so its stale watch slots are never read as a clause. level-0 reasons are
    ; zeroed (absorb skips level-0 vars anyway; belt and braces). the arena only
    ; grows -- dead slabs leak until the solve ends, the price of O(1)-amortized
@@ -786,14 +786,14 @@
                             _ (putw ar cid 0) _ (putw ar (cid + 1) n) 0)) 0 (keys dead))
        nl (filter (\ p (0 = peep dead <p 0)) ls)
        _ (pin s 'learnts nl) _ (pin s 'nl #nl)
-       ; the cap grows LINEARLY: geometric (x3/2 per reduce) compounds to an unbounded
-       ; DB on 100k-conflict runs -- watch lists balloon and bcp relives the pre-tombstone
+       ; the cap grows linearly: geometric (x3/2 per reduce) compounds to an unbounded
+       ; db on 100k-conflict runs -- watch lists balloon and bcp relives the pre-tombstone
        ; disease (uuf250: 101s geometric vs 31s linear).
        (pin s 'maxl (peep s 'maxl 2000 + 500)))
-   ; RARE REAL COMPACTION (fcompact): the tombstone reducer leaks dead slabs -- on a
+   ; rare real compaction (fcompact): the tombstone reducer leaks dead slabs -- on a
    ; 100k+-conflict run the arena spreads over tens of MB and bcp's working set dies.
    ; when the arena top passes fcmp0 words (at a level-0 restart, after freduce), the
-   ; LIVE clauses compact into a fresh cask, watches rebuild from scratch (wn resets:
+   ; live clauses compact into a fresh cask, watches rebuild from scratch (wn resets:
    ; its dead nodes leak too), learnt cids remap. same level-0 discipline as freduce:
    ; level-0 reasons zeroed, a level-0-satisfied clause drops, a single-nonfalse one
    ; enqueues as a fact, all-false cannot arise (propagation was drained).
@@ -804,7 +804,7 @@
        lt (tablet 0) _ (foldl (\ _ p (pin lt <p >p)) 0 ls)
        _ ((: (zw i) (? (i > (1 + (2 * nv))) 0 (: _ (putw fx (who + i) 0) (zw (i + 1))))) 0)
        _ (putw fx 5 2)
-       ; ZERO the level-0 reasons: every cid MOVES here, so a stale reason would
+       ; zero the level-0 reasons: every cid moves here, so a stale reason would
        ; dereference garbage in the new arena (absorb skips level-0 vars, but the
        ; discipline is load-bearing -- omitting this produced a bogus SAT on uuf250).
        _ ((: (zr t) (? (t >= getw fx 0) 0
@@ -825,8 +825,8 @@
                            (? (n < 2) (walk nxt nu nls)
                               (any (\ el (1 = flv s el)) lits) (walk nxt nu nls)
                               (: nf (filter (\ el !(-1 = flv s el)) lits)
-                                 ; all-false CAN arise here: a fact fenq'd earlier in
-                                 ; THIS walk is still queued, so a later clause may be
+                                 ; all-false can arise here: a fact fenq'd earlier in
+                                 ; this walk is still queued, so a later clause may be
                                  ; falsified before bcp ever sees it -- that is a
                                  ; level-0 conflict: the formula is UNSAT (s 'bad, read
                                  ; by the driver after the compaction).
@@ -858,7 +858,7 @@
                     r ((peep s 'conf ()) fx (peep s 'ar ()) (peep s 'wn ()) confl)
                     (? (r = -1) 'unsat
                        (: cid (r >> 6) glue (r & 63)
-                          _ (: j (peep fdrat0 () 0)              ; the learnt is RUP: log it
+                          _ (: j (peep fdrat0 () 0)              ; the learnt is rup: log it
                                (? (hot? j) (fdsay j "" (map fdlit (fclits s cid))) 0))
                           _ (? (1 < getw (peep s 'ar ()) cid)       ; size >= 2: track for reduction
                                (: _ (pin s 'learnts ((cid >< glue) >< peep s 'learnts ()))
@@ -866,21 +866,21 @@
                           _ (fdecay s) _ (pin s 'nconf (1 + peep s 'nconf 0))
                           _ (pin s 'mconf (1 + peep s 'mconf 0))
                           (loop st))))
-                 ((getw fx 2 > 0) &&                                ; a full DB also forces the restart:
+                 ((getw fx 2 > 0) &&                                ; a full db also forces the restart:
                   ((peep s 'nconf 0 >= peep s 'climit 0) ||         ; reduction is only sound at level 0
                    (peep s 'nl 0 > peep s 'maxl 2000)))
                     (: _ (fbackjump s 0) _ (fnext-restart s)
                        _ (? (peep s 'nl 0 > peep s 'maxl 2000) (freduce s) 0)
                        _ (? (getw fx 4 > peep fcmp0 () 1048576) (fcompact s) 0)
-                       ; STABLE/FOCUSED alternation on a growing conflict budget (fst0,
+                       ; stable/focused alternation on a growing conflict budget (fst0,
                        ; x3/2 per switch): focused = the luby schedule; stable = rare
-                       ; GEOMETRIC restarts (climit 2000 x6/5 within the phase) with
-                       ; sticky phases. the REPHASE WHEEL (random -> invert -> keep)
-                       ; fires only on ENTERING stable: early enough to spring a SAT
+                       ; geometric restarts (climit 2000 x6/5 within the phase) with
+                       ; sticky phases. the rephase wheel (random -> invert -> keep)
+                       ; fires only on entering stable: early enough to spring a SAT
                        ; instance from a bad polarity basin (uf250 keeps its ~35% win),
                        ; rare enough that a long UNSAT refutation keeps its phase-saving
                        ; locality (uuf250 panel 65s -> 42s; the old every-4-restarts
-                       ; wheel fired ~440 times over 700k conflicts and DOUBLED the
+                       ; wheel fired ~440 times over 700k conflicts and doubled the
                        ; conflict count). frp0 pins the wheel off.
                        st2 (? (peep s 'mconf 0 > peep s 'mbudget 0)
                               (: m (peep s 'mode 0) _ (pin s 'mode (1 - m)) _ (pin s 'mconf 0)
@@ -888,7 +888,7 @@
                                  (? ((m = 0) && (peep frp0 () 0 > 0))
                                     (: _ (pin s 'sclimit 2000)
                                        w (peep s 'rew 0) _ (pin s 'rew (w + 1))
-                                       ; random FIRST: at the first entry bph ~= the current
+                                       ; random first: at the first entry bph ~= the current
                                        ; phases, so leading with best would waste the one
                                        ; early escape that wins the SAT instances. over a
                                        ; 14-instance panel the orderings tie on net (85s vs
@@ -911,49 +911,49 @@
                     (v = 0 ? 'sat (loop st)))))) (wheel 42)))
    (fextract s nvars) (: fx (peep s 'fx ()) vao (peep s 'vao 0)
                          (map (\ v (v >< (? (0 = (getw fx (vao + v) & 1)) 1 -1))) (rng 1 (nvars + 1))))
-   ; --- BVA: bounded variable ADDITION (clause factoring), the preprocessing pass ---
+   ; --- BVA: bounded variable addition (clause factoring), the preprocessing pass ---
    ; the ablation-found pigeonhole killer: cadical minus factoring
-   ; collapses to minisat-class. for a literal l, GROW a set of literals M_lit and a set
+   ; collapses to minisat-class. for a literal l, grow a set of literals M_lit and a set
    ; of clauses M_cls (all containing l) such that (m | C\{l}) is in the formula for
    ; every pairing; then a fresh variable x replaces the |M_lit|*|M_cls| clauses with
    ; |M_cls| clauses (x | C\{l}) + |M_lit| definitions (-x | m). resolving on x recovers
-   ; every original (UNSAT preserved); a model extends by x := AND of M_lit (SAT
-   ; preserved); models of the new formula project by DROPPING vars > nvars. adding
+   ; every original (UNSAT preserved); a model extends by x := and of M_lit (SAT
+   ; preserved); models of the new formula project by dropping vars > nvars. adding
    ; definitional variables is the extended-resolution move -- the proof system where
-   ; pigeonhole has POLYNOMIAL refutations (Cook 1976), which plain resolution (and so
-   ; ANY amount of clause learning) provably lacks (Haken 1985).
+   ; pigeonhole has polynomial refutations (Cook 1976), which plain resolution (and so
+   ; any amount of clause learning) provably lacks (Haken 1985).
    fbva0 {1}                                                ; pin 0 to solve raw (the A/B switch)
    fbvar0 {8}                                               ; BVA round cap
-   fbvac0 {1}                                               ; 1 = factor ORIGINAL structure only (no aux cascade)
-   ; the pass runs over FLAT state, and its hot loop -- the occ-probe / match-count
-   ; machinery inside `try` -- is the FOURTH native kernel (fbvag; fbvag3 the honest
-   ; twin, phase for phase). a literal is an OFFSET KEY: signed s -> s + NB, so key
-   ; order IS signed order and the hot walks compare words directly. nvars buckets
-   ; to a power of 2 (the kernel cache survives the ladder's varying counts) and NB
+   fbvac0 {1}                                               ; 1 = factor original structure only (no aux cascade)
+   ; the pass runs over flat state, and its hot loop -- the occ-probe / match-count
+   ; machinery inside `try` -- is the fourth native kernel (fbvag; fbvag3 the honest
+   ; twin, phase for phase). a literal is an offset key: signed s -> s + nb, so key
+   ; order is signed order and the hot walks compare words directly. nvars buckets
+   ; to a power of 2 (the kernel cache survives the ladder's varying counts) and nb
    ; = 12*bucket+256 bounds every var a call can mint: a round starts under
    ; 4*nvars+64, tries at most one lit per candidate, each adding at most one var.
    ; bx header (24 words): w0 aru (clause-arena top) w1 onu (occ-node top) w2 nv
    ; w3 pnu (match-node top) w4 mt (empty clause seen); the kernel seam: w5 l
    ; w6 chain-in w7 mode (1 = build M_cls from occ[l], 0 = one grow level) w8/w9
-   ; the ORIGINAL-variable key band (sentinels 0/4NB pass everything when the aux
-   ; cascade is on) w10 NB; outs w11 best-key w12 count w13 chain-out; w14+ kernel
-   ; scratch. then five sections indexed by key, 2*NB+2 words each: HHO occ heads
-   ; | OCO raw occurrence counts (adds only -- the min-occ heuristic wants the
-   ; UNPRUNED tally) | LCO live counts (adds bump, deletes drop: the round sweep
-   ; reads a counter) | PCO the per-level match counts (pass 2 re-walks and zeroes:
-   ; state-clean without a touched list) | MLO the M_lit marks. a clause lays
+   ; the original-variable key band (sentinels 0/4NB pass everything when the aux
+   ; cascade is on) w10 nb; outs w11 best-key w12 count w13 chain-out; w14+ kernel
+   ; scratch. then five sections indexed by key, 2*nb+2 words each: hho occ heads
+   ; | oco raw occurrence counts (adds only -- the min-occ heuristic wants the
+   ; unpruned tally) | lco live counts (adds bump, deletes drop: the round sweep
+   ; reads a counter) | pco the per-level match counts (pass 2 re-walks and zeroes:
+   ; state-clean without a touched list) | mlo the M_lit marks. a clause lays
    ; [size, key0..] in ba, sorted; a tombstone zeroes the size and stashes the true
    ; length at cid+1 (the freduce discipline -- occ chains are never pruned, every
    ; walk checks the size first). occ / match nodes are [cid, next] in bo / bp
    ; (0 = nil; words 0-1 reserved). the kernel never grows a cask: the driver
    ; pre-ensures bp room (build: 2*OCO[l]; grow: 2*level-length) before each call.
    ; --- the grow-step twin -- (fbvag3 bx ba bo bp), the kernel's spec. build mode
-   ; chains occ[l]'s live in-band clauses in WALK order (tail-append) -> count.
+   ; chains occ[l]'s live in-band clauses in walk order (tail-append) -> count.
    ; grow mode, pass 1: per clause, k = fewest-occurrence lit beside l; per occ[k]
-   ; partner of equal size, the ONE key beyond C\{l} (a sorted two-pointer merge);
-   ; in-band, unmarked keys count into PCO under a RUNNING best (count, ties ->
-   ; lowest key -- increments reach the final max, so the running max IS the
-   ; argmax). pass 2 (only when a best exists) re-walks, zeroing PCO on sight and
+   ; partner of equal size, the one key beyond C\{l} (a sorted two-pointer merge);
+   ; in-band, unmarked keys count into pco under a running best (count, ties ->
+   ; lowest key -- increments reach the final max, so the running max is the
+   ; argmax). pass 2 (only when a best exists) re-walks, zeroing pco on sight and
    ; chaining the best key's clauses (front-push = the walk's own order reversed,
    ; the pl discipline) -> best key, count + chain in w11-w13.
    (fbvag3 bx2 ba2 bo2 bp2)
@@ -975,7 +975,7 @@
                          tail = 0 ? (putw bx2 13 p) (putw bp2 (tail + 1) p),
                          bld qn (cnt + 1) p))))))
            (getw bx2 (hho + l)) 0 0)
-          (: (mrg cid did n)                                ; the ONE key of d beyond c\{l}, -1 if none
+          (: (mrg cid did n)                                ; the one key of d beyond c\{l}, -1 if none
               ((: (go i j x)
                   (? (i > cid + n)
                      (? (x > 0)         (j > did + n ? x -1)
@@ -1034,7 +1034,7 @@
        s2 (2 * NB + 2)
        HHO 24  OCO (HHO + s2)  LCO (OCO + s2)  PCO (LCO + s2)  MLO (PCO + s2)
        fo (peep fbvac0 () 0)
-       LO (1 = fo ? (NB - nvars) 0)                       ; the ORIGINAL-variable key band
+       LO (1 = fo ? (NB - nvars) 0)                       ; the original-variable key band
        HI (1 = fo ? (NB + nvars) (4 * NB))                ; (sentinels: everything passes)
        bx (cask (8 * (MLO + s2)))
        b {'ba (cask 8192) 'bo (cask 8192) 'bp (cask 4096)}
@@ -1099,7 +1099,7 @@
                           (? (bk = 0) (mlit >< chain)
                              (: nc (getw bx 12) nl (1 + tally mlit)
                                 red2 ((nl * nc) - (nl + nc))
-                                (? (red2 > red)                   ; max count; ties -> LOWEST literal
+                                (? (red2 > red)                   ; max count; ties -> lowest literal
                                    (: _ (putw bx (MLO + bk) 1)    ; (symmetric instances: groups stay contiguous)
                                       (grow (bk >< mlit) nc (getw bx 13) red2))
                                    (mlit >< chain))))))
@@ -1115,8 +1115,8 @@
                     (: x (1 + getw bx 2) _ (putw bx 2 x)
                        ml (map (\ m (m - NB)) mlit)         ; signed, most-recent first (l last)
                        rs (map (\ cid (rem-lit (l - NB) (bcl ar cid))) mcls)
-                       ; the proof lines, in RAT-checkable order: the definitions
-                       ; (-x m) while NO clause carries x (blocked on -x), then the
+                       ; the proof lines, in rat-checkable order: the definitions
+                       ; (-x m) while no clause carries x (blocked on -x), then the
                        ; x-clauses (RAT on x: every resolvent is an original (m r),
                        ; still present, or a tautology), then the originals deleted
                        _ (: j (peep fdrat0 () 0)
@@ -1133,13 +1133,13 @@
                             0 rs) 0)) 0 ml)
                        _ (foldl (\ _ r (: _ (addc (x >< r)) 0)) 0 rs)
                        _ (foldl (\ _ m (: _ (addc ((0 - x) >< (m >< ()))) 0)) 0 ml)
-                       _ (addc (x >< map (\ m (0 - m)) ml))       ; the OTHER direction: x <- AND(m) --
-                       1)))))                                      ; a COMPLETE definition (pure extended
+                       _ (addc (x >< map (\ m (0 - m)) ml))       ; the other direction: x <- and(m) --
+                       1)))))                                      ; a complete definition (pure extended
                                                                    ; resolution), so x propagates instead of
                                                                    ; wandering: without it CDCL decides x freely
        _ (foldl (\ _ c (: _ (addc c) 0)) 0 formula)
        _ ((: (round r)                                      ; sweep most-occurring literals first; stop on a quiet
-             (: nv2 (getw bx 2)                             ; round OR when the cumulative find is a handful (a sweep
+             (: nv2 (getw bx 2)                             ; round or when the cumulative find is a handful (a sweep
                 ls (sortby (\ a2 b2 (? (<a2 = <b2) (>a2 <= >b2) (<a2 > <b2)))   ; costs a full pass; an
                            ((: (go el acc)                                       ; incidental 6-of-300 is
                                (? (el > (NB + nv2)) acc                          ; not worth another)
@@ -1161,14 +1161,14 @@
             2 ())
        ((? (1 = getw bx 4) (() >< out) out) >< getw bx 2))
    (fcdcl formula nvars)
-    ; the fbva LADDER: re-run the pass on its own output with the baseline lifted (level-1
-    ; aux become "original" for level 2) while it keeps factoring SUBSTANTIALLY (> nvars/16
+    ; the fbva ladder: re-run the pass on its own output with the baseline lifted (level-1
+    ; aux become "original" for level 2) while it keeps factoring substantially (> nvars/16
     ; fresh vars -- an incidental handful, e.g. flat graph coloring's 6-of-300, is not a
     ; commander hierarchy and another pass is pure intake cost) -- level 2 deepens the
     ; commander tree (php8 ~1550 -> ~1400 conflicts under the reason-side bump; WITHOUT
     ; that bump a deeper tree actively hurts, so the ladder rides the bump). an instance
     ; with nothing factorable exits after one pass (randoms: no ladder cost). models
-    ; still project by the ORIGINAL nvars.
+    ; still project by the original nvars.
     (: p (? (0 = peep fbva0 () 1) (formula >< nvars)
             ((: (go p k) (: p2 (fbva <p >p)
                             (? (((16 * (>p2 - >p)) <= >p) || (k >= 3)) p2 (go p2 (k + 1)))))
@@ -1190,18 +1190,18 @@
     (: _ (pin fknob () 1) a (fcdcl f n) _ (pin fknob () 0) b (fcdcl f n)
        (? (id? a 'unsat) (id? b 'unsat) (!(id? b 'unsat) && sat? b f)))
 
-   (fbvaboth f n)                                           ; the BVA PASS itself, kernel vs twin.
-    (: _ (pin fknob () 1) a (fbva f n)                      ; fboth compares VERDICTS, and a verdict
+   (fbvaboth f n)                                           ; the BVA pass itself, kernel vs twin.
+    (: _ (pin fknob () 1) a (fbva f n)                      ; fboth compares verdicts, and a verdict
        _ (pin fknob () 0) b (fbva f n) (a = b))              ; survives a wrong transform -- an
                                                              ; equisatisfiable formula still solves.
                                                              ; this compares the transform itself.
 
-   ; --- the in-gate DRAT checker: RUP + RAT on the first literal, a from-scratch
-   ; reimplementation of the CHECKING side (shares nothing with the emitter but
+   ; --- the in-gate drat checker: rup + rat on the first literal, a from-scratch
+   ; reimplementation of the checking side (shares nothing with the emitter but
    ; fd-parse's inverse relation to fdsay). naive O(lines * db) unit propagation --
    ; the gate runs it on small refutations; drat-trim (crew/sat/dratcheck.sh) is the
    ; independent external checker for the bench-scale ones.
-   (fd-parse txt)                                           ; DRAT text -> steps (tag . lits), tag 1 = delete
+   (fd-parse txt)                                           ; drat text -> steps (tag . lits), tag 1 = delete
     (: n (tally txt)
        ((: (go i tag num sgn lits steps)
            (? (i >= n) (rev steps)
@@ -1232,7 +1232,7 @@
      db 0)
    (fd-rup? db c)                                           ; does the negation propagate to a conflict?
     (fd-up db (foldl (a \ l \ pin a (neg l) 1) {} c))
-   (fd-rat? db c)                                           ; RAT on <c: every resolvent taut or RUP
+   (fd-rat? db c)                                           ; rat on <c: every resolvent taut or rup
     (? (atom? c) 0
        (: p <c
           (all (\ d (? (member? (neg p) d)
@@ -1240,7 +1240,7 @@
                           (? (1 = taut? rv) 1 (fd-rup? db rv)))
                        1))
                db)))
-   (fd-del db c)                                            ; drop ONE clause equal as a set
+   (fd-del db c)                                            ; drop one clause equal as a set
     (: k (sort c)
        ((: (go d) (? (atom? d) ()
                      (sort <d = k) >d
@@ -1276,15 +1276,15 @@
     (fboth (cyclic 14) 14)
     (fboth (php 4) (php-vars 4))
     (fboth (php 5) (php-vars 5))
-    ; ..and the BVA TRANSFORM agrees, not just the verdict it leads to (php reaches
+    ; ..and the BVA transform agrees, not just the verdict it leads to (php reaches
     ; fbvag3's build mode ~50-100 times; cyclic exercises the no-factoring exit).
     (fbvaboth (php 4) (php-vars 4))
     (fbvaboth (php 5) (php-vars 5))
     (fbvaboth (cyclic 14) 14)
-    ; pigeonhole PHP(5): UNSAT + resolution-hard (learning, restarts, arena growth end to end)
+    ; pigeonhole php(5): UNSAT + resolution-hard (learning, restarts, arena growth end to end)
     (id? (fcdcl (php 5) (php-vars 5)) 'unsat)
-    ; DRAT: an UNSAT solve's emitted proof re-checks against the ORIGINAL formula --
-    ; pure RUP on the tiny ones, BVA's RAT lines on php(4), `d` lines under a tiny
+    ; drat: an UNSAT solve's emitted proof re-checks against the original formula --
+    ; pure rup on the tiny ones, BVA's rat lines on php(4), `d` lines under a tiny
     ; learnt cap. fd-check is the in-gate eye; crew/sat/dratcheck.sh aims drat-trim at php.
     (: f '((1) (-1)) j (jug 0) _ (pin fdrat0 () j) r (fcdcl f 1) _ (pin fdrat0 () 0)
        (id? r 'unsat && (1 = fd-check f (fd-parse (slurp j)))))
@@ -1300,13 +1300,13 @@
        f (php 4) j (jug 0) _ (pin fdrat0 () j) r (fcdcl f (php-vars 4))
        _ (pin fdrat0 () 0) _ (pin fmaxl0 () keep)
        (id? r 'unsat && (1 = fd-check f (fd-parse (slurp j)))))
-    ; force the learnt-DB REDUCTION path hard (a tiny cap -> reduction every few restarts)
+    ; force the learnt-db reduction path hard (a tiny cap -> reduction every few restarts)
     ; and re-run the differential battery through it, both engines
     (: keep (peep fmaxl0 () 0) _ (pin fmaxl0 () 24)
        ok (id? (fcdcl (php 5) (php-vars 5)) 'unsat &&
            ffuzz 30 12 50 && fboth (php 4) (php-vars 4))
        _ (pin fmaxl0 () keep) ok)
-    ; force the REAL COMPACTION path the same way (a tiny arena threshold -> fcompact at
+    ; force the real compaction path the same way (a tiny arena threshold -> fcompact at
     ; every level-0 restart; its all-false-at-level-0 UNSAT verdict and cid remapping are
     ; only reachable here -- an untested fcompact once shipped a bogus SAT on uuf250)
     (: keep (peep fcmp0 () 0) _ (pin fcmp0 () 64)

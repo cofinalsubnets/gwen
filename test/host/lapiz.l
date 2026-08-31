@@ -1,13 +1,13 @@
 ; --- test/host/lapiz.l: the document lens, exactly ---
-; NOT in the test/*.l corpus (it loads a crew file and splices its module).
-; the corpus is the LENS LAWS over a markdown corpus wide enough to touch every
+; not in the test/*.l corpus (it loads a crew file and splices its module).
+; the corpus is the lens laws over a markdown corpus wide enough to touch every
 ; block and every span:
-;   LAW 1  the AST is the FIXED POINT of each surface -- (mdread (mdshow a)) = a
+;   law 1  the AST is the fixed point of each surface -- (mdread (mdshow a)) = a
 ;          and (htread (htshow a)) = a. the strong one: neither shower loses
-;          anything its reader wants, so the two surfaces are views of ONE value.
-;   LAW 2  falls out -- each surface round-trips through the other up to
+;          anything its reader wants, so the two surfaces are views of one value.
+;   law 2  falls out -- each surface round-trips through the other up to
 ;          normalization, and both normalizers are idempotent. reading is a
-;          RETRACTION (many markdowns, one AST), showing its SECTION.
+;          retraction (many markdowns, one AST), showing its section.
 ; a new surface owes law 1 and nothing more; that is what keeps its arrival from
 ; touching any other. run:
 ;   cat test/00-init.l test/host/lapiz.l | out/host/love
@@ -87,13 +87,13 @@ the [end](e)."]
    _ (map (\ s
       (: d (mdread s)  m (nrm s)  h (md->ht s)
          (assert
-            (d = (mdread (mdshow d)))          ; LAW 1, the markdown surface
-            (d = (htread (htshow d)))          ; LAW 1, the html surface
-            (m = (ht->md (md->ht s)))          ; LAW 2: the lens closes, up to normalization
+            (d = (mdread (mdshow d)))          ; law 1, the markdown surface
+            (d = (htread (htshow d)))          ; law 1, the html surface
+            (m = (ht->md (md->ht s)))          ; law 2: the lens closes, up to normalization
             (m = (nrm m))                      ; ..and a normalizer is idempotent
             (h = (md->ht (ht->md h)))
             (h = (hrm h))
-            (! (t0? d))                        ; NO 0 TAIL anywhere in the middle
+            (! (t0? d))                        ; no 0 tail anywhere in the middle
             (! (t0? (htread h)))))) corpus)
 
  ; --- the shapes, spelled out: the middle is plain love data -------------------
@@ -107,32 +107,32 @@ the [end](e)."]
     ((mdread "---\n") = '((rule)))
     ((mdread "t\n:   b\n") = '((deflist ((((text "t")) ((text "b")))))))
     ((mdread "---\ntitle: L\n---\n") = '((meta ((title "L") (section "") (date "") (source "") (manual "")))))
-    ; two blank-separated lists of one kind are ONE list (markdown's loose-list rule,
+    ; two blank-separated lists of one kind are one list (markdown's loose-list rule,
     ; and the only spelling roff has) -- `bmrg`, the block twin of `mrg`
     ((mdread "- a\n\n- b\n") = '((bullets (((text "a")) ((text "b"))))))
-    ; a WRAPPED item is ONE item: a line that is neither blank nor a block opener
+    ; a wrapped item is one item: a line that is neither blank nor a block opener
     ; continues the item above it, and the wrap's indentation is not the text's.
     ((mdread "- a\n  wrapped\n- b\n") = '((bullets (((text "a wrapped")) ((text "b"))))))
     ((mdread "1. a\n   wrapped\n") = '((numbers (((text "a wrapped"))))))
-    ; ..and what does NOT continue one: a blank line, and every block opener
+    ; ..and what does not continue one: a blank line, and every block opener
     ((mdread "- a\n\nb\n") = '((bullets (((text "a")))) (para ((text "b")))))
     ((mdread "- a\n- b\n") = '((bullets (((text "a")) ((text "b"))))))
     ((mdread "- a\n# b\n") = '((bullets (((text "a")))) (head 1 ((text "b")))))
     ((mdread "- a\n```\nx\n```\n") = '((bullets (((text "a")))) (fence "" "x\n")))
-    ; ⚠ THE READER IS TOTAL: a line `starter` claims but no block can parse -- a
+    ; the reader is total: a line `starter` claims but no block can parse -- a
     ; `---` rule that is not one, a `:   ` body with no term over it -- is taken as
-    ; a paragraph of its own rather than STOPPING the block loop, which used to drop
+    ; a paragraph of its own rather than stopping the block loop, which used to drop
     ; the whole rest of the document in silence.
     ((mdread ":   orphan\n") = '((para ((text ":   orphan")))))
     ((mdread "--- the table ---\nbody\n")
      = '((para ((text "--- the table ---"))) (para ((text "body")))))
     ((mdread "- a\n:   b\n") = '((bullets (((text "a")))) (para ((text ":   b")))))
-    ; ..and it never fires on what a SHOWER writes, which is why law 1 does not feel
+    ; ..and it never fires on what a shower writes, which is why law 1 does not feel
     ; it: a real rule, a real deflist and a shielded paragraph all still read as they
     ; are shown.
     ((mdread "---\n") = '((rule)))
     ((mdread "t\n:   b\n") = '((deflist ((((text "t")) ((text "b")))))))
-    ; a paragraph that would re-read as a block wears ONE backslash; the escape leaf takes it off
+    ; a paragraph that would re-read as a block wears one backslash; the escape leaf takes it off
     ((nrm "- a") = "- a\n")
     ((nrm "\\- a") = "\\- a\n")
     ((mdread "\\- a") = '((para ((text "- a")))))
@@ -146,7 +146,7 @@ the [end](e)."]
     ((ht->md "<p>5 &lt; 6 &amp; 7</p>") = "5 < 6 & 7\n")
     ((md->ht "5 < 6 & 7") = "<p>5 &lt; 6 &amp; 7</p>"))
 
- ; --- the roff surface: law 1 on the MAN-PAGE-SHAPED docs ---------------------
+ ; --- the roff surface: law 1 on the man-page-shaped docs ---------------------
  ; roff is a smaller surface, so its law is stated over its domain -- meta, head 1-2,
  ; para, fence with no language, quote, bullets, numbers, deflist, and text/strong/
  ; em/code inline. every one of those appears below.
@@ -192,10 +192,10 @@ love \\- a curried lisp
 some literal
 ```"]
     _ (map (\ s (: d (mdread s)
-                   (assert (d = (rfread (rfshow d)))        ; LAW 1, the roff surface
+                   (assert (d = (rfread (rfshow d)))        ; law 1, the roff surface
                            (! (t0? (rfread (rfshow d))))))) rfcorpus)
 
-    ; ..and OUTSIDE the domain rfshow stays total while rfread normalizes. each loss is
+    ; ..and outside the domain rfshow stays total while rfread normalizes. each loss is
     ; pinned here, so it is a stated property of the surface and not a surprise.
     (rfrt s) (rfread (rfshow (mdread s)))
     _ (assert
@@ -207,7 +207,7 @@ some literal
        ((rfrt "## deep") = '((head 2 ((text "deep")))))
        ((rfrt "```\nx\n```\n") = '((fence "" "x\n"))))
 
-    ; the surface TABLE is the whole of conversion: six pairings, no pairwise code
+    ; the surface table is the whole of conversion: six pairings, no pairwise code
     _ (assert
        ((convert 'md 'ht "# hi") = "<h1>hi</h1>")
        ((convert 'md 'rf "# hi") = ".SH hi\n")
@@ -218,28 +218,28 @@ some literal
     0)
 
  ; --- real documents through the lens, laws and all ---------------------------
- ; README.md, and the two man pages -- which are WRITTEN in markdown and generated
+ ; readme.md, and the two man pages -- which are written in markdown and generated
  ; into roff by this module (tools/mkman.l), so their law 1 is load-bearing: it is
  ; what keeps doc/*.md and the shipped doc/*.1 from being able to disagree.
  _ (: (slurpf f) (: q (open f "r") (slurp q))
       _ (map (\ f (: d (mdread (slurpf f))
                      (assert
                         (0 < tally d)                    ; it parsed
-                        (d = (mdread (mdshow d)))        ; LAW 1 on real markdown
+                        (d = (mdread (mdshow d)))        ; law 1 on real markdown
                         (d = (htread (htshow d)))
                         (! (t0? d)))))
              ["README.md" "doc/love.md" "doc/cook.md"])
-      ; ..and the roff law only on the MAN PAGES: README.md is deliberately outside the
+      ; ..and the roff law only on the man pages: readme.md is deliberately outside the
       ; roff domain (deep headings, fence languages, links, rules), which is the domain
       ; doing its job rather than a failure.
       _ (map (\ f (: d (mdread (slurpf f))
-                     (assert (d = (rfread (rfshow d))))))   ; LAW 1 on the roff the build ships
+                     (assert (d = (rfread (rfshow d))))))   ; law 1 on the roff the build ships
              ["doc/love.md" "doc/cook.md"])
       ; the man pages are man-page-shaped: every block is in the roff domain, so the
       ; generated page loses nothing (verified against groff by hand, byte-identical
       ; to the hand-written pages these replaced).
       _ (map (\ f (: d (mdread (slurpf f))
-                     (assert (id? 'meta (cap (cap d)))    ; a .TH, and it leads
+                     (assert (id? 'meta (cap (cap d)))    ; a .th, and it leads
                              (! (member? 'rule (map cap d)))))) ["doc/love.md" "doc/cook.md"])
       0)
 

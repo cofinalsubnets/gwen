@@ -1,19 +1,19 @@
 ; crew/lux/ewmh.l -- EWMH + docks: the protocol tax that separates "manages my windows"
 ; from "my taskbar, pager, and fullscreen video work". Three pieces:
-;   * a SUPPORT WINDOW advertising _NET_SUPPORTING_WM_CHECK + _NET_WM_NAME
+;   * a support window advertising _net_supporting_wm_check + _net_wm_name
 ;     ("LG3D (XMonad)" -- the Java hack, setWMName);
 ;   * root properties a pager reads (_NET_SUPPORTED/_NET_CLIENT_LIST/
-;     _NET_ACTIVE_WINDOW/_NET_CURRENT_DESKTOP/_NET_WM_DESKTOP), re-published by
+;     _net_active_window/_net_current_desktop/_net_wm_desktop), re-published by
 ;     ewmh-sync whenever the sheaf changes (a change-guard skips the no-ops);
-;   * STRUTS: a dock's _NET_WM_STRUT_PARTIAL shrinks the tiling rect
+;   * struts: a dock's _net_wm_strut_partial shrinks the tiling rect
 ;     (avoidStruts); ewmh-toggle flips it live (ToggleStruts, sup+b).
-; The strut arithmetic and the property encodings are PURE (jug-testable), so
+; The strut arithmetic and the property encodings are pure (jug-testable), so
 ; crew/lux/law.l asserts them; the ewst tablet is the module's one mutable cell (the
-; evq pattern). Loads after crew/lux/{layout,wire}.l. A body-LESS `:` -- leaks all.
+; evq pattern). Loads after crew/lux/{layout,wire}.l. a body-less `:` -- leaks all.
 (:
-   ; --- pure: strut arithmetic. A strut is (left right top bottom), root-
+   ; --- pure: strut arithmetic. a strut is (left right top bottom), root-
    ;     relative reserved widths; shrinking clamps the rect off each edge. ---
-   (strut-parse vals) (#vals >= 4 ? (take 4 vals))                      ; _PARTIAL's 12 values: the first 4 are the strut
+   (strut-parse vals) (#vals >= 4 ? (take 4 vals))                      ; _partial's 12 values: the first 4 are the strut
    (strut-shrink r st swp shp)
     (: x1 (mx2 (rx r) (st 0)) y1 (mx2 (ry r) (st 2))
        x2 (mn2 (rx r + rw r) (swp - st 1))
@@ -45,7 +45,7 @@
     (: n #vals (go (a >< u)) (x-w32 s a, go u)
      (x-w8 s 18, x-w8 s 0, x-w16 s (6 + n), x-w32 s win, x-w32 s prop,
       x-w32 s type, x-w8 s 32, x-w8 s 0, x-w16 s 0, x-w32 s n,
-      go vals))           ; an ORDERED loop: map's effects run tail-first
+      go vals))           ; an ordered loop: map's effects run tail-first
    (x-chprop8 s win prop type txt)
     (: n #txt (go i) (i < x-pad4 n ? (put s 0, go (i + 1)))
      (x-w8 s 18, x-w8 s 0, x-w16 s (6 + (n + x-pad4 n) / 4), x-w32 s win, x-w32 s prop,
@@ -59,7 +59,7 @@
                  "_NET_WM_STATE_MAXIMIZED_VERT" "_NET_WM_STATE_MAXIMIZED_HORZ" "_NET_CLOSE_WINDOW"
                  "_NET_WM_STRUT" "_NET_WM_STRUT_PARTIAL" "_NET_WM_WINDOW_TYPE"
                  "_NET_WM_WINDOW_TYPE_DOCK" "_NET_WM_WINDOW_TYPE_DIALOG" "_NET_WM_WINDOW_TYPE_NOTIFICATION"
-                 "WM_CHANGE_STATE")                                              ; ICCCM iconify (minimizeEventHook); interned, NOT advertised as _NET_
+                 "WM_CHANGE_STATE")                                              ; ICCCM iconify (minimizeEventHook); interned, not advertised as _net_
    (ewmh-init s root idbase ndesk)
     (: at (tablet 8)
        _ (each ewmh-atoms (nm \ pin at nm (x-intern s nm)))
@@ -67,12 +67,12 @@
        _ (pins ewst 'atoms at 'root root 'sup idbase)
        (a nm) (peep at nm 0)
        _ (x-mkwin s idbase root)
-       _ (x-chprop32 s root (a "_NET_SUPPORTED") 4                                           ; type ATOM(4); only the _NET_ vocabulary
+       _ (x-chprop32 s root (a "_NET_SUPPORTED") 4                                           ; type atom(4); only the _net_ vocabulary
                      (map (nm \ peep at nm 0) (filter (nm \ snip nm 0 5 = "_NET_") ewmh-atoms)))
-       _ (x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase])                     ; type WINDOW(33)
+       _ (x-chprop32 s root (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase])                     ; type window(33)
        _ (x-chprop32 s idbase (a "_NET_SUPPORTING_WM_CHECK") 33 [idbase])
-       _ (x-chprop8 s idbase (a "_NET_WM_NAME") utf8 "LG3D (XMonad)")                        ; setWMName: the Java hack
-       _ (x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 [ndesk])                        ; type CARDINAL(6)
+       _ (x-chprop8 s idbase (a "_NET_WM_NAME") utf8 "LG3D (XMonad)")                        ; setwmname: the Java hack
+       _ (x-chprop32 s root (a "_NET_NUMBER_OF_DESKTOPS") 6 [ndesk])                        ; type cardinal(6)
        (x-flush s))
 
    ; --- sync: publish the sheaf whenever it changed (pagers track us) ---
@@ -82,7 +82,7 @@
        (? (key = ewst 'last) 0
           (: _ (pin ewst 'last key) root (peep ewst 'root 0)
              _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST") 33 wins)
-             _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST_STACKING") 33 wins)   ; libwnck CREATES its windows off THIS list (no stacking =
+             _ (x-chprop32 s root (ewmh-atom "_NET_CLIENT_LIST_STACKING") 33 wins)   ; libwnck creates its windows off this list (no stacking =
                                                                                      ; an empty taskbar); wswins is tiles-then-floats = bottom to top
              _ (x-chprop32 s root (ewmh-atom "_NET_CURRENT_DESKTOP") 6 [cur])
              _ (x-chprop32 s root (ewmh-atom "_NET_ACTIVE_WINDOW") 33 [foc])

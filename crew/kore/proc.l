@@ -96,11 +96,11 @@
                     (: _ (flush err) (? ok 0 1)))
        (go pids 1))
 
-   ; -- date: the wall clock. ⚠ UTC AND ONLY UTC -- there is no tz database in this tree,
-   ; so localtime IS gmtime, the same call nolibc made and for the same reason. -u is
-   ; taken and changes nothing; -d @SECONDS and -r FILE name a moment other than now,
+   ; -- date: the wall clock. utc and only utc -- there is no tz database in this tree,
+   ; so localtime is gmtime, the same call nolibc made and for the same reason. -u is
+   ; taken and changes nothing; -d @seconds and -r file name a moment other than now,
    ; which is also the only thing that makes this tool gateable against GNU at all.
-   ; +FORMAT, or GNU's C-locale default when none is given.
+   ; +format, or GNU's C-locale default when none is given.
    udt-wd '("Sun" "Mon" "Tue" "Wed" "Thu" "Fri" "Sat")
    udt-wdl '("Sunday" "Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday")
    udt-mo '("Jan" "Feb" "Mar" "Apr" "May" "Jun" "Jul" "Aug" "Sep" "Oct" "Nov" "Dec")
@@ -151,7 +151,7 @@
                          (: _ (put o 37) (put o d)))
                     (go (k + 2))))))
        (go 0))
-   (udt-when w)                        ; -d's @SECONDS, the one spelling this date parses
+   (udt-when w)                        ; -d's @seconds, the one spelling this date parses
     (? ((0 < tally w) && (w 0 = 64)) (* 1000 (uatoi (snip w 1 (tally w))))
        (udie 1 ("date: cannot read the date '" + w + "' (only @SECONDS here)")))
    (date-main as)
@@ -173,10 +173,10 @@
        _ (say out (udatef fmt ms)) _ (put out 10) _ (flush out) 0)
 
    ; -- id: who this process is. -u/-g/-G the ids, -n their names, and the bare face
-   ; GNU's uid=/gid=/groups= line. ⚠ the supplementary groups are read out of
-   ; /etc/group -- there is no getgroups here and no NSS anywhere, so a box whose groups
+   ; GNU's uid=/gid=/groups= line. the supplementary groups are read out of
+   ; /etc/group -- there is no getgroups here and no nss anywhere, so a box whose groups
    ; live in a directory service will be told less than the truth. -r is taken and
-   ; changes nothing: this love holds only the REAL ids, which is what -r asks for.
+   ; changes nothing: this love holds only the real ids, which is what -r asks for.
    (id-main as)
     (: (fl a t)
         (? !(two? a) t
@@ -225,13 +225,13 @@
 
 
    ; ---- the /proc family: ps, free, uptime, pidof, pgrep, pkill, killall, pwdx ----
-   ; ⚠ NO NIF GREW FOR ANY OF THESE. /proc is a filesystem, so the whole family is
+   ; no nif grew for any of these. /proc is a filesystem, so the whole family is
    ; `uread` and a parser -- which is also why a world without one (the kernel's own
-   ; image, src/kmain.c, mounts no procfs) reads as NO PROCESSES rather than as an
+   ; image, src/kmain.c, mounts no procfs) reads as no processes rather than as an
    ; error. The tools say what they found; they do not invent a reason.
-   ; ⚠ AND NONE OF THEM CAN BE SMOKED BYTE-FOR-BYTE against procps: the process table
-   ; moves between two runs, and every number here is a clock. So the PARSERS are lawed
-   ; (law.l) and the FACES are smoked as sets -- a pid we made ourselves is in the
+   ; and none of them can be smoked byte-for-byte against procps: the process table
+   ; moves between two runs, and every number here is a clock. So the parsers are lawed
+   ; (law.l) and the faces are smoked as sets -- a pid we made ourselves is in the
    ; listing, a pid we killed is gone -- which is test/gate/kore.sh's own note.
 
    (uprocs _)                          ; every numeric name under /proc, ascending
@@ -242,8 +242,8 @@
                              0)
                    (go 0))
        (? (two? r) (sort (map uatoi (filter dig? r))) ()))
-   ; a stat line -> (pid comm state ppid pgrp session tty_nr ..). ⚠ THE COMM IS TAKEN
-   ; BETWEEN THE FIRST "(" AND THE LAST ")" and never by splitting on spaces: a program
+   ; a stat line -> (pid comm state ppid pgrp session tty_nr ..). the comm is taken
+   ; between the first "(" AND THE LAST ")" and never by splitting on spaces: a program
    ; may be named `(sd-pam)` or `a b)c`, and a naive split reads its parentheses as
    ; fields -- silently, since every field after it is then off by the same amount.
    (ustatf ln)
@@ -251,8 +251,8 @@
        (lp k) (? (k < 0) -1 ((ln k) = 41) k (lp (k - 1)))
        (fp k) (? (n <= k) -1 ((ln k) = 40) k (fp (k + 1)))
        a (fp 0) b (lp (n - 1))
-       ; ⚠ the pid is taken through uwords and not off the raw slice: `uatoi` reads
-       ; every charm it is handed, so the SPACE before the "(" would go in as -16
+       ; the pid is taken through uwords and not off the raw slice: `uatoi` reads
+       ; every charm it is handed, so the space before the "(" would go in as -16
        (? ((a < 0) || ((b < 0) || (b < a))) ()
           (: h (uwords (snip ln 0 a))
              (? !(two? h) ()
@@ -275,8 +275,8 @@
                  (go k r) (? (k < n) (go (k + 1) (? ((p k) = 47) (k + 1) r)) (snip p r n))
                  (go 0 0))
 
-   ; the two clocks. USER_HZ is 100 everywhere Linux runs a userland we could be in.
-   (uclk s)                            ; a second count -> HH:MM:SS
+   ; the two clocks. user_hz is 100 everywhere Linux runs a userland we could be in.
+   (uclk s)                            ; a second count -> hh:mm:SS
     (: (p2 v) (uzpad 2 (show v))
        ((((p2 (// s 3600)) + ":") + ((p2 (// (% s 3600) 60)) + ":")) + (p2 (% s 60))))
    (uhms tk) (uclk (// tk 100))
@@ -311,10 +311,10 @@
        t)
 
    ; -- ps: the pid, its terminal, its cpu time and its name. -e/-A/a/x take every
-   ; process; bare ps takes the ones that are OURS and share this terminal, which is
+   ; process; bare ps takes the ones that are ours and share this terminal, which is
    ; procps' rule (same euid, same tty) and not a simplification of it -- a bare ps
    ; listing root's daemons would be a different tool.
-   ; ⚠ the owner comes off /proc/PID ITSELF, whose directory is owned by the process:
+   ; the owner comes off /proc/PID itself, whose directory is owned by the process:
    ; one stat where /proc/PID/status would be a second read and a second parser.
    (upuid p) (: st (stat ("/proc/" + (show p))) (? (5 < (tally st)) (st 4) -1))
    (ps-main as)
@@ -338,7 +338,7 @@
        _ (foldl (\ _ p (one p)) 0 (uprocs 0))
        _ (flush out) 0)
 
-   ; -- free: /proc/meminfo, procps' six columns. ⚠ USED IS TOTAL MINUS AVAILABLE and
+   ; -- free: /proc/meminfo, procps' six columns. used is total minus available and
    ; not total minus free: the kernel's own estimate of what a new program could have
    ; is the only honest reading of "used", and it is what procps prints --
    (free-main as)
@@ -358,10 +358,10 @@
        _ (put out 10)
        _ (flush out) 0)
 
-   ; -- uptime: the clock, how long since boot, and the three load averages. ⚠ THERE
-   ; IS NO `N users` FIELD and there will not be one: it comes out of utmp, which this
-   ; tree does not keep, and a fabricated 0 is worse than an absent field. ⚠ the time
-   ; of day is UTC, for the reason `date` gives --
+   ; -- uptime: the clock, how long since boot, and the three load averages. there
+   ; is no `N users` field and there will not be one: it comes out of utmp, which this
+   ; tree does not keep, and a fabricated 0 is worse than an absent field. the time
+   ; of day is utc, for the reason `date` gives --
    (uptime-main as)
     (: r (uread "/proc/uptime")
        secs (? (two? r) (: w (uwords <>r)
@@ -375,7 +375,7 @@
        _ (say out (((" " + tod) + (" up " + (uupsay secs))) + (",  load average: " + ld)))
        _ (put out 10) _ (flush out) 0)
 
-   ; -- the four by-name tools. a name is matched against the COMM, which is what the
+   ; -- the four by-name tools. a name is matched against the comm, which is what the
    ; kernel keeps and is capped at fifteen charms -- `pgrep -f` asks the cmdline
    ; instead, where the whole of a long program name lives --
    (upmatch f? x? pat pid)             ; does this process answer to pat

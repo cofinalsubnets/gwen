@@ -1,5 +1,5 @@
-; mint serials -- every mint draws from ONE stream (pids share it), and the serial is what
-; makes the total order TOTAL over points: symbols order by name, then interned-first, then
+; mint serials -- every mint draws from one stream (pids share it), and the serial is what
+; makes the total order total over points: symbols order by name, then interned-first, then
 ; serial (creation order); noms inherit the chain order through chain lex + the mint tiebreak.
 ; the serial is also the mint's hash, so same-name noms key a map apart. (the +/* lanes a
 ; symbol inherits are spec.l's; the fine dispatch cells are test/matrix.l's.)

@@ -1,7 +1,7 @@
 ; the svalbard gate (crew/sb/): a sandbox store driven end to end
 ; (record / log / diff, tips + snap + deps + the content addresses). runs under
-; `make test_sb`: cat test/00-init.l THIS | out/host/love -- host nifs
-; (sha256, readdir, chdir), so it stays OFF the corpus like the other hostnif
+; `make test_sb`: cat test/00-init.l this | out/host/love -- host nifs
+; (sha256, readdir, chdir), so it stays off the corpus like the other hostnif
 ; tests. the make target clears the sandbox first; cwd is the repo root, and
 ; everything here happens inside out/host/.sbtest.
 ; the use below splices svalbard under the session layer: every internal reads
@@ -34,7 +34,7 @@
  ("a.txt" = <<s1)                                      ; path-sorted
  (blob <><s1 = "one\ntwo\nthree\n")                 ; the blob rides its hash
  !again                                                ; a clean tree records nothing
- (p1 = sha256 <>(look (".sb/patch/" + p1))))      ; the id IS the file's hash
+ (p1 = sha256 <>(look (".sb/patch/" + p1))))      ; the id is the file's hash
 
 ; mutate: one changed, one born, one dead
 (: _ (lay "a.txt" "one\ntwo point five\nthree\n")
@@ -93,9 +93,9 @@
  (0 = sb-diff ())                                       ; working tree == the recomputed snap
  !(sb-record "noop"))                                   ; ...so nothing is left to record
 
-; --- an EMPTY file is content, not absence. it slurps to () -- the zero point --
+; --- an empty file is content, not absence. it slurps to () -- the zero point --
 ;     so a scan that reads the net hashes it to () and it never reaches the snap:
-;     the tree is dirty FOREVER, every record buds a junk tip, and sync
+;     the tree is dirty forever, every record buds a junk tip, and sync
 ;     (which both refuse a dirty tree) never run again. it must record, land in
 ;     the snap under the honest empty digest, and materialize 0-byte through a
 ;     sync (where blob presence is likewise the wrapper, never the net) ---
@@ -120,9 +120,9 @@
  (two? et)                                                ; ...materializing e.txt: present...
  (0 = tally <>et))                                        ; ...and 0 bytes
 
-; --- divergence on ONE path is a MERGE, not a coin flip. the incoming hunk
+; --- divergence on one path is a merge, not a coin flip. the incoming hunk
 ;     names the base it expected, so all three sides sit in the store: disjoint
-;     edits to one file BOTH survive (the case that used to drop a side by hash
+;     edits to one file both survive (the case that used to drop a side by hash
 ;     order), a true overlap lands in markers and sync answers 0, and the
 ;     resolution is an ordinary record -- after which the clash is settled for
 ;     good. two nests under an ignored parent so the outer walk never sees them ---
@@ -139,7 +139,7 @@
    gotm (sb-sync "../a")
    mtext (<>(look "f"))
    cfm (<>(derive-snap (readdir ".sb/patch")))
-   ; now both move the SAME line -- a real overlap
+   ; now both move the same line -- a real overlap
    _ (chdir "../a") _ (lay "f" "ONE\nA-TWO\nthree\nfour\nFIVE\n") _ (sb-record "a: two")
    _ (chdir "../b") _ (lay "f" "ONE\nB-TWO\nthree\nfour\nFIVE\n") _ (sb-record "b: two")
    gotc (sb-sync "../a")
@@ -153,19 +153,19 @@
    _ (chdir "../.."))
 
 (assert
- (mtext = "ONE\ntwo\nthree\nfour\nFIVE\n")               ; BOTH disjoint edits survived
+ (mtext = "ONE\ntwo\nthree\nfour\nFIVE\n")               ; both disjoint edits survived
  (0 < gotm)                                              ; ...and it was not a conflict
  (1 = tally cfm) (0 = <><cfm)                          ; one merge, zero regions unresolved
- (0 = gotc)                                              ; the overlap DID conflict: sync answers 0
+ (0 = gotc)                                              ; the overlap did conflict: sync answers 0
  (1 = <><cfc)                                          ; ...one region
  (member? "=======" (lines ctext))                       ; ...and the markers are in the file
- (member? "A-TWO" (lines ctext))                         ; ...carrying BOTH sides, neither lost
+ (member? "A-TWO" (lines ctext))                         ; ...carrying both sides, neither lost
  (member? "B-TWO" (lines ctext))
  !cfr                                                    ; the record settled it -- nothing left
  (0 = ndirty))                                           ; ...and the tree matches the snap
 
 ; --- the two sides that cannot line-merge: a delete meeting an edit keeps the
-;     CONTENT (a deletion would be the one lossy answer), and flags it ---
+;     content (a deletion would be the one lossy answer), and flags it ---
 (: _ (chdir "mrg/a")
    _ (lay "g" "keep\nme\n") _ (sb-record "g is born")
    _ (chdir "../b") _ (sb-sync "../a")
@@ -178,13 +178,13 @@
 
 (assert
  (0 = gotd)                                              ; a delete against an edit is a conflict
- (two? gtext)                                            ; the file is STILL THERE...
+ (two? gtext)                                            ; the file is still there...
  (<>gtext = "keep\nme too\n")                          ; ...with the edit intact, not the deletion
  (1 = tally (filter (\ e ("g" = <e)) cfd)))              ; ...and g is named in the report
 
-; --- sync is an EXCHANGE, not a fetch: ONE command settles BOTH nests. the
+; --- sync is an exchange, not a fetch: one command settles both nests. the
 ;     derive is a pure function of the patch set, so two nests over one union
-;     land on the SAME snap -- after a sync the trees are identical and the far
+;     land on the same snap -- after a sync the trees are identical and the far
 ;     end needed no attendance. a peer that is dirty takes no push at all (its
 ;     store is left whole, never half-fed) and sync says so ---
 (: _ (mkdir "mrg/c" 493) _ (chdir "mrg/c") _ (mk ())
@@ -193,7 +193,7 @@
    _ (sb-sync "../c")
    _ (lay "d-only" "from d\n") _ (sb-record "d: its own file")
    _ (chdir "../c") _ (lay "c-only" "from c\n") _ (sb-record "c: its own file")
-   gotx (sb-sync "../d")                               ; ONE sync, run from c
+   gotx (sb-sync "../d")                               ; one sync, run from c
    csnap (snap ()) cdirty (dirty ())
    dhere (look "d-only")                              ; d's file walked in
    _ (chdir "../d")
@@ -210,48 +210,48 @@
 (assert
  (0 < gotx)                                              ; the exchange went through
  (two? dhere) (two? chere)                               ; each nest took the other's file
- (show csnap = show dsnap)                               ; ...and both derived the SAME snap
+ (show csnap = show dsnap)                               ; ...and both derived the same snap
  (0 = cdirty) (0 = ddirty)                               ; ...both trees clean, the far end untouched by hand
- (0 = goty)                                              ; a DIRTY peer refuses the push
+ (0 = goty)                                              ; a dirty peer refuses the push
  (dstore = nb4))                                         ; ...and its store is left whole, not half-fed
 
-; --- apply: realize a dep-consistent SUBSET of the store. git's checkout AND
-;     its cherry-pick are ONE act here -- the tree is a pure function of a patch
+; --- apply: realize a dep-consistent subset of the store. git's checkout and
+;     its cherry-pick are one act here -- the tree is a pure function of a patch
 ;     set, so both are only "name a set", with no replay-onto-a-foreign-state to
-;     conflict. a named patch drags its DEP CLOSURE along: topo silently drops a
+;     conflict. a named patch drags its DEP closure along: topo silently drops a
 ;     patch whose context-writer is absent, so leaving one behind would quietly
 ;     realize less than you asked for ---
 (: _ (mkdir "mrg/e" 493) _ (chdir "mrg/e") _ (mk ())
    _ (lay "a" "v1\n") pa (sb-record "a born")
    _ (lay "a" "v2\n") pb (sb-record "a edited")
    _ (lay "b" "x\n")  pc (sb-record "b born -- independent")
-   n1 (sb-apply [pa])                                  ; checkout: the tree AS OF pa
+   n1 (sb-apply [pa])                                  ; checkout: the tree as OF pa
    a1 (<>(look "a")) b1 (look "b")
-   n2 (sb-apply [pa pc])                               ; cherry-pick: pc taken, pb SKIPPED
+   n2 (sb-apply [pa pc])                               ; cherry-pick: pc taken, pb skipped
    a2 (<>(look "a")) b2 (look "b")
    n3 (sb-apply [pb])                                  ; the closure drags pa in behind pb
    n4 (sb-apply ())                                    ; no id: the way back
    a4 (<>(look "a"))
    bad (sb-apply '("deadbeef"))                        ; a prefix that resolves to nothing
-   nstore (tally (readdir ".sb/patch"))                ; read HERE -- the assert runs after the chdir back
+   nstore (tally (readdir ".sb/patch"))                ; read here -- the assert runs after the chdir back
    clean (dirty ())
    _ (chdir "../.."))
 
 (assert
  (1 = n1) (a1 = "v1\n") !(two? b1)                       ; as of pa: a rolled back, b not yet born
  (2 = n2) (a2 = "v1\n") (two? b2)                        ; pa + pc: pb's edit skipped, pc's birth kept
- (3 = nstore)                                            ; ...and the STORE never shrank -- apply is a view
- (2 = n3)                                                ; naming pb alone realized TWO: its dep came
+ (3 = nstore)                                            ; ...and the store never shrank -- apply is a view
+ (2 = n3)                                                ; naming pb alone realized two: its dep came
  (3 = n4) (a4 = "v2\n")                                  ; the way back is the whole store
  !bad                                                    ; an unresolvable prefix answers 0
  (0 = clean))                                            ; every apply leaves the tree clean
 
-; --- undo: the INVERSE patch. removal is GROWTH -- the patch stays, its
+; --- undo: the inverse patch. removal is growth -- the patch stays, its
 ;     dependents stay valid, the store only gets bigger, and that is what keeps
-;     releases inclusion-ordered. a path that MOVED ON since is three-way merged
+;     releases inclusion-ordered. a path that moved on since is three-way merged
 ;     rather than clobbered: base = what the patch wrote, ours = what is there
 ;     now, theirs = what it replaced -- so the later edits survive and only that
-;     patch's write is lifted out. a true overlap records NOTHING ---
+;     patch's write is lifted out. a true overlap records nothing ---
 (: _ (mkdir "mrg/u" 493) _ (chdir "mrg/u") _ (mk ())
    _ (lay "f" "one\ntwo\nthree\n") _ (sb-record "base")
    _ (lay "f" "one\nBAD\nthree\n") pbad (sb-record "the bad edit, line 2")
@@ -264,7 +264,7 @@
    _ (lay "g" "born\n") pg (sb-record "g born")       ; a birth undone is a death
    u2 (sb-undo [pg])
    gone (look "g")
-   _ (lay "h" "a\nb\n") _ (sb-record "h base")        ; the OVERLAP: same line, later patch
+   _ (lay "h" "a\nb\n") _ (sb-record "h base")        ; the overlap: same line, later patch
    _ (lay "h" "a\nB2\n") pq (sb-record "h -> B2")
    _ (lay "h" "a\nB3\n") _ (sb-record "h -> B3")
    n2 (tally (readdir ".sb/patch"))
@@ -275,18 +275,18 @@
 
 (assert
  (1 = u1)                                               ; the undo landed as a patch
- (ftext = "one\ntwo\nTHREE!\n")                        ; the bad edit LIFTED, the later work KEPT
+ (ftext = "one\ntwo\nTHREE!\n")                        ; the bad edit lifted, the later work kept
  (n1 = (n0 + 1))                                        ; ...by growing the store, never shrinking it
  (0 = clean)                                            ; ...and the tree matches the snap after
  (1 = u2) !(two? gone)                                  ; a birth undone leaves no file
  !u3                                                    ; a true overlap answers 0...
- (n3 = n2))                                             ; ...and records NOTHING -- resolve first
+ (n3 = n2))                                             ; ...and records nothing -- resolve first
 
-; --- bank: freeze the head under a NAME, immutable. ⚠ hatch.md asks for a
-;     SINGLE-TIP head and that does not survive per-path deps: an independent
-;     birth is never depended upon, so it stays maximal and TWO tips is what
+; --- bank: freeze the head under a NAME, immutable. hatch.md asks for a
+;     single-tip head and that does not survive per-path deps: an independent
+;     birth is never depended upon, so it stays maximal and two tips is what
 ;     ordinary parallel work looks like, not a fork to repair. a ref freezes the
-;     TIP SET instead -- the head DAG state whatever its shape, and the same
+;     tip set instead -- the head DAG state whatever its shape, and the same
 ;     thing psid hashes, so a release and its goods line up ---
 (: _ (mkdir "mrg/k" 493) _ (chdir "mrg/k") _ (mk ())
    _ (lay "a" "1\n") _ (sb-record "a born")
@@ -296,9 +296,9 @@
    b2 (sb-bank '("v1"))                                ; the same head again: idempotent
    r1 (refof "v1")
    _ (lay "c" "3\n") _ (sb-record "work after the release")
-   b3 (sb-bank '("v1"))                                ; a DIFFERENT head: immutable, refuses
+   b3 (sb-bank '("v1"))                                ; a different head: immutable, refuses
    b4 (sb-bank '("v2"))
-   n1 (sb-apply '("v1"))                               ; realize the release BY NAME
+   n1 (sb-apply '("v1"))                               ; realize the release by NAME
    cgone (look "c")
    n2 (sb-apply '("v2"))
    cback (look "c")
@@ -308,34 +308,34 @@
    _ (chdir "../.."))
 
 (assert
- (2 = ntip)                                              ; two independent births, TWO tips -- normal
+ (2 = ntip)                                              ; two independent births, two tips -- normal
  (1 = b1) (1 = b2)                                       ; banked; re-banking the same head is a no-op
- (2 = tally r1)                                          ; the ref froze the TIP SET, not one id
- !b3 (1 = b4)                                            ; a banked name is IMMUTABLE
- (2 = n1) !(two? cgone)                                  ; apply BY NAME realized exactly the release
+ (2 = tally r1)                                          ; the ref froze the tip set, not one id
+ !b3 (1 = b4)                                            ; a banked name is immutable
+ (2 = n1) !(two? cgone)                                  ; apply by NAME realized exactly the release
  (3 = n2) (two? cback)                                   ; ...and the later ref brings c back
  !bad !bdirty)                                           ; an empty name and a dirty tree both refuse
 
 ; --- refs travel. a release is only "the unit you propagate" if the NAME
-;     reaches the other nest with the patches. a ref is a single FILE, not a
-;     content-addressed one, so sync UNIONS it by name instead of gap-filling.
-;     the same name at the SAME head is idempotent; at DIFFERENT heads it is a
+;     reaches the other nest with the patches. a ref is a single file, not a
+;     content-addressed one, so sync unions it by name instead of gap-filling.
+;     the same name at the same head is idempotent; at different heads it is a
 ;     human error, since a banked name is immutable and neither nest may repoint
-;     the other's -- so EACH SIDE KEEPS ITS OWN and the clash is told once ---
+;     the other's -- so each side keeps its own and the clash is told once ---
 (: _ (mkdir "mrg/r" 493) _ (mkdir "mrg/r/l" 493) _ (chdir "mrg/r/l") _ (mk ())
    _ (lay "f" "base\n") _ (sb-record "base") _ (sb-bank '("v1"))
    _ (mkdir "../d" 493) _ (chdir "../d") _ (mk ())
    got (sb-sync "../l")
    travelled (refof "v1")                                ; ...it arrived, unbanked here
-   n1 (sb-apply '("v1"))                               ; ...and realizes BY NAME
-   ; now bank the SAME name on each side at DIFFERENT heads
+   n1 (sb-apply '("v1"))                               ; ...and realizes by NAME
+   ; now bank the same name on each side at different heads
    _ (lay "g" "d\n") _ (sb-record "d work") _ (sb-bank '("rel"))
    drel (refof "rel")
    _ (chdir "../l") _ (lay "h" "l\n") _ (sb-record "l work") _ (sb-bank '("rel"))
    lrel (refof "rel")
    clash (sb-sync "../d")
-   lkept (refof "rel")                                   ; l kept ITS rel...
-   _ (chdir "../d") dkept (refof "rel")                  ; ...and d kept ITS
+   lkept (refof "rel")                                   ; l kept its rel...
+   _ (chdir "../d") dkept (refof "rel")                  ; ...and d kept its
    _ (chdir "../../.."))
 
 (assert
@@ -343,7 +343,7 @@
  (1 = n1)                                                ; ...and named a release the nest never banked
  !(show drel = show lrel)                                ; the two `rel`s really are different heads
  !clash                                                  ; a clash makes sync answer 0
- (show lkept = show lrel)                                ; each side KEPT ITS OWN -- no silent loss
+ (show lkept = show lrel)                                ; each side kept its own -- no silent loss
  (show dkept = show drel))
 
 (: _ (puts "sb: ok") _ (putc 10) 0)

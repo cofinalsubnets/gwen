@@ -51,7 +51,7 @@
            ? [B I op cmp] 0)
           0)
    ; --- call-out loop: loopinfo's shape, with the per-step term a call (F ARG) rather than arithmetic.
-   ; answers (F op i ARG); the caller resolves F and compiles ARG for the callout arg (emit.l jitcalloutx).
+   ; answers (F op i ARG); the caller resolves F and compiles arg for the callout arg (emit.l jitcalloutx).
    (calloutinfo lam)                                                    ; the one param means F is free, hence a global
     (lam @ ['\ N [[': [GO I A] ['? [cmp I N] [GO ['+ I 1] [op A [F ARG]]] A]] 0 z2]]
           (name? N && name? GO && name? I && name? A && I !== A
@@ -90,7 +90,7 @@
               ? [vars updates T R inits] 0))
           0)
    ; --- c-finite bignum deopt (doc/misc/proto/cfinite.l): a constant-coefficient linear recurrence with a
-   ;     canonical counter (init 0, step (c + 1), test (c < n)) closes to M^n x0, O(log n) -- so only
+   ;     canonical counter (init 0, step (c + 1), test (c < n)) closes to m^n x0, O(log n) -- so only
    ;     njit-loop-n's post-overflow path changes. linearity is a structural certificate, read off the
    ;     syntax by cf-lin: anything non-linear or non-canonical declines to `interp`. the state carries a
    ;     trailing `1` coordinate so an affine update reads linear, and M's last row [0..0 1] keeps it.
@@ -126,7 +126,7 @@
    (cf-mul A B)    (: Bt (cf-tpose B) (map (r \ map (c \ cf-dot r c) Bt) A))
    (cf-mpow M n)   (: D #M (go p acc base)
                       (? (p = 0) acc (: b2 (cf-mul base base) (? (1 = (p % 2)) (go (p // 2) (cf-mul acc base) b2) (go (p // 2) acc b2))))
-                      (go n (cf-id D) M))                                                    ; M^n by repeated squaring, O(log n) matmuls
+                      (go n (cf-id D) M))                                                    ; m^n by repeated squaring, O(log n) matmuls
    (cf-aug inits)  (inits + [1])                                                          ; x0 = [inits.. 1]
    (cf-canon? lam vs ups test inits)                                                        ; counter c -> exactly n trips (the lambda param)?
     ((two? test) && (id? <test '<) && (3 = #test) && (id? <>>test <>lam)
@@ -147,7 +147,7 @@
    (qualc ['\ p ['\ q E]]) (name? p && name? q && p !== q && exprn [p q] E)
    (flatc ['\ p ['\ q E]]) ['\ p q E]                          ; (\ p (\ q E)) -> (\ p q E)
    ; --- float-result leaf (\ x <fexpr>): a body that boxes a gem, over +-*/ on a fixnum param and
-   ;     float/int consts. soundness turns on WHEN the param floats -- native cvtsi2sd's it at every use,
+   ;     float/int consts. soundness turns on when the param floats -- native cvtsi2sd's it at every use,
    ;     where the interpreter keeps an integer subexpression exact until a float forces promotion, so
    ;     ((x * 3) + 1.5) diverges at x=2^53+1. fty types each node F / I / 0(reject) and allsafe demands
    ;     the param never sit inside an I-typed compound, which lands the two promotion points together.
@@ -209,8 +209,8 @@
    ; matching arity. autogroup takes the maximal closed subset -- a fn calling out of the fragment
    ; drops, taking its callers with it -- and rewrites each binding to its own native (jitgroupir), so
    ; a reference from anywhere resolves to native while the calls among the group stay in the buffer.
-   ; --- lambda-lifting: a fn body (NL inits..), NL = (: (g q..) GBODY), is a local loop; lift g to a
-   ;     top-level (g' FV.. q..) with FV the enclosing params free in GBODY, threaded through g's own
+   ; --- lambda-lifting: a fn body (NL inits..), nl = (: (g q..) GBODY), is a local loop; lift g to a
+   ;     top-level (g' FV.. q..) with fv the enclosing params free in gbody, threaded through g's own
    ;     self-calls, and leave the body as (g' FV.. inits..) -- so the loop joins the group's call graph.
    ;     one level only; a non-named-let body passes through untouched.
    (occurs? s e) (? (two? e) (foldl (\ a x (a || occurs? s x)) 0 e) (id? e s))                  ; s occurs (syntactically) in e?
@@ -246,9 +246,9 @@
           (: F <nf P >nf  nl <pbody inits >pbody
              gnf <>nl g <gnf q >gnf GBODY <>>nl
              gn (name (string F + "_" + string g))                                        ; lifted name F_g (unique per enclosing fn)
-             fv (filter (pp \ occurs? pp GBODY && !(member? pp q)) P)                        ; enclosing params free in GBODY
+             fv (filter (pp \ occurs? pp GBODY && !(member? pp q)) P)                        ; enclosing params free in gbody
              [(nf . (gn . fv + inits))                                                 ; F's body -> (gn fv.. inits..)
-               [((gn . fv + q) . subst-call g gn fv GBODY)]])))                       ; new def: (gn fv.. q..) . GBODY'
+               [((gn . fv + q) . subst-call g gn fv GBODY)]])))                       ; new def: (gn fv.. q..) . gbody'
    (unpair ps body) (? (atom? ps) [body] (: pr <ps (<pr . (>pr . unpair >ps body))))    ; pairs + body -> a : binding list
    (lift form)                                                                                    ; lambda-lift every named-let fn body in a `:`
     (? !(two? form && id? <form ': && !(atom? >form)) form

@@ -1,4 +1,4 @@
-; tools/dest2uu.l -- EMIT test/uuhomgen.l: doc/misc/proto/dest.l's two generators (cv
+; tools/dest2uu.l -- emit test/uuhomgen.l: doc/misc/proto/dest.l's two generators (cv
 ; the r0 protocol, ck the destination die) run on dest.l's own law-site samples,
 ; the emissions lifted to uu nlist terms so test/uuhomlaw.l can prove the laws
 ; of them (substrate: test/uuhom.l). Run on the host binary:
@@ -8,13 +8,13 @@
 ; the lift: 4 nats per instruction (op d a b, 0-padded); operands parity-tagged
 ; (reg r = 2r, imm k = 2k+1); the sp shuttle idioms fold to push/pop. dest.l's
 ; `:` forms are eval'd (its samples s1..e5 leak from their body-less binders, so
-; the roster below IS dest.l's), its law asserts run as a gate; only the e5 bin
-; expression is copied, dest.l holding it inline. the lift is a TRANSLATOR --
+; the roster below is dest.l's), its law asserts run as a gate; only the e5 bin
+; expression is copied, dest.l holding it inline. the lift is a translator --
 ; untrusted like wm2uu: a wrong lift can miss a law, never fake a theorem the
 ; laws file doesn't ask, and the artifact prints each source form beside its
 ; term for the reading.
-; load dest.l FIRST, in its own top-level form: the next form's bare cv/cvs/ck/cks
-; references resolve at ITS compile, which must follow this run. reads carries the
+; load dest.l first, in its own top-level form: the next form's bare cv/cvs/ck/cks
+; references resolve at its compile, which must follow this run. reads carries the
 ; top-level leak (uu2coq's door); out rides a jug meanwhile -- dest.l's own asserts
 ; gate the run, its "dest: ok" stays out of the artifact.
 (: j (jug 0) _ (wear [in j err])

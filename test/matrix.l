@@ -1,14 +1,14 @@
-; === the generic-op DISPATCH MATRICES, walked cell by cell ====================
+; === the generic-op dispatch matrices, walked cell by cell ====================
 ; l's generic dyadic ops are NxN ap matrices indexed by the kind lattice
-; (l.h enum q): KCharm | KSun KGem KTwin (the lean scalar-star boxes) | KBig |
-; KTrayZ KTrayR KTrayC KTrayO (the tray tower -- ONE rep, DTray, refined by element
-; tier) | KString KMint | KChain(chain) | KTablet KHot.
-; A monadic op is that matrix's diagonal. Three matrices are explicit tables in
+; (l.h enum q): kcharm | ksun kgem ktwin (the lean scalar-star boxes) | KBig |
+; ktrayZ ktrayR ktrayC ktrayO (the tray tower -- ONE rep, DTray, refined by element
+; tier) | kstring kmint | kchain(chain) | ktablet khot.
+; a monadic op is that matrix's diagonal. Three matrices are explicit tables in
 ; l.c -- g_add_mx (+), g_mul_mx (*), g_apply_mx (apply); the rest (- / %
 ; < <= = >= >) are lane aps that refine the same lattice internally.
-; This file holds the FINE within-category cells: fix vs box/float/complex vs
+; This file holds the fine within-category cells: fix vs box/float/complex vs
 ; bignum, the four array tiers, the rep pairings a coarse law folds together. The
-; COARSE cell of each row -- what the band law already says -- is spec.l's, and
+; coarse cell of each row -- what the band law already says -- is spec.l's, and
 ; the church-numeral rows are functions.l's; a row that is wholly theirs is a
 ; pointer here, not a copy. So a dispatch regression (e.g. a data-sentinel stride
 ; desync that mis-routes whole apply rows) still fails loudly, without the corpus
@@ -16,23 +16,23 @@
 
 ; one representative value per kind -- the legend a row is read against. The three
 ; scalar-star boxes are distinct kinds (KGem/KTwin/KSun) but share one apply cell.
-(: mx-fix 5                              ; KCharm
-   mx-real 2.5                            ; KGem, the gem (float box)
-   mx-cpx (2 ~ 3)                       ; KTwin, complex scalar (Cp)
-   mx-box (<< 1 62)                      ; KSun, the sun (wide int)
+(: mx-fix 5                              ; kcharm
+   mx-real 2.5                            ; kgem, the gem (float box)
+   mx-cpx (2 ~ 3)                       ; ktwin, complex scalar (Cp)
+   mx-box (<< 1 62)                      ; ksun, the sun (wide int)
    mx-big (100 2)                     ; KBig
-   mx-az  @(10 20)                       ; KTrayZ (int tray)
-   mx-ar  @(1.5 2.5)                     ; KTrayR (float tray)
-   mx-ac  (array 2 (1 ~ 2) (3 ~ 4))    ; KTrayC (packed complex tray)
-   mx-ao  (array 2 (100 2) 5)         ; KTrayO (object tray)
-   mx-str "ab"                           ; KString
-   mx-sym 'ef                            ; KMint (interned)
-   mx-lst '(1 2)                         ; KChain (chain / list)
-   mx-fn  (+ 1)                          ; KHot (nif partial application)
-   mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; KTablet (a tablet is a lookup-lambda)
+   mx-az  @(10 20)                       ; ktrayZ (int tray)
+   mx-ar  @(1.5 2.5)                     ; ktrayR (float tray)
+   mx-ac  (array 2 (1 ~ 2) (3 ~ 4))    ; ktrayC (packed complex tray)
+   mx-ao  (array 2 (100 2) 5)         ; ktrayO (object tray)
+   mx-str "ab"                           ; kstring
+   mx-sym 'ef                            ; kmint (interned)
+   mx-lst '(1 2)                         ; kchain (chain / list)
+   mx-fn  (+ 1)                          ; khot (nif partial application)
+   mx-map (pin (pin (tablet 0) 1 10) 2 20)) ; ktablet (a tablet is a lookup-lambda)
 
 ; ============================================================================
-; APPLY matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
+; apply matrix: g_apply_mx[applied data kind = g_typ(v)][arg kind = g_kind(x)]
 ; ============================================================================
 ; Each data kind's sentinel tail-jumps through this. The arg-kind dimension is
 ; uniform today (a link for later), so we vary it to pin that. The index/append
@@ -40,19 +40,19 @@
 ; functions.l's whole numeric tower. What is left here is the cells no band law
 ; reaches.
 (assert
- ; --- row KChain: a chain is a SEQUENCE, the text law one lattice rung up. it was the
- ;     Church eliminator ((p f) == (f (A p) (B p))) until the tree was checked and nothing
- ;     at all applied a chain to a function -- so a lambda takes the DEFAULT action, and
+ ; --- row kchain: a chain is a sequence, the text law one lattice rung up. it was the
+ ;     Church eliminator ((p f) == (f (a p) (B p))) until the tree was checked and nothing
+ ;     at all applied a chain to a function -- so a lambda takes the default action, and
  ;     that is the cell worth pinning. the index/append rows are spec.l's chains section. ---
  (nil? ((link 1 2) 1))                            ; improper chain: the spine is one cell, so 1 is oob
- (nil? ('(1 2) (\ a b [a b])))                   ; arg = a lambda: the DEFAULT action, not an eliminator
+ (nil? ('(1 2) (\ a b [a b])))                   ; arg = a lambda: the default action, not an eliminator
  (nil? ('(1 2) "ab"))                            ; ... as for every other kind
 
- ; --- row KString: the byte index is spec.l's; the width and the empty row are here ---
+ ; --- row kstring: the byte index is spec.l's; the width and the empty row are here ---
  (= 255 ((string 255) 0))                     ; byte is unsigned 0..255
  (nil? ("" 5)) (nil? ("" -1))                   ; the empty string indexes to 1
 
- ; --- row KMint: a point applies as every unit does, const-1 -- spec.l's mints section
+ ; --- row kmint: a point applies as every unit does, const-1 -- spec.l's mints section
  ;     says it for both the bare mint and the named symbol, so the row is a pointer.
 
  ; --- the scalar-star + array rows (KGem/KTwin/KSun/KTray*, all -> data_num_apply):
@@ -65,11 +65,11 @@
 
  ; --- non-matrix apply paths: the charm numeral, the lambda and the cask take their own
  ;     routes and are said elsewhere; the nif partial and the tablet miss are here ---
- (= 7 (((+) 3) 4))                            ; KHot: a nif fired through the unit call
- (nil? (mx-map 9)))                           ; KTablet: a missing key -> nil, the zero point
+ (= 7 (((+) 3) 4))                            ; khot: a nif fired through the unit call
+ (nil? (mx-map 9)))                           ; ktablet: a missing key -> nil, the zero point
 
 ; ============================================================================
-; `+` matrix (g_add_mx): the FINE within-category cells the spec's band laws fold together
+; `+` matrix (g_add_mx): the fine within-category cells the spec's band laws fold together
 ; ============================================================================
 ; addn lane (numeric tower & arrays): the matrix routes here for any arith x
 ; arith chain; the lane then refines by representation. Each rep pairing:
@@ -102,20 +102,20 @@
  (= (11 ~ 2) (peep (+ (10 ~ 0) mx-ac) 0 0))  ; C array + complex scalar
  (= (11 ~ 2) (peep (+ @(10 20) mx-ac) 0 0))   ; R/Z array + C array (real promotes)
 
- ; --- add_string lane: text x text; a NUMBER (tray included) arrives as the unit
+ ; --- add_string lane: text x text; a number (tray included) arrives as the unit
  ;     and the text answers whole. the crossings the spec states once, the orders
  ;     it does not, and the reps it has no room for: ---
- ("efab" = (+ 'ef "ab"))                       ; sym + str DEMOTES (the rank min pulls to string)
+ ("efab" = (+ 'ef "ab"))                       ; sym + str demotes (the rank min pulls to string)
  (= "ab" (+ @(1 2) "ab"))   (= "ab" (+ "ab" @(1 2)))   ; a tray is number-band against text, either side
  ('ef = (+ @(1 2) 'ef))
  (= "ab" (+ mx-big "ab"))                     ; a bignum is a number like any other
 
- ; --- add_seq lane: a list against text (chain wins); a NUMBER degenerates ---
+ ; --- add_seq lane: a list against text (chain wins); a number degenerates ---
  (= '(1 2) (+ '(1 2) 5))                      ; list <-> num, the order the spec leaves open
- (= '(97 98 1 2) (+ "ab" '(1 2)))             ; str <-> list: the bytes SPLICE (the charlist hom)
+ (= '(97 98 1 2) (+ "ab" '(1 2)))             ; str <-> list: the bytes splice (the charlist hom)
  (= "(7 8)" (show (+ @(1 2) '(7 8))))         ; array <-> list: the tray is number-band, it degenerates
 
- ; --- addl lane: a lambda operand anywhere -> CHURCH-NUMERAL add (not pointwise):
+ ; --- addl lane: a lambda operand anywhere -> church-numeral add (not pointwise):
  ;     (m + n) a x == m a (n a x), so the result is a function awaiting (f x).
  ;     "1" + "1" == "2": apply (+ 1) twice to 0. ---
  (= 2 (((+ (\ f x (f x)) (\ f x (f x))) (+ 1)) 0))
@@ -147,7 +147,7 @@
  (nil? (* "ab" @(1 2)))   (nil? (* @(1 2) "ab"))   ; an array is no count -> nil
 
  ; --- seq * seq: chain x chain is the cartesian product (spec.l); string stays nil,
- ;     and so does SYMBOL, which the string lane might have been read to cover ---
+ ;     and so does symbol, which the string lane might have been read to cover ---
  (nil? (* 'a 'b))
 
  ; --- mull: a lambda operand anywhere -> composition (Church mul) ---
@@ -160,7 +160,7 @@
 ; comparisons, =. Same lattice; these had no consolidated matrix test.
 ; ============================================================================
 (assert
- ; --- subtraction `-` is NUMERIC ONLY (text/list/lambda operands -> nil) ---
+ ; --- subtraction `-` is numeric only (text/list/lambda operands -> nil) ---
  (= 3 (- 5 2))   (= 2.5 (- 5 2.5))            ; fix/float tower
  (= (100 2) (- (+ (100 2) 5) 5))        ; bignum
  (= (-2 ~ -2) (- (1 ~ 2) (3 ~ 4)))         ; complex
@@ -174,18 +174,18 @@
  (aall (= @(5 10) (/ @(10 20) 2)))            ; array / scalar
  (nil? (/ "a" 2))                             ; non-numeric -> nil
 
- ; --- modulo `mod` (fmod on floats); UNDEFINED on complex (-> nil) ---
+ ; --- modulo `mod` (fmod on floats); undefined on complex (-> nil) ---
  (= 1 (% 5 2))   (= 1.0 (% 7.0 2.0))
  (= 2 (% (100 2) 7))                     ; bignum mod fixnum
  (nil? (% (1 ~ 2) 2))                      ; complex -> nil
  (nil? (% "a" 2))                           ; non-numeric -> nil
 
- ; === ordered comparison (< <= > >=): a TOTAL ORDER over all values. The BANDS -- points at
+ ; === ordered comparison (< <= > >=): a total order over all values. The bands -- points at
  ; the floor, then string, then the numbers, then tray < chain < map < top -- are spec.l's
- ; order section. Here: the reps that interleave WITHIN the number band, the complex rule,
- ; the lambda class, and the array operand, which BROADCASTS to a mask rather than ordering.
+ ; order section. Here: the reps that interleave within the number band, the complex rule,
+ ; the lambda class, and the array operand, which broadcasts to a mask rather than ordering.
  ; `> >=` are `< <=` with operands reversed (a > b == b < a).
- ; --- within NUMBER: the whole tower orders by value (reps interleave) ---
+ ; --- within number: the whole tower orders by value (reps interleave) ---
  (< 1 2)   (< 1.5 2)                                    ; fix / float
  (? word (< (<< 1 62) (* 3 (<< 1 62))) 1)               ; box < box (64-bit word only)
  (< 5 (100 2))   (? word (< (<< 1 62) (100 2)) 1)  ; fix/box < bignum (magnitude-exact)
@@ -194,9 +194,9 @@
  (< i 1)   (< (1 ~ 9) (2 ~ 0))   (< (2 ~ 1) (2 ~ 2))   ; re decides, then im
  !(< (2 ~ 2) (2 ~ 2))   (<= (2 ~ 2) (2 ~ 2))    ; equal complexes
  ; --- the band crossings the spec's line does not carry a rep for ---
- (< "" 1.5)   (< 'z (100 2))   (< "x" (1 ~ 1))     ; ANY string < ANY number
+ (< "" 1.5)   (< 'z (100 2))   (< "x" (1 ~ 1))     ; any string < any number
  !(< '(0) 'z)                                     ; ...and a chain is above a point
- ; --- LAMBDA is the top class; within it, ordered by representation hash ---
+ ; --- lambda is the top class; within it, ordered by representation hash ---
  (< 5 (+ 1))   (> (+ 1) '(0))   (< "z" (+ 1))         ; everything sorts below a lambda
  !(< (+ 1) (+ 1))   (<= (+ 1) (+ 1))   (>= (+ 1) (+ 1))   ; reflexive: a lambda equals itself
  (= (? (< (+ 1) (+ -1)) 1 0) (? (> (+ -1) (+ 1)) 1 0))    ; antisymmetric: a < b iff b > a
@@ -204,13 +204,13 @@
  ; --- all four orderings agree (<= >= include equality; > is the strict reverse) ---
  (<= 3 3)   (>= 3 3)   !(< 3 3)   !(> 3 3)   (> 5 3)   (>= 5 3)
  (<= "ab" "ab")   (> 'b 'a)   (>= '(1) '(1))
- ; --- array operand: comparison is ELEMENTWISE (a 0/1 mask), not the scalar order ---
+ ; --- array operand: comparison is elementwise (a 0/1 mask), not the scalar order ---
  (aall (< @(1 2) 10))   (= star-tray (tier (< @(1 2) 10)))   ; the mask is an z array
  (= 1 (peep (< @(1 5) @(3 2)) 0 0))   (= 0 (peep (< @(1 5) @(3 2)) 1 0))
  (aall (<= @(1 2) @(1 2)))   (aall (>= @(2 2) @(1 2)))
  (nil? (< @(1 2) "x"))                                 ; array vs non-number -> nil
  (nil? (< mx-ac mx-ac))                                ; a complex array is unordered -> nil
- ; --- 0/0 collapses to 0, so it is ORDERED like any zero (no NaN to be unordered) ---
+ ; --- 0/0 collapses to 0, so it is ordered like any zero (no NaN to be unordered) ---
  (nil? (< (/ 0 0) (/ 0 0)))   (<= (/ 0 0) (/ 0 0))   (nil? (> (/ 0 0) 1))
 
  ; --- equality `=`: bridges the numeric tower, else eql. the array rows are spec.l's ---

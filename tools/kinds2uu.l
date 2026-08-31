@@ -1,18 +1,18 @@
-; tools/kinds2uu.l -- the kinds-lattice analog of tools/wm2uu.l: read the ABSTRACT
-; DOMAIN of doc/misc/proto/kinds.l AS DATA and emit test/uukind.l -- the join (and its
+; tools/kinds2uu.l -- the kinds-lattice analog of tools/wm2uu.l: read the abstract
+; domain of doc/misc/proto/kinds.l as data and emit test/uukind.l -- the join (and its
 ; num? guard) compiled into uu terms over a nat-coded carrier, so test/uukindlaw.l
-; proves the semilattice laws OF THE ACTUAL ANALYSIS, not a hand transcription. Run:
+; proves the semilattice laws OF the actual analysis, not a hand transcription. Run:
 ;
 ;   love tools/kinds2uu.l > test/uukind.l        (or: make uukind)
 ;
-; the ENCODING is derived from kinds.l's own `rank`: each kind symbol takes its
+; the encoding is derived from kinds.l's own `rank`: each kind symbol takes its
 ; rank as its nat code (bot 0 .. top 5), and `str` -- the incomparable branch, off
 ; rank's table -- takes the next code up. so `rank` folds to identity here, and the
 ; translation is otherwise structural: ? -> nested bool_rect, id? -> nateqb,
 ; < -> natgtb (swapped), && -> andb, num? -> the emitted numq, a `:` -> a let.
-; kind symbols appear only QUOTED in kinds.l ('bot ..), so a bare nom is a variable.
+; kind symbols appear only quoted in kinds.l ('bot ..), so a bare nom is a variable.
 ;
-; a body-LESS `:` -- the k2-* vocabulary leaks; none shadows a nif.
+; a body-less `:` -- the k2-* vocabulary leaks; none shadows a nif.
 (:
    (k2-pairs bs) (? (! (two? bs)) () (! (two? (cup bs))) ()
                     (link [(cap bs) (cap (cup bs))] (k2-pairs (cup (cup bs)))))
@@ -46,7 +46,7 @@
              (id? h 'id?)  ['nateqb (k2-tx km (k2-a1 e) 'nat) (k2-tx km (k2-a2 e) 'nat)]
              (id? h '<)    ['natgtb (k2-tx km (k2-a2 e) 'nat) (k2-tx km (k2-a1 e) 'nat)]
              (id? h '&&)   ['andb (k2-tx km (k2-a1 e) 'bool) (k2-tx km (k2-a2 e) 'bool)]
-             (id? h 'rank) (k2-tx km (k2-a1 e) ty)     ; code IS rank -- fold
+             (id? h 'rank) (k2-tx km (k2-a1 e) ty)     ; code is rank -- fold
              (id? h 'num?) ['numq (k2-tx km (k2-a1 e) 'nat)]
              'k2-untranslatable)))
    (k2-cond km cs ty)

@@ -1,8 +1,8 @@
 ; --- test/host/serve.l: `love serve`'s hook (lib/serve.l) ---
-; NOT in the test/*.l corpus (it loads crew modules and splices them).
+; not in the test/*.l corpus (it loads crew modules and splices them).
 ;
-; the SERVER half is kiosko's and gated there (test/host/kiosko.l drives a real
-; socket, the maker hook included). what is gated here is the MAKER: the four
+; the server half is kiosko's and gated there (test/host/kiosko.l drives a real
+; socket, the maker hook included). what is gated here is the maker: the four
 ; things `love serve` answers for and the ones it refuses, driven directly --
 ; no port, no socket, no timing, because none of that is this file's claim.
 ;
@@ -26,10 +26,10 @@
 (assert
  (member? 'serve (from ()))
  (member? 'serve-main (keys (from 'serve)))
- ; the verb is REGISTERED, which is what makes `love serve` a word on the artifact
+ ; the verb is registered, which is what makes `love serve` a word on the artifact
  (lit? (peep (from 'verbs 'tab) 'serve ())))
 
-; a scratch tree to answer for. ⚠ the maker takes a ROOT and a path and joins them
+; a scratch tree to answer for. the maker takes a root and a path and joins them
 ; itself, so the fixture is a real directory and the test asks for real paths.
 (: dir "/tmp/servetest"
    _ (mkdir dir 493)
@@ -58,13 +58,13 @@
            (sub? <>r "<h1>a head</h1>")            ; rendered, through lapiz
            (sub? <>r "<em>prose</em>"))
         0)
-   ; ⚠ `.l.md` is claimed BEFORE `.md`, and reads the .l with the suffix off. the
+   ; `.l.md` is claimed before `.md`, and reads the .l with the suffix off. the
    ; two pages link to each other, which is the whole reason the nav line exists.
    _ (: r (mk "/x.l.md")
         _ (assert
            (two? r)
            (sub? <>r "<h1>/x.l</h1>")              ; the file names the document
-           (sub? <>r "a comment")                  ; ..and its header IS the document
+           (sub? <>r "a comment")                  ; ..and its header is the document
            (sub? <>r "href=\"/x.l\""))            ; ..with the way back to the source
         0)
    ; a file with no header says so, rather than serving a blank page
@@ -80,7 +80,7 @@
         0)
 
    ; --- and the ones it refuses -----------------------------------------------
-   ; ⚠ () is the whole of "not mine": kiosko then serves the file, or says 404, and
+   ; () is the whole of "not mine": kiosko then serves the file, or says 404, and
    ; neither answer is this file's to give. a maker that answered for everything
    ; would take the static server away.
    _ (assert
@@ -90,7 +90,7 @@
 
    ; --- the cache --------------------------------------------------------------
    ; keyed by the file's mtime and size, in memory, never on disk. the second ask
-   ; is the same value, and REWRITING the file answers the new one.
+   ; is the same value, and rewriting the file answers the new one.
    _ (: a (mk "/x.l")
         b (mk "/x.l")
         _ (assert (<>a = <>b))

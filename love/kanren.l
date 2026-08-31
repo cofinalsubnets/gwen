@@ -134,7 +134,7 @@
    ; a type constraint over any predicate -- symbolo/numbero and their kin in one goal
    (apt p x st) (: r (con st (('apt . p . x) . >st)) (? (ufail? r) () (sun r)))
    ; --- the extra-logical three. `ifte` is the primitive (the soft cut): if c
-   ; holds at all, t runs over EVERY answer of c and e is dropped. `sole` commits
+   ; holds at all, t runs over every answer of c and e is dropped. `sole` commits
    ; to the first answer. `naf` is negation as failure -- it answers "not proved",
    ; never "false", and only a ground terminating goal lets you read the two as one.
    (ifte c t e st) (: m (sfire (c st)) (? (two? m) (s_star m t) (e st)))
@@ -185,7 +185,7 @@
 ; the tripled spellings are the point: a relation is the ordinary operator said three times --
 ; === is =, =/= its negation, &&& and ||| are && and ||, \\\ is \ with its params minted fresh
 ; as logic vars. all-punct, so all of them are infix at house band for free.
-(:: 'zz (\ x (: s (nom 0) u (nom 0) x2 <x ['\ s u [x2 s]])))   ; delay a goal: the curried tail IS the thunk
+(:: 'zz (\ x (: s (nom 0) u (nom 0) x2 <x ['\ s u [x2 s]])))   ; delay a goal: the curried tail is the thunk
 (:: '&&& (\ xs (foldl (\ a b [conj2 a b]) <xs >xs)))   ; conj of goals -- the ring's *
 (:: '||| (\ xs (foldl (\ a b [disj2 a b]) <xs >xs)))   ; disj of goals -- the ring's +
 (:: '\\\ (\ a (('\ . a) . map (\ a [var ['\ a]]) (init a))))                         ; lambda w/ fresh logic vars

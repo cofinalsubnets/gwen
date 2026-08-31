@@ -4,22 +4,22 @@
 ; whose corpus verifies the 2026 jacobian-conjecture disproof whole
 ; (det J symbolically, the collision certificates in exact arithmetic).
 ;
-; a POLY is a list of monomials, each (c e0 e1 .. ) -- a coefficient (a
-; STAR: an integer or a ratio coin, so the ring is Q[x..] with Z[x..]
+; a poly is a list of monomials, each (c e0 e1 .. ) -- a coefficient (a
+; star: an integer or a ratio coin, so the ring is Q[x..] with Z[x..]
 ; sitting inside it structurally) then one exponent per variable -- keys
 ; lex-descending, no zero coefficients, all polys in one expression
-; sharing an arity. the zero polynomial is (): the empty sum IS nothing.
-; cnorm keeps coefficients CANONICAL: an integer-valued coin ((q n 1))
+; sharing an arity. the zero polynomial is (): the empty sum is nothing.
+; cnorm keeps coefficients canonical: an integer-valued coin ((q n 1))
 ; demotes to its integer numerator, so halves that sum whole land an
 ; integer, = stays structural across Z and Q, and the zero-drop is the
 ; plain (c = 0) -- a value-zero coin demotes to the fixnum 0 first.
 ; (! can never test a coefficient: a red one nets nothing.)
 ;
 ; a K-ELEMENT of Q[x]/(m), deg m = d, is an ascending list of d q coins.
-; the field is given not by m but by XD -- x^d rewritten as an element --
+; the field is given not by m but by xd -- x^d rewritten as an element --
 ; so reduction folds top powers down with no division anywhere.
 
-; NO BRACKETS HERE: the runtime supplies the layer. a consumer hands the loader
+; no brackets here: the runtime supplies the layer. a consumer hands the loader
 ; this file's path ((use "crew/rune/rune.l")) and it loads as one fresh layer,
 ; leave registers it, the splice serves the bare names -- or, where a device
 ; baked the source, (use 'rune) answers off that registration; or one member
@@ -68,7 +68,7 @@
                    (go <rows 0 1))))
 
 ; --- gcd & squarefree factorization: euclid in Q[x], answers monic ----------
-; UNIVARIATE (arity-1 keys): pmod/pquot are long division's remainder and
+; univariate (arity-1 keys): pmod/pquot are long division's remainder and
 ; quotient -- the lead quotient monomial (pquo) rides pmul/psub, so
 ; cancellation is the ring's own, exact -- and pgcd euclids until the zero
 ; poly, then normalizes monic (unique in Q[x]; units divide out). cinv is
@@ -101,13 +101,13 @@
                 (: g (pgcd f (pd f 0))
                  (go (pquot f g) (pquot (pd f 0) g))))))
 
-; --- multivariate gcd: Q[x..] as (Q[y..])[x], the primitive PRS -------------
-; mgcd recurses on ARITY: view the poly univariate in the FIRST variable
+; --- multivariate gcd: Q[x..] as (Q[y..])[x], the primitive prs -------------
+; mgcd recurses on arity: view the poly univariate in the first variable
 ; (lex-descending keys make the lead monomial's e1 the x-degree free), take
-; the CONTENT -- the recursive mgcd fold over the x-coefficients (mcof drops
+; the content -- the recursive mgcd fold over the x-coefficients (mcof drops
 ; e1; one variable fewer each level, pgcd the arity-1 floor) -- split it
 ; off (mdiv, exact lex division), and euclid the primitive halves by
-; PSEUDO-remainder (mprem cross-multiplies the lead coefficients, so the
+; pseudo-remainder (mprem cross-multiplies the lead coefficients, so the
 ; top term cancels exactly with no coefficient division; each remainder
 ; re-primitivized). a degree-0 remainder means coprime in x -- the 1 poly.
 ; the answer is content-gcd times primitive-gcd, lex-lead normalized to 1
@@ -147,14 +147,14 @@
 ; --- rational roots: factorization's first rung ------------------------------
 ; the rational root theorem over the squarefree split: pint clears the
 ; denominators (roots are scale-blind), candidates are +-n/d for n a divisor
-; of the constant and d of the lead, peval tests each EXACTLY (powers by
+; of the constant and d of the lead, peval tests each exactly (powers by
 ; application, the sum cnormed), a hit divides out through pquot and the
 ; part is squarefree so every hit is simple. proots answers the rational
-; roots WITH multiplicity (psff carries it), ascending; pfac the factor
+; roots with multiplicity (psff carries it), ascending; pfac the factor
 ; list -- a leading constant when the lead is not 1, then monic factors,
 ; each (x - r) once per multiplicity, rootless remainders kept whole --
-; whose pmul-fold is p EXACTLY. a rootless remainder of degree 2 or 3 is
-; thereby CERTIFIED irreducible over Q (a factor would be linear); degree
+; whose pmul-fold is p exactly. a rootless remainder of degree 2 or 3 is
+; thereby certified irreducible over Q (a factor would be linear); degree
 ; 4 up it just has no rational roots, honestly.
 (: (pden c) (coin? c ? <>(load c) 1)
    (pint f) (: cs (filter (m \ coin? (mco m)) f)
@@ -191,15 +191,15 @@
 
 ; --- zassenhaus: factorization whole -----------------------------------------
 ; the summit of the ladder: a rootless remainder of degree 4 up factors into
-; irreducibles the classical way. the monic REDUCTION does the heavy
+; irreducibles the classical way. the monic reduction does the heavy
 ; simplifying -- F(y) = L^(n-1) f(y/L) is monic over Z, its factors map back
 ; by y -> Lx and pmonic -- so every stage below is monic: pick an odd prime
 ; p keeping F squarefree mod p (monic F makes every p coprime to the lead),
-; BERLEKAMP factors F mod p (dense ascending integer vectors mod m -- the
-; fv kit; x^(ip) rows, the nullspace of Q^T - I by row reduction, r = the
-; factor count, gcd splitting with v - s), linear HENSEL lifts the factors
+; berlekamp factors F mod p (dense ascending integer vectors mod m -- the
+; fv kit; x^(ip) rows, the nullspace of q^t - I by row reduction, r = the
+; factor count, gcd splitting with v - s), linear hensel lifts the factors
 ; pairwise up a tree to p^K > 2B (B a generous mignotte bound; bignums make
-; overshoot free), and RECOMBINATION multiplies subsets mod p^K, centers
+; overshoot free), and recombination multiplies subsets mod p^K, centers
 ; symmetrically, and tests true division over Z -- a hit divides out and the
 ; search restarts; what remains is irreducible. pfac (rehomed here) drives:
 ; constant, rational-root linears, and now every remainder split whole.
@@ -406,17 +406,17 @@
                   (pconst 1 c . go 1 (psff x)))))
 
 ; --- bivariate factorization: monic in x, hensel in y ------------------------
-; the first multivariate rung: f(x y) MONIC IN X (so no y-content exists and
+; the first multivariate rung: f(x y) monic in X (so no y-content exists and
 ; yun's split rides mgcd/mdiv verbatim -- msff). zfac2 mirrors zassenhaus
-; with the prime replaced by the point: SHIFT y -> y+a so the good point sits
+; with the prime replaced by the point: shift y -> y+a so the good point sits
 ; at the origin (then mod y^K is monomial FILTERING, evaluation the e_y = 0
 ; slice, and the lift arithmetic is padd/pmul whole), factor f(x 0) with the
 ; univariate pipeline, hensel-lift pairwise in powers of y (bezout once over
 ; Q[x] via pegcd; the same u/w identity as the integer lift), recombine by
-; subset products truncated at K = deg_y + 1 -- a TRUE factor equals its own
+; subset products truncated at K = deg_y + 1 -- a true factor equals its own
 ; truncation, so no centering: candidates divide (m2dm, exact division by a
 ; monic-in-x divisor) or die. factors shift back y -> y-a. pfac (rehomed
-; once more) now DISPATCHES on arity: univariate whole, bivariate monic-in-x
+; once more) now dispatches on arity: univariate whole, bivariate monic-in-x
 ; whole, anything else honestly kept.
 (: (mdegy f) (: (go l m2) (? (0 = tally l) m2
                              (: e <>(mkey <l)
@@ -536,14 +536,14 @@
                 cst (cnorm (mco <x * cinv (lcs all)))
                 (? (cst = 1) all (pconst 2 cst . all)))
 ; --- n variables: kronecker packs onto the bivariate engine ------------------
-; the last rung. vpack folds the LAST variable into the one before it --
-; the substitution y -> Y^D, z -> Y with D past the last variable's degree,
-; a ring homomorphism whose exponent map e*D + e' is INJECTIVE below D and
-; ORDER-PRESERVING on lex keys, so the packed poly is canonical as it
+; the last rung. vpack folds the last variable into the one before it --
+; the substitution y -> y^d, z -> Y with D past the last variable's degree,
+; a ring homomorphism whose exponent map e*D + e' is injective below D and
+; order-preserving on lex keys, so the packed poly is canonical as it
 ; stands. n variables pack down to two, the bivariate engine factors the
 ; image whole (recursively through pfac), and subsets of image factors
-; recombine: a candidate is the UNPACKED subset product, guarded by the
-; pack ROUND-TRIP (a true factor's product never carries past D, and the
+; recombine: a candidate is the unpacked subset product, guarded by the
+; pack round-trip (a true factor's product never carries past D, and the
 ; guard turns carry accidents into clean misses), then certified by mdm --
 ; multivariate lex division with remainder, safe on any divisor. hits
 ; divide out and the search restarts; the residual is a factor too. one
@@ -597,20 +597,20 @@
                    (bfac2 x))))
 
 ; --- the poly coin: polynomials first-class under the generic ops ----------
-; strike a CANONICAL monomial list (the engine's own output) and the surface
+; strike a canonical monomial list (the engine's own output) and the surface
 ; arrives whole: + - * run padd/psub/pmul through the die (slots 1/5/2), =
 ; compares canonical payloads, and net-mode 1 (slot 6) nets a poly by its
-; MONOMIAL COUNT -- so ! reads "is the zero polynomial" even when the
+; monomial count -- so ! reads "is the zero polynomial" even when the
 ; coefficients sum red (the raw-list layer needs (0 = tally p) for that). the
-; ZERO polynomial is the coin over () -- never bare (), which rides + and * as
+; zero polynomial is the coin over () -- never bare (), which rides + and * as
 ; the do-nothing unit and would dodge annihilation. a method owns its domain:
 ; a star operand lifts to the other side's arity; against the zero poly the
 ; arity is unknowable, so + and - answer () there, but * needs no lift at all
 ; (c times the zero poly IS the zero poly); anything else answers (). slot 7
-; declares polys STARS, so a numeral powers a poly through its own * -- ipow's
+; declares polys stars, so a numeral powers a poly through its own * -- ipow's
 ; squaring over coins, seeded at 1, lands on the zero-mul face. pd/pdet work
 ; the raw layer: (load p) to reach it, (poly ..) to come back.
-; a RED star is a COEFFICIENT, not nothing: polyish? tests the zero point by
+; a red star is a coefficient, not nothing: polyish? tests the zero point by
 ; identity and value ((), the charm 0), never by net -- !(-1) is true, and the
 ; old !v gate read -1 as the zero poly, so (+ p -1) dropped its constant.
 (: polyd {0 'poly 6 1 7 1}
@@ -632,9 +632,9 @@
 
 ; --- the eval bridge: a poly compiles to a live closure ---------------------
 ; pemit renders a poly (raw or coin) as core source over the given variable
-; symbols, one per key position. the emission is folded DYADIC + * ** only --
+; symbols, one per key position. the emission is folded dyadic + * ** only --
 ; never (+ a b c), which is application, and never (e x) numeral power, which
-; COMPOSES a non-numeric operand -- a power rides ('** s e): ** is the bound
+; composes a non-numeric operand -- a power rides ('** s e): ** is the bound
 ; base-first power, exact through every DieStar operand (integers, bignums,
 ; gems, q coins). pfn wraps the emission in \ and hands it to ev: a real
 ; curried closure, glaze-eligible; args arrive in syms order.
@@ -657,21 +657,21 @@
 ; --- the matcher: rules over terms, riding the kanren unifier ---------------
 ; a TERM is core source -- a star, a symbol, or a folded dyadic form ('+ a b),
 ; exactly what pemit renders and ev compiles -- so the rewrite layer and the
-; eval bridge share one term language. a PATTERN is a term with kanren logic
+; eval bridge share one term language. a pattern is a term with kanren logic
 ; vars at the open positions, and `unify` (the compiler-grade core; the
 ; relational rewrite layer it was kept public for) does the matching: one var
-; shared across two positions is a NONLINEAR pattern -- (- a a) matches only
+; shared across two positions is a nonlinear pattern -- (- a a) matches only
 ; when both sides agree, structurally, coins by value -- at no extra cost.
 ; `rule` compiles the readable (vars pat tpl) triple: each named symbol in vs
-; becomes ONE var shared across both halves; `grule` adds a GUARD -- a closure
+; becomes one var shared across both halves; `grule` adds a guard -- a closure
 ; over the bound values, vs order -- that must answer green for the rewrite to
 ; fire (how (d a v) -> 0 says "only when a is free of v"). `match` answers the
-; binding, or () on a miss -- a var-less hit is the EMPTY binding, whose truth
+; binding, or () on a miss -- a var-less hit is the empty binding, whose truth
 ; is blue, so test a miss against (), never with ! alone. `sew` fills a
 ; template under a binding. `rewrite` drives a rule list bottom-up to a
 ; fixpoint (rw1 tries the rules once, at the root, guards included);
 ; termination is the rule set's burden. a named symbol is a (name . mint)
-; chain -- the SAME shape as a var -- so mark and rewrite treat noms as
+; chain -- the same shape as a var -- so mark and rewrite treat noms as
 ; atoms, never walking into them.
 (: sew (from 'kanren 'subst)
    mnil (from 'kanren 'empty_dict)
@@ -700,28 +700,28 @@
 ; `laws` is the core identity table -- units, annihilators, inverses, the
 ; doubling collect, the log/exp cancellations, and the pythagorean identity --
 ; every rule shrinking or size-keeping-once, so the fixpoint lands. the
-; CONDITIONAL laws (a/a, 0/a, cancellation, sqrt(a^2) -> a) ride guards over
-; the two certifiers, each carrying an ASSUMPTIONS CONTEXT c -- a list of
+; conditional laws (a/a, 0/a, cancellation, sqrt(a^2) -> a) ride guards over
+; the two certifiers, each carrying an assumptions context c -- a list of
 ; fact terms like ((pos x) (nz n)) -- as their first argument: nzc certifies
 ; "nonzero" (a value-nonzero ground star by the square-sat test -- $(t*t) > 0
 ; forces t /= 0, sound for red stars and blind only toward blue, the safe
 ; direction -- pi/e, an exp form, a power or root or product of nonzeros, or
-; a DECLARED nz/pos/neg fact); posc certifies "positive" (positive ground,
+; a declared nz/pos/neg fact); posc certifies "positive" (positive ground,
 ; pi/e, exp, roots/products/sums of positives, even powers of nonzeros, or a
 ; declared pos). nz? is the empty-context face. `glaws` builds the guarded
 ; rules over a context; laws = ulaws + (glaws ()), so bare simp certifies
-; only the MANIFEST -- x/x stays -- while the c-family carries declared
+; only the manifest -- x/x stays -- while the c-family carries declared
 ; facts through every driver: (simpc c t) -- assume is its given name --
 ; (expandc c t), (derivc c t v); the plain simp/expand/deriv are their
 ; empty-context faces: (assume '((nz x)) '(/ x x)) is 1. `xlaws`
-; adds the GROWING rules on top: distribution and the log/exp splits. simp
+; adds the growing rules on top: distribution and the log/exp splits. simp
 ; never expands; `expand` does (each pass pushes a * inside a +, or a log/exp
 ; through its operand, so that fixpoint lands too -- collected on the way).
-; fold1 computes a GROUND node: (op a b) for op in + - * ** / with both
+; fold1 computes a ground node: (op a b) for op in + - * ** / with both
 ; operands stars (the open star: integers, gems, q coins, poly coins alike)
 ; folds to its value, cnormed so an integer-valued coin lands the integer.
-; a power folds by APPLICATION -- (b a) is a**b -- on a whole exponent.
-; Q IS THE FOLD CODOMAIN: a ground quotient or negative power folds EXACTLY
+; a power folds by application -- (b a) is a**b -- on a whole exponent.
+; Q is the fold codomain: a ground quotient or negative power folds exactly
 ; through the q coin ((/ 1 2) and (** 2 -1) both land (q 1 2), (/ 6 3) demotes
 ; to 2) -- never to a gem. a zero divisor/base (nz? again) or a slot-less die
 ; keeps its term. `simpw` drives a rule table + fold bottom-up to a
@@ -859,16 +859,16 @@
 ; --- collect: the commutative collect -----------------------------------------
 ; + and * are commutative and associative, and - is + wearing a sign, so
 ; collect canonicalizes each +/-/* spine, bottom-up: flatten (sflat carries
-; the sign through every -, so subtraction IS a signed addend), split every
+; the sign through every -, so subtraction is a signed addend), split every
 ; element into (c u) -- ground coefficient and core -- sort, merge equal
 ; cores summing coefficients exactly, and refold: green terms first
-; (constant last), then each red term SUBTRACTED in order, so the sign
+; (constant last), then each red term subtracted in order, so the sign
 ; returns to the surface as - ; a lone ground red stays the signed star, a
-; pure negation stays (- 0 u). a product also POWER-COLLECTS: repeated
+; pure negation stays (- 0 u). a product also power-collects: repeated
 ; factors merge into (** u n), exponents whole and >= 1 only (x * x**-1
 ; never folds -- x might be 0), summed through the same pair merge. the
 ; orders are structural and deterministic: a product sorts bases noms-first
-; (variables precede function forms); a sum sorts by DEGREE descending (vks
+; (variables precede function forms); a sum sorts by degree descending (vks
 ; counts a core's factors, powers weighted) then the sorted factor-string,
 ; so the binomial expand lands x^2 + 2xy + y^2 in that order, and (x+y)(x-y)
 ; cancels to x^2 - y^2. expand runs it; simp stays order-preserving.
@@ -951,9 +951,9 @@
 ; --- symbolic d: the derivative as a rule set --------------------------------
 ; the term head `d` -- (d t v) -- reduces by dlaws: sum/product/quotient rules
 ; are plain patterns, (d a a) -> 1 rides the nonlinear pattern, sin/cos and
-; exp/log carry the chain rule, the power rule guards on a CONSTANT exponent
+; exp/log carry the chain rule, the power rule guards on a constant exponent
 ; (free? n v -- a symbolic exponent needs the log bridge and stays), and the
-; base case is the GUARDED rule: (d a v) -> 0 exactly when a is free? of v
+; base case is the guarded rule: (d a v) -> 0 exactly when a is free? of v
 ; -- the guard the matcher grew for it. a head with no
 ; rule keeps its (d ..) term: a derivative rune cannot take stays symbolic,
 ; the honest answer. deriv drives dlaws to a fixpoint and simps the result,
@@ -983,17 +983,17 @@
    (deriv t v) (derivc () t v))
 
 ; --- unfix: terms back to the infix surface ----------------------------------
-; the inverse of opfix, as a FORM: unfix renders a core term as low-paren
+; the inverse of opfix, as a form: unfix renders a core term as low-paren
 ; infix source -- a value, not text; show prints it, ev runs it, and
 ; (opfix (unfix t)) = t is the round-trip law the gate asserts over a corpus.
 ; the grammar, probed: bands are C-like (* / above + -, ** above both),
-; arithmetic folds LEFT within its band, ** folds right, application binds
-; tightest. the wrap rule follows the HAND: the child on the folding side wraps
+; arithmetic folds left within its band, ** folds right, application binds
+; tightest. the wrap rule follows the hand: the child on the folding side wraps
 ; only strictly below its parent's band (the fold already nests that way), the
 ; other child wraps at the band and below. so (- (- 10 4) 3) renders 10 - 4 - 3
 ; while (- 10 (- 4 3)) renders 10 - (4 - 3). an application splices bare unless
 ; its head is an operator, and application arguments wrap whenever compound.
-; `operators` is mopped post-egg, so uband carries the bands AND hands rune
+; `operators` is mopped post-egg, so uband carries the bands and hands rune
 ; renders (band . hand, 1 = left); an op off the table stays prefix, which reads
 ; back unchanged.
 (: uband '((+ 1 1) (- 1 1) (* 2 1) (/ 2 1) (** 3 0))

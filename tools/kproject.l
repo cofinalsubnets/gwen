@@ -1,4 +1,4 @@
-; tools/kproject.l -- the metal projection (plan C2). the artifact is ONE
+; tools/kproject.l -- the metal projection (plan C2). the artifact is one
 ; hosted -pie love; a boot door eats a fixed-address image. this tool derives
 ; the second from the first: re-base every PT_LOAD at the kernel base, apply
 ; the love_rela table there (the same law nolibc's __ai_reloc runs at a hosted
@@ -6,10 +6,10 @@
 ; and patch boot.o below the image, write k_image_top into the file, and emit
 ; the flat ELF the doors have always eaten. cat after crew/holo/{elf,obj,link}.l:
 ;
-;   love <cat> IN.pie BOOT.o OUT.elf ARCH
+;   love <cat> in.pie boot.o out.elf arch
 ;
 ; (kproject pie bootb out arch) is the callable half -- pie and boot.o as
-; BYTES -- which is how the `love kernel` verb projects the running binary
+; bytes -- which is how the `love kernel` verb projects the running binary
 ; over a boot.o it laid itself (crew/source/source.l).
 
 (: (kparams arch)                       ; target, kernel base, entry symbol
@@ -125,9 +125,9 @@
                 (bs >< ps)))
       en (ldemit cx 'note kbase objs ())
       (gapz a b) (? (a < b) [(ld-zeros (b - a))] ())
-      ; ⚠ the file is address-linear from kbase plus one page (fo), so the boot
+      ; the file is address-linear from kbase plus one page (fo), so the boot
       ; chain is seeded with the kbase..b0 gap -- without it every byte lands
-      ; one page below where its phdr points. each stage takes the PIECES of
+      ; one page below where its phdr points. each stage takes the pieces of
       ; the one before (never the [cur pieces] pair), bridged by its gap; bss
       ; owns address space and no bytes, so it is laid above and never emitted.
       eb (ldemit cx 'boot b0 objs [(ld-zeros (b0 - kbase))])
@@ -174,8 +174,8 @@
                            (ld-zeros (shto - (ssto + sstz))) sht])))))
 
    ; the file driver (kernel.mk's KPROJ). arity-gated: the `love kernel` verb
-   ; evals this file too (crew/source/source.l), and ITS argv is the verb's own.
-   ; ⚠ a def, so the outer `:` stays define-mode and `kproject` survives the
+   ; evals this file too (crew/source/source.l), and its argv is the verb's own.
+   ; a def, so the outer `:` stays define-mode and `kproject` survives the
    ; read -- the call below is its own form.
    (kdrive as)
     (? (= 4 (tally as))

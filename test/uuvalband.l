@@ -1,25 +1,25 @@
-; test/uuvalband.l -- THE BAND ALGEBRA over test/uuval.l's values: love's `+`
+; test/uuvalband.l -- the band algebra over test/uuval.l's values: love's `+`
 ; and `*` themselves, where uuval models only what net reads and test/uumx.l
-; only which lane a pair of kinds dispatches to. the tree's notions of BAND meet
+; only which lane a pair of kinds dispatches to. the tree's notions of band meet
 ; here: this carrier has the three shapes a value can be -- () and a number and
-; a link -- and each is one of mx.l's fifteen kinds, so the cell vadd takes IS
+; a link -- and each is one of mx.l's fifteen kinds, so the cell vadd takes is
 ; the lane mx.l's matrix dispatches to, checked over all nine pairs. the three
 ; vocabularies cut at different depths and disagree about nothing: kinds.l's
-; lattice ranks the numeric tier INSIDE the one band mx.l's roster gives it.
+; lattice ranks the numeric tier inside the one band mx.l's roster gives it.
 ;
 ; the laws are the ones test/proof/rocq/spec.v proves of `gval` -- the unit on
-; either side of +, the zero that annihilates * on either side, the DEGENERATION
+; either side of +, the zero that annihilates * on either side, the degeneration
 ; of a mixed band under + (a number against a chain arrives as that band's unit,
-; which is what buys associativity over the WHOLE carrier with no side
+; which is what buys associativity over the whole carrier with no side
 ; conditions), the |count| action of a number on a chain, and the cartesian
 ; product that makes chain*chain a semiring rather than a monoid -- restated
 ; here over the finer carrier and proved in uu rather than in Rocq alone.
 ;
 ; what + needs that uuval did not: the integers really associate. that is the
-; first block, and it is why uuval respells zadd by ITERATION -- the four
+; first block, and it is why uuval respells zadd by iteration -- the four
 ; definitional equations below are the whole proof, and the truncated-
 ; subtraction spelling has none of them. the chain band needs one more thing --
-; that APPEND associates -- and that needs the pad to be invisible to append and
+; that append associates -- and that needs the pad to be invisible to append and
 ; veq to compose, which is why uuval's equality is an equivalence. every law
 ; here is given twice: once over veq, and once over paths on uuval's pinned
 ; carrier, the second by the bridge and one line each.
@@ -47,7 +47,7 @@
                        n))
              z))))
 
-; --- a step on the RIGHT argument of + comes out front. no induction: each arm
+; --- a step on the right argument of + comes out front. no induction: each arm
 ; --- is one definitional equation, or one of the two inverses above ---
 (assert
  (defq uv-zadd-succ
@@ -75,7 +75,7 @@
          (lam n (idpath (zpred (zadd a (ii2 n)))))
          b)))))
 
-; --- ..and so + associates. the induction is on the RIGHT argument alone: each
+; --- ..and so + associates. the induction is on the right argument alone: each
 ; --- step peels one zsucc or zpred, the lemma above carries it across a, and
 ; --- the hypothesis closes the rest ---
 (assert
@@ -127,7 +127,7 @@
                        n))
              b))))
 
-; --- a step on the LEFT argument comes out front too. this is the one the half
+; --- a step on the left argument comes out front too. this is the one the half
 ; --- bit's carry needs: two halves make a whole, and the whole must travel ---
 (assert
  (defq uv-zadd-lsucc
@@ -273,7 +273,7 @@
    (lam a (uv-pairpath rea rea (radd rzero (pr1 a)) (pr1 a) (radd rzero (pr2 a)) (pr2 a)
              (uv-radd-lunit (pr1 a)) (uv-radd-lunit (pr2 a))))))
 
-; --- THE BAND. a value has three shapes and love's dispatch has fifteen kinds;
+; --- the band. a value has three shapes and love's dispatch has fifteen kinds;
 ; --- these are the three the model carries, and the codes are named against
 ; --- src/mx.l's own so the two notions cannot drift. () is the mint band, a
 ; --- number the numeric band, a link the chain band ---
@@ -290,7 +290,7 @@
  (= (vof 0 '2) (vof 0 '(vband (vlink (nval 1) (nval 2))))))
 
 ; --- + over the whole carrier, cell for cell as love answers: the unit on
-; --- either side, numbers add, chains APPEND, and a mixed band DEGENERATES --
+; --- either side, numbers add, chains append, and a mixed band degenerates --
 ; --- the number arrives as the chain's unit and the chain answers whole, which
 ; --- is what buys associativity with no side conditions. append walks the left
 ; --- spine and replaces its tail whatever the tail is: love answers (1 3) for
@@ -346,11 +346,11 @@
  ; '(1) + '(2) = '(1 2): the left spine ends in (), and the right takes its place
  (= (vof 0 'true) (vof 0 '(veq (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
                                (vlink (nval 1) (vlink (nval 2) vnilv)))))
- ; ..and a dotted tail is REPLACED, not kept -- love answers (1 3) too
+ ; ..and a dotted tail is replaced, not kept -- love answers (1 3) too
  (= (vof 0 'true) (vof 0 '(veq (vadd (vlink (nval 1) (nval 2)) (vlink (nval 3) vnilv))
                                (vlink (nval 1) (vlink (nval 3) vnilv))))))
 
-; --- APPEND ASSOCIATES, modulo veq. this is the law the depth index made hard:
+; --- append associates, modulo veq. this is the law the depth index made hard:
 ; --- a link meets its limbs at a height neither spells, so appending on the left
 ; --- pads what appending on the right does not. the pad is invisible to append
 ; --- for the same reason it is invisible to veq -- one induction each -- and the
@@ -454,7 +454,7 @@
                    t))))
              d))))
 
-; --- THE BRIDGE: the model's three bands ARE three of mx.l's kinds, and the cell
+; --- the bridge: the model's three bands are three of mx.l's kinds, and the cell
 ; --- vadd takes is the lane mx.l's `+` matrix dispatches to. nine pairs, checked
 ; --- against the table love.c's mx.h is laid from, so a dispatch edit that moved
 ; --- a lane out from under this model fails a proof here ---
@@ -469,7 +469,7 @@
      true)
    (idpath true))
  ; the model's number is a numeric kind, so the tier lattice test/uukindlaw.l
- ; proves the semilattice laws of ranks WITHIN this one band, and refines it
+ ; proves the semilattice laws of ranks within this one band, and refines it
  (defq uv-bnum-is-numeric (paths nat (mxband (mxkof bNum)) (mxband mxKGem))
    (idpath (mxband mxKGem)))
  ; ..and the three kinds are distinct kinds, so the nine pairs are nine cells
@@ -480,15 +480,15 @@
      true)
    (idpath true)))
 
-; --- the laws + owes, cell by cell. each is stated over the SHAPE the cell is
-; --- about rather than over its band CODE: a code is a nat and a neutral one
+; --- the laws + owes, cell by cell. each is stated over the shape the cell is
+; --- about rather than over its band code: a code is a nat and a neutral one
 ; --- tells conv nothing, where a tree with a head reduces the whole dispatch.
 ; --- so all but the right unit are one idpath, and that one is a case analysis
 ; --- with no induction in it ---
 (assert
  (defq uv-vadd-lunit (pi v val (paths val (vadd vnilv v) v)) (lam v (idpath v)))
  ; the right unit is a veq law and not a paths one: () + () answers the () the
- ; RIGHT operand spells, which sits at height 0 where the left one may not
+ ; right operand spells, which sits at height 0 where the left one may not
  (defq uv-vadd-runit (pi v val (paths bool (veq (vadd v vnilv) v) true))
    (lam v ((nat_rect
               (lam d (pi t (vtre d) (paths bool (veq (vadd (tpair d t) vnilv) (tpair d t))
@@ -529,14 +529,14 @@
    (lam a (lam b (lam c
       (maponpaths msr val (lam w (vnum w))
          (madd (madd a b) c) (madd a (madd b c)) (uv-madd-assoc a b c))))))
- ; a mixed band DEGENERATES: the chain answers whole and the number is gone
+ ; a mixed band degenerates: the chain answers whole and the number is gone
  (defq uv-vadd-degen-l
    (pi m msr (pi a val (pi b val (paths val (vadd (vnum m) (vlink a b)) (vlink a b)))))
    (lam m (lam a (lam b (idpath (vlink a b))))))
  (defq uv-vadd-degen-r
    (pi m msr (pi a val (pi b val (paths val (vadd (vlink a b) (vnum m)) (vlink a b)))))
    (lam m (lam a (lam b (idpath (vlink a b))))))
- ; ..and the NET can see it go: this is the whole reason + associates over the
+ ; ..and the net can see it go: this is the whole reason + associates over the
  ; carrier with no side conditions, and the whole reason it is not a hom
  (defq uv-vadd-degen-net
    (pi m msr (pi a val (pi b val
@@ -548,12 +548,12 @@
       (paths val (vadd (vlink a b) (vlink c d)) (vapp (vlink a b) (vlink c d)))))))
    (lam a (lam b (lam c (lam d (idpath (vapp (vlink a b) (vlink c d)))))))))
 
-; --- AND SO + ASSOCIATES, cell by cell over the three shapes a value has. the
+; --- and so + associates, cell by cell over the three shapes a value has. the
 ; --- carrier is a sigma over a depth-indexed tree and not a three-constructor
 ; --- inductive, so there is no destruct to write one forall with: what stands in
 ; --- for it is the twenty-seven cells, which is the same content spec.v's
 ; --- `destruct x, y, z` covers. twenty-five of them are one reflexivity -- both
-; --- sides reduce to the SAME value, which is exactly what the DEGENERATION
+; --- sides reduce to the same value, which is exactly what the degeneration
 ; --- buys -- and the two that carry mathematics are the numeric cell (the
 ; --- measure's own monoid) and the chain cell (append) ---
 (assert
@@ -646,12 +646,12 @@
    (lam a (lam b (lam c (lam d (lam e (lam f
       (uv-vapp-assoc (pr1 (vlink a b)) (pr2 (vlink a b)) (vlink c d) (vlink e f))))))))))
 
-; --- AND OVER PATHS. every cell above is a veq law; the bridge in uuval.l turns
+; --- and over paths. every cell above is a veq law; the bridge in uuval.l turns
 ; --- each one into a paths law on the pinned carrier in a single line, because
 ; --- the work is in the bridge and not in the cells. this is the restatement:
-; --- + associates over the whole carrier as an EQUALITY, with veq left standing
+; --- + associates over the whole carrier as an equality, with veq left standing
 ; --- as the decision procedure the bridge proves it to be.
-; --- each cell crosses AT ITS OWN SHAPE, for the same reason the cells are
+; --- each cell crosses at its own shape, for the same reason the cells are
 ; --- shaped at all: a generic crossing quantified over three neutral values
 ; --- carries the whole unreduced vadd dispatch, with pin unfolded inside every
 ; --- one of its leaves, and conv pays for that twice ---
@@ -768,7 +768,7 @@
    (lam a (lam b (lam c (lam d (lam e (lam f (uv-veq-paths (vadd (vadd (vlink a b) (vlink c d)) (vlink e f)) (vadd (vlink a b) (vadd (vlink c d) (vlink e f)))
       (uv-aa-sss a b c d e f)))))))))
  ; the right unit and append's own law cross the same way. the right unit was a
- ; veq law because () + () answers the RIGHT operand's () -- over paths on the
+ ; veq law because () + () answers the right operand's () -- over paths on the
  ; pinned carrier that distinction is gone, both spellings pinning to pnilv
  (defq uv-pvadd-runit (pi v val (paths pval (pin (vadd v vnilv)) (pin v)))
    (lam v (uv-veq-paths (vadd v vnilv) v (uv-vadd-runit v))))
@@ -779,9 +779,9 @@
                                              (vappd d t (vapp v w))
                                   (uv-vapp-assoc d t v w))))))))
 
-; --- * over the same carrier. the halves are closed under + and NOT under *
+; --- * over the same carrier. the halves are closed under + and not under *
 ; --- (a half times a half is a quarter), so the multiplicative band is modelled
-; --- at the INTEGER rung: on a whole measure this is love's `*` cell for cell,
+; --- at the integer rung: on a whole measure this is love's `*` cell for cell,
 ; --- and off it -- a measure carrying a half -- `*` leaves the carrier and the
 ; --- model does not follow. an exact `*` everywhere wants the dyadic rung, and
 ; --- that is a different carrier, not a lemma about this one ---
@@ -811,8 +811,8 @@
  (= (vof 0 '(ii1 0))  (vof 0 '(zmul (ii1 0) (ii2 2))))
  (= (vof 0 '2)        (vof 0 '(vcount (zval (ii2 1))))))   ; |-2| = 2
 
-; --- the two chain cells: a number REPEATS a chain |count| times, and two
-; --- chains take the CARTESIAN -- each pair a 2-list, which is why the carrier
+; --- the two chain cells: a number repeats a chain |count| times, and two
+; --- chains take the cartesian -- each pair a 2-list, which is why the carrier
 ; --- nests, and what makes this lane a semiring rather than a monoid ---
 (assert
  (defn vrep (pi n nat (pi c val val))
@@ -879,7 +879,7 @@
    (pi a val (pi b val (pi c val (pi d val
       (paths val (vmul (vlink a b) (vlink c d)) (vcart (vlink a b) (vlink c d)))))))
    (lam a (lam b (lam c (lam d (idpath (vcart (vlink a b) (vlink c d))))))))
- ; 0 copies is (): the NUMBER zero annihilates a chain too, and it is not the
+ ; 0 copies is (): the number zero annihilates a chain too, and it is not the
  ; same value as () doing it -- () and 0 stay apart (uv-nil-ne-zero) where the
  ; string band, which this carrier has no room for, is where spec.v's gval keeps
  ; the two answers apart as well
@@ -904,13 +904,13 @@
       (vof 0 '(veq (vmul (vlink (nval 1) vnilv) (vlink (nval 2) (vlink (nval 3) vnilv)))
                    (vlink (vlink (nval 1) (vlink (nval 2) vnilv))
                           (vlink (vlink (nval 1) (vlink (nval 3) vnilv)) vnilv)))))
- ; and * DISCRIMINATES, so none of the above is a constant
+ ; and * discriminates, so none of the above is a constant
  (= (vof 0 'false) (vof 0 '(veq (vmul (nval 2) (nval 3)) (nval 5))))
  (= (vof 0 'false) (vof 0 '(veq (vmul (nval 2) (vlink (nval 1) vnilv))
                                 (vlink (nval 1) vnilv)))))
 
 ; --- and + associating, computed. the append is the interesting one: the two
-; --- bracketings build the SAME chain at different heights, which is the whole
+; --- bracketings build the same chain at different heights, which is the whole
 ; --- of what the law says and the whole of what veq is for ---
 (assert
  (= (vof 0 'true)
@@ -918,7 +918,7 @@
                          (vlink (nval 3) vnilv))
                    (vadd (vlink (nval 1) vnilv)
                          (vadd (vlink (nval 2) vnilv) (vlink (nval 3) vnilv))))))
- ; ..and the two bracketings really do differ as TREES: veq sees past the height
+ ; ..and the two bracketings really do differ as trees: veq sees past the height
  (= (vof 0 'false)
       (vof 0 '(veq (vadd (vadd (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
                          (vlink (nval 3) vnilv))
@@ -927,7 +927,7 @@
  (= (vof 0 'false)
       (vof 0 '(veq (vapp (vlink (nval 1) vnilv) (vlink (nval 2) vnilv))
                    (vapp (vlink (nval 2) vnilv) (vlink (nval 1) vnilv)))))
- ; the mixed cells associate by DEGENERATION: both sides answer the chain
+ ; the mixed cells associate by degeneration: both sides answer the chain
  (= (vof 0 'true)
       (vof 0 '(veq (vadd (vadd (nval 5) (vlink (nval 1) vnilv)) (nval 7))
                    (vadd (nval 5) (vadd (vlink (nval 1) vnilv) (nval 7))))))
@@ -935,17 +935,17 @@
       (vof 0 '(veq (vadd (vadd (nval 5) (vlink (nval 1) vnilv)) (nval 7))
                    (vlink (nval 1) vnilv)))))
 
-; --- WHAT IS NOT PROVED HERE, named rather than left to be noticed. + is done:
+; --- what is not proved here, named rather than left to be noticed. + is done:
 ; --- every cell associates, chain+chain included. * is not -- its numeric cell
 ; --- sits at the integer rung (see above), the |count| action wants smul's
 ; --- homomorphism over that rung, and the cartesian associates only up to the
-; --- canonical reassociation, which is a statement about ORDER that veq is too
+; --- canonical reassociation, which is a statement about order that veq is too
 ; --- coarse to make. spec.v holds gtimes_assoc_seq1/2/3 and mul-reassoc holds
 ; --- the order seam meanwhile, and the differential in test/uuvaldiff.l runs
 ; --- every ordered pair of a twelve-value corpus through both operations
 ; --- against love itself.
 
-; --- the planted faults: a proof term that type-checks WHATEVER it says proves
+; --- the planted faults: a proof term that type-checks whatever it says proves
 ; --- nothing, so each load-bearing claim gets its false twin and the kernel must
 ; --- refuse that one. every negative takes its positive. ---
 (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
@@ -957,14 +957,14 @@
  (id? 'rejected (rejects (\ z (defq uv-bad-zsucc
     (pi a zed (paths zed (zadd a (zsucc zzero)) a))
     (lam a (idpath a))))))
- ; the DEGENERATION drops the number; it does not keep it
+ ; the degeneration drops the number; it does not keep it
  (id? 'accepted (rejects (\ z (defq uv-ok-degen
     (pi m msr (pi a val (pi b val (paths val (vadd (vnum m) (vlink a b)) (vlink a b)))))
     (lam m (lam a (lam b (idpath (vlink a b)))))))))
  (id? 'rejected (rejects (\ z (defq uv-bad-degen
     (pi m msr (pi a val (pi b val (paths val (vadd (vnum m) (vlink a b)) (vnum m)))))
     (lam m (lam a (lam b (idpath (vnum m)))))))))
- ; () is the unit of + and the ZERO of *, not the unit of both
+ ; () is the unit of + and the zero of *, not the unit of both
  (id? 'rejected (rejects (\ z (defq uv-bad-mulunit
     (pi v val (paths val (vmul vnilv v) v)) (lam v (idpath v))))))
  ; the sign of a product is not the sign of its magnitude
@@ -973,12 +973,12 @@
  (id? 'rejected (rejects (\ z (defn uv-bad-zmul
     (paths zed (zmul (ii2 1) (ii1 3)) (ii1 6)) (idpath (ii1 6))))))
  ; ..and the bridge names the lane mx.l names: a chain against a number keeps
- ; the CHAIN, which is bin_a with the chain on the left
+ ; the chain, which is bin_a with the chain on the left
  (id? 'accepted (rejects (\ z (defn uv-ok-lane
     (paths nat (mxadd mxKChain mxKCharm) mxLbin_a) (idpath mxLbin_a)))))
  (id? 'rejected (rejects (\ z (defn uv-bad-lane
     (paths nat (mxadd mxKChain mxKCharm) mxLbin_b) (idpath mxLbin_b)))))
- ; append associates and does NOT commute -- a law that held of both would be
+ ; append associates and does not commute -- a law that held of both would be
  ; holding of nothing
  (id? 'rejected (rejects (\ z (defq uv-bad-app-comm
     (pi d nat (pi t (vtre d) (pi v val

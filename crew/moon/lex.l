@@ -11,14 +11,14 @@
    ; a diagnostic carrier: a stage may answer this instead of
    ; a bare bad, naming its own cause -- file/line/col (any () when unknown) and a
    ; message. gripe? guards it; the driver (moon.l ccdie) formats it, else falls
-   ; back to today's generic line so unconverted stages don't regress. a gripe IS
+   ; back to today's generic line so unconverted stages don't regress. a gripe is
    ; a chain, so okv? -- a real stage result -- excludes it explicitly. it lives
-   ; HERE, the first moon file in both load orders (crew/build.mk, test/test.mk),
+   ; here, the first moon file in both load orders (crew/build.mk, test/test.mk),
    ; so every later stage can answer one.
    (gripe file line col msg) ['gripe file line col msg]
    (gripe? ('gripe >< _)) 1
    (okv? x) (two? x && !(gripe? x))
-   ; clexat: lex with the FIRST line numbered ln0 -- the driver's door. its -D
+   ; clexat: lex with the first line numbered ln0 -- the driver's door. its -D
    ; text prepends to the TU, so those lines get 1-k..0 and the source itself
    ; starts at 1: every stamped line (gripes, __LINE__) is true with no
    ; pay-back pass. clex is the plain 1-based face every other caller reads.
@@ -41,19 +41,19 @@
                   (go (i + 4) ((((c - 240) << 18) | ((s (i + 1) & 63) << 12) | ((s (i + 2) & 63) << 6) | (s (i + 3) & 63)) >< acc))
                  (go (i + 1) (c >< acc)))))
        (go 0 ()))
-   ; -- A FLOAT LITERAL'S VALUE, DEFERRED --------------------------------------
-   ; the lexer hands back the PIECES and this folds them, because the fold is the
+   ; -- a float literal's VALUE, deferred --------------------------------------
+   ; the lexer hands back the pieces and this folds them, because the fold is the
    ; expensive half and most literals never need it: every macro body is lexed
-   ; where it is DEFINED, so the predefine table and <float.h> used to pay a
+   ; where it is defined, so the predefine table and <float.h> used to pay a
    ; correctly-rounded decimal->binary walk per literal in every TU that expanded
    ; none of them. the pieces ride the VALUE slot, not the spelling slot, so the
    ; rebuilds that drop a 5th cell (cpp's relex, parse's stampf) carry them anyway.
-   ; ⚠ a number passes straight through -- cpp mints 'flo tokens with real values.
+   ; a number passes straight through -- cpp mints 'flo tokens with real values.
    (cfipow b p) (: (go k a) (? (k < 1) a (go (k - 1) (* a b))) (go p 1))
-   ; ⚠ NEVER (/ mant (ipow 10 k)) in FLOATS: that rounds twice, and 10^310 is an
+   ; never (/ mant (ipow 10 k)) in floats: that rounds twice, and 10^310 is an
    ; infinity before the divide ever runs -- 1e-310 folded to 0, 1e-308 to -inf,
-   ; 1e-307 came out a ulp light, every one of them SILENT. hand the exact digits
-   ; to the READER: am_strtod under `sound` is the tree's one correctly-rounded
+   ; 1e-307 came out a ulp light, every one of them silent. hand the exact digits
+   ; to the reader: am_strtod under `sound` is the tree's one correctly-rounded
    ; decimal->binary, the same one love's own literals ride, and it carries the
    ; whole range including the subnormals. the `e` keeps the answer a gem however
    ; integral the digits look.
@@ -61,7 +61,7 @@
    (cflo v)
     (? !(two? v) v
        (id? <v 'dec) (cfdec <>v <>>v)
-       ; mant * 2^bexp is EXACT in decimal either way -- a negative binary exponent
+       ; mant * 2^bexp is exact in decimal either way -- a negative binary exponent
        ; is mant * 5^k over 10^k -- so the same reader takes this lane too, and
        ; 0x1p-1074 stops needing a 2^1074 that no double can hold.
        (id? <v 'hex) (: m <>v b <>>v
@@ -79,7 +79,7 @@
        p3 '("<<=" ">>=" "...")
        p2 '("==" "!=" "<=" ">=" "&&" "||" "<<" ">>" "+=" "-=" "*=" "/=" "%="
             "&=" "|=" "^=" "->" "++" "--" "##")
-       ; the multi-char punctuators BUCKETED BY FIRST CHAR. firstat walked all
+       ; the multi-char punctuators bucketed by first char. firstat walked all
        ; 21 of them on every punctuator token, each `at?` minting a closure and a
        ; tally; a `(` now looks at none of them and a `<` at three.
        pmap (: t {}
@@ -90,17 +90,17 @@
                (add (p3 + p2)))
        kwt (: t {} (go l) (? !(two? l) t (: _ (pin t <l 1) (go >l))) (go kws))
        p1 "()[]{};,.:?~!+-*/%<>=&|^#"
-       ; --- THE CLASS TABLE: one 256-byte string, a bitmask per char ------
+       ; --- the class table: one 256-byte string, a bitmask per char ------
        ; a membership test becomes an index and an `&` where it was a scan
        ; (in1? walked 25 chars, idc? called two predicates -- both per char).
-       ; ⚠ BIT 0 IS LEFT UNUSED: a string indexed past its end answers the charm
+       ; bit 0 is left unused: a string indexed past its end answers the charm
        ; 1, so a char outside 0..255 would match whichever class held bit 0;
        ; with it empty, (& 1 m) is 0 for every mask here. `oct?` rides dig?
        ; rather than taking the eighth bit.
        ;   2 ws  4 dig  8 idh  16 idc  32 hexd  64 suf  128 punct1
        (cbit c) ((c = 32 || c = 9 || c = 13 || c = 12 || c = 11 ? 2 0) +
                  (48 <= c <= 57 ? 4 0) +
-                 ; ⚠ a byte past 127 is an identifier char (a utf-8 `Å` is two of them, C11
+                 ; a byte past 127 is an identifier char (a utf-8 `Å` is two of them, C11
                  ; 6.4.2.1's extended set); a stray one outside a literal now interns, not scares
                  (97 <= c <= 122 || 65 <= c <= 90 || c = 95 || 128 <= c ? 8 0) +
                  (48 <= c <= 57 || 97 <= c <= 122 || 65 <= c <= 90 || c = 95 || 128 <= c ? 16 0) +
@@ -114,7 +114,7 @@
        (hexv c) (? (dig? c) (c - 48) (97 <= c <= 102) (c - 87) (c - 55))         ; a=10 A=10
        (suf? c) (ctbl c & 64)
        (skipsuf j) (? (j < n && suf? (src j)) (skipsuf (j + 1)) j)                      ; eat an int-literal suffix run
-       ; a WIDE/prefixed literal marker before ' or " : L (C89 wchar_t), u/U (C11 char16/32),
+       ; a wide/prefixed literal marker before ' or " : L (C89 wchar_t), u/U (C11 char16/32),
        ; u8 (C11 UTF-8 string, byte semantics). -> prefix length (1|2), else 0; the
        ; prefixed lane below picks the token kind.
        (wpfx i) (: c (src i)
@@ -126,14 +126,14 @@
        ; digit, so the whole-span scan is safe for decimal and hex integers alike)
        (hasu? i j) (: (go k) (? (j <= k) () ((src k = 117) || (src k = 85)) 1 (go (k + 1))) (go i))
        (hasl? i j) (: (go k) (? (j <= k) () ((src k = 108) || (src k = 76)) 1 (go (k + 1))) (go i))
-       ; a DOUBLED l/L (the ll/LL suffix): its own kinds -- on the 32-bit thumb targets
+       ; a doubled l/L (the ll/LL suffix): its own kinds -- on the 32-bit thumb targets
        ; `long long` is a distinct 8-byte type and 1ull<<40 must ride it (parse types them).
        (hasll? i j) (: (l? c) ((c = 108) || (c = 76))
                        (go k) (? ((j - 1) <= k) () (l? (src k) && l? (src (k + 1))) 1 (go (k + 1)))
                        (go i))
        ; the token kind of an integer literal: u alone reads unsigned INT (-1u
-       ; wraps at 32 bits), u with l/L -- or a value past 32 bits -- unsigned LONG;
-       ; the ll/LL pairs get their own kinds (ullnum/llnum). an UNSUFFIXED one climbs
+       ; wraps at 32 bits), u with l/L -- or a value past 32 bits -- unsigned long;
+       ; the ll/ll pairs get their own kinds (ullnum/llnum). an unsuffixed one climbs
        ; C11 6.4.4.1's ladder, where hex/octal/binary take the unsigned rungs --
        ; 0xffffffff is a uint, 0xffffffffffffffff a ulong -- and a decimal past
        ; long takes ulong too (gcc's reading; C is out of types there). dec marks
@@ -143,15 +143,15 @@
             (? (hasll? i j) 'llnum
                (!dec && !(hasl? i j) && (2147483648 <= v) && (v <= 4294967295)) 'unum
                (9223372036854775808 <= v <= 18446744073709551615) 'ulnum
-               (hasl? i j) 'lnum                                 ; 1L is a LONG, not an int that fits
+               (hasl? i j) 'lnum                                 ; 1L is a long, not an int that fits
                'num)
            (hasll? i j) 'ullnum
            (hasl? i j || (4294967296 <= v)) 'ulnum
            'unum)
-       ; C11 6.4.3p2: a UCN may NOT name a basic-set character (short identifier under
-       ; 00A0, bar $ @ `), nor a surrogate, nor anything past the last code point. So
-       ; a UCN naming 'A' is a constraint violation, not a long way to spell it --
-       ; gcc 13 refuses it where newer ones take C23's relaxation.
+       ; C11 6.4.3p2: a ucn may not name a basic-set character (short identifier under
+       ; 00a0, bar $ @ `), nor a surrogate, nor anything past the last code point. So
+       ; a ucn naming 'A' is a constraint violation, not a long way to spell it --
+       ; gcc 13 refuses it where newer ones take c23's relaxation.
        (ucnok? v) ?((v = 36) || (v = 64) || (v = 96) ||
                     (160 <= v <= 1114111 && !(55296 <= v <= 57343)))
        (ucn? k) ((k < n) && (src k = 92) && ((k + 1) < n) && ((src (k + 1) = 117) || (src (k + 1) = 85)))
@@ -159,23 +159,23 @@
                    (d = 102) 12 (d = 118) 11 (d = 48) 0 (d = 92) 92                       ; \f \v \0 backslash
                    (d = 34) 34 (d = 39) 39 (d = 63) 63 (d = 101) 27 ())                   ; \" \' \? \e
        (oct? c) ((ctbl c & 4) && c <= 55)                                            ; an octal digit 0-7
-       (escseq k) (: d (src k)                     ; k = index of the char AFTER the backslash -> (value nextpos) or ()
+       (escseq k) (: d (src k)                     ; k = index of the char after the backslash -> (value nextpos) or ()
                      (? (oct? d)                                                          ; \ooo -- 1..3 octal digits
                          (: (oc m v cnt) (? (cnt < 3 && m < n && oct? (src m))
                                             (oc (m + 1) (+ (* v 8) (src m - 48)) (cnt + 1))
                                             [v m])
                             (oc k 0 0))
-                        (d = 120)                                                         ; \xHH -- 1+ hex digits
+                        (d = 120)                                                         ; \xhh -- 1+ hex digits
                          (? (((k + 1) < n) && hexd? (src (k + 1)))
                             (: (hx m v) (? (m < n && hexd? (src m))
                                            (hx (m + 1) (+ (* v 16) (hexv (src m))))
                                            [v m])
                                (hx (k + 1) 0))
                             ())
-                        ; \uXXXX / \UXXXXXXXX (C99 6.4.3): EXACTLY 4 or 8 hex digits, a short
-                        ; run refusing rather than taking what it found. the THIRD element
-                        ; marks it a UCN -- it names a code POINT, so a narrow string owes the
-                        ; utf-8 encoding of it where \xHH lays the one byte it named.
+                        ; \uxxxx / \uxxxxxxxx (C99 6.4.3): exactly 4 or 8 hex digits, a short
+                        ; run refusing rather than taking what it found. the third element
+                        ; marks it a ucn -- it names a code point, so a narrow string owes the
+                        ; utf-8 encoding of it where \xhh lays the one byte it named.
                         ((d = 117) || (d = 85))
                          (: w (? (d = 117) 4 8)
                             (uc m v cnt) (? (cnt = w) (? (ucnok? v) [v m 1] ())
@@ -187,7 +187,7 @@
        ; the body of a string-shaped literal, from qi (after the opening quote) to the
        ; closing `term` -> (content endpos) | (). one lane under the narrow, wide and
        ; wide-char faces; `wide` re-encodes escape values as UTF-8 (utf8put below).
-       ; ⚠ the body lands a RUN AT A TIME, never a byte: `say` of a snip is one
+       ; the body lands a run at a time, never a byte: `say` of a snip is one
        ; memcpy, where an accumulator grown per char is quadratic -- the corpus
        ; literal baked into the kernel is 910 KB and cost 51s of a 64s build.
        (strbody qi term wide)
@@ -206,8 +206,8 @@
                         (c2 = 10) ()
                         (c2 = 92 && e + 1 < n)
                          (: r (escseq (e + 1))
-                            ; ⚠ a UCN (two? >>r) encodes even in a NARROW string: gcc lays
-                            ; "ä" as two utf-8 bytes, where "\xE4" is the one byte E4
+                            ; a ucn (two? >>r) encodes even in a narrow string: gcc lays
+                            ; "ä" as two utf-8 bytes, where "\xe4" is the one byte e4
                             (? (two? r) (: _ (? (wide || two? >>r) (utf8put sink <r) (put sink <r)) (eat <>r)) ()))
                         ; a stop `run` made that none of the above claims: one byte,
                         ; then on. the trailing \ lands here, and so would any future
@@ -269,12 +269,12 @@
                  (: k (j3 + 1)
                     (? (k < n && member? (src k) '(102 70 108 76)) (k + 1) k)))
            dxp (exp - fd)
-           ; C11 6.4.4.2: an f/F suffix makes the constant a FLOAT, not a double kept
+           ; C11 6.4.4.2: an f/F suffix makes the constant a float, not a double kept
            ; at 53 bits. the 4th element reports it; the caller picks the kind.
            fsu (? (isflo && (j2 < n) && member? (src j2) '(102 70)) 1 0)
            val (? isflo ['dec mant dxp] iv)          ; cflo folds it, if anyone asks
            [j4 (? im 'imag isflo) val fsu])
-       ; -- hex literals: 0x integer (0xff), OR a hex FLOAT 0x H.H p [+-] D (a binary
+       ; -- hex literals: 0x integer (0xff), or a hex float 0x H.H p [+-] D (a binary
        ; exponent, base 2): 0x1.0p-53, 0x1p4, 0x.8p1. i points at the '0'. -> (endj isflo? value). --
        (hxrun j v nd) (? (j < n && hexd? (src j)) (hxrun (j + 1) (16 * v + hexv (src j)) (nd + 1)) [j v nd])
        ; -- octal literal: a leading 0 then octal digits (0777, 0644). i points at the 0
@@ -308,18 +308,18 @@
         (? (n <= i) [1 (rev acc)]
            (: c (src i)
               (? (c = 10) (go (i + 1) (line + 1) acc)
-                 ((c = 92) && ((i + 1) < n) && (src (i + 1) = 10))         ; \<nl> splice: ONE logical line
+                 ((c = 92) && ((i + 1) < n) && (src (i + 1) = 10))         ; \<nl> splice: one logical line
                   (go (i + 2) line acc)                                    ; (line unadvanced so a directive stays grouped)
                  ((c = 92) && ((i + 2) < n) && (src (i + 1) = 13) && (src (i + 2) = 10))          ; \<cr><nl>
                   (go (i + 3) line acc)
                  (ws? c) (go (i + 1) line acc)
-                 ; both comment probes sit behind ONE (= c 47) gate (two at? calls
+                 ; both comment probes sit behind one (= c 47) gate (two at? calls
                  ; per character otherwise)
                  ((c = 47) && at? i "//")
                   (: (eat j) (? ((n <= j) || (src j = 10)) j (eat (j + 1)))
                      (go (eat i) line acc))
                  ((c = 47) && at? i "/*")
-                  (: ; a \<nl> INSIDE a comment is a splice (C phase 2 runs before
+                  (: ; a \<nl> inside a comment is a splice (C phase 2 runs before
                      ; comments), so it stays on the logical line -- a #define whose
                      ; body carries a spliced multi-line comment keeps its grouping
                      ; (m4-1.4 regex.c PUSH_FAILURE_POINT)
@@ -333,7 +333,7 @@
                  (c = 34) (: r (strbody (i + 1) 34 ())          ; a string literal
                              (? (two? r) (go <>r line (['str <r line () (snip src i <>r)] >< acc)) ()))
                  ; a character constant: chars and escapes up to the closing quote.
-                 ; ⚠ MULTI-character ones are ordinary C (implementation-defined, gcc
+                 ; multi-character ones are ordinary C (implementation-defined, gcc
                  ; packs left to right into an int) and they turn up in text the
                  ; program never means to compile -- pdclib's `#error .. 'long' ..`
                  ; sits in a dead #if, and the whole file lexes before cpp runs.
@@ -355,7 +355,7 @@
                                    (go j line (['num v line () (snip src i j)] >< acc)))))
                  ((c = 48) && ((i + 1) < n) && ((src (i + 1) = 120) || (src (i + 1) = 88)))        ; 0x / 0X hex (int or float)
                   (: r (hexlit i)
-                     k (? <>r (? <>>>r 'flof 'flo) (ukind i <r <>>r ()))   ; a u/U in the suffix run marks it UNSIGNED (1U / 1ULL)
+                     k (? <>r (? <>>>r 'flof 'flo) (ukind i <r <>>r ()))   ; a u/U in the suffix run marks it unsigned (1U / 1ULL)
                      (go <r line ([k <>>r line () (snip src i <r)] >< acc)))
                  ((c = 48) && ((i + 2) < n) && ((src (i + 1) = 98) || (src (i + 1) = 66)) &&
                   ((src (i + 2) = 48) || (src (i + 2) = 49)))                                            ; 0b / 0B binary
@@ -363,7 +363,7 @@
                      j2 (skipsuf <r)
                      k (ukind i j2 <>r ())
                      (go j2 line ([k <>r line () (snip src i j2)] >< acc)))
-                 ((c = 48) && ((i + 1) < n) && octd? (src (i + 1)))       ; 0NNN octal integer (0644, 0777)
+                 ((c = 48) && ((i + 1) < n) && octd? (src (i + 1)))       ; 0nnn octal integer (0644, 0777)
                   (: r (octlit i)
                      j2 (skipsuf <r)
                      k (ukind i j2 <>r ())
@@ -376,7 +376,7 @@
                      (go j2 line ([k <>>r line () (snip src i j2)] >< acc)))
                  ; a prefixed literal: the kind carries the width (L -> 'wstr, u -> 'str16,
                  ; U -> 'str32; u8 stays narrow), the value is canonical UTF-8, the
-                 ; spelling keeps the prefix. a wide CHAR constant decodes to its LAST
+                 ; spelling keeps the prefix. a wide char constant decodes to its last
                  ; code point (L'ä' is 0xE4, not the packed bytes; L'ab' is 'b' --
                  ; implementation-defined, gcc's reading) and stays 'num.
                  (< 0 (wpfx i))
@@ -391,8 +391,8 @@
                            cps (? (two? r) (utf8dec <r) ())
                            (lastc l) (? (two? >l) (lastc >l) <l)
                            (? (two? cps) (go <>r line (['num (lastc cps) line () (snip src i <>r)] >< acc)) ()))))
-                 ; an identifier may be spelled with UCNs (C99 6.4.2.1). a UCN names a CODE
-                 ; POINT, so `Å` must intern as the utf-8 `Å` does -- one name, built by
+                 ; an identifier may be spelled with ucns (C99 6.4.2.1). a ucn names a code
+                 ; point, so `Å` must intern as the utf-8 `Å` does -- one name, built by
                  ; the escape lane where the plain run is a snip. a malformed one lex-errors.
                  ((idh? c) || (ucn? i))
                   (: (idr j) (? ((j < n) && idc? (src j)) (idr (j + 1))

@@ -1,17 +1,17 @@
-; test/uuvallaw.l -- GENERATED from test/law.l by tools/law2uu.l. Do not edit;
-; refresh with `make uuvallaw`. CLAUDE.md's laws, ONE SPELLING for both lanes:
+; test/uuvallaw.l -- generated from test/law.l by tools/law2uu.l. Do not edit;
+; refresh with `make uuvallaw`. claude.md's laws, one spelling for both lanes:
 ; test/law.l quantifies each row over a corpus (refutation), and the rows the
-; measure tower can state arrive here as uu OBLIGATIONS over test/uuval.l's
+; measure tower can state arrive here as uu obligations over test/uuval.l's
 ; model (proof). the source row prints over its term, and every proof was
-; SEARCHED against the live kernel -- by conversion where the tower's round
+; searched against the live kernel -- by conversion where the tower's round
 ; trips are definitional, by cases on the saturated measure where they are
 ; not, and otherwise by the lemma the model names for that row.
 ; a guard the tower cannot read erases (the model has one uniform value),
-; which makes the obligation STRONGER than the row it came from, never
-; weaker; each such row names the guard it dropped. a guard it CAN read
+; which makes the obligation stronger than the row it came from, never
+; weaker; each such row names the guard it dropped. a guard it can read
 ; stays, as the orb it always was. a val-rung claim is veq's -- a guarded row
-; needs a DECIDABLE claim, and a path is not a bool -- and where the guard
-; erased the row gets its PATHS twin over the pinned carrier beside it, by
+; needs a decidable claim, and a path is not a bool -- and where the guard
+; erased the row gets its paths twin over the pinned carrier beside it, by
 ; uuval.l's bridge. Substrate: test/uuval.l over test/uu.l.
 
 (assert (member? 'vof (names ())))
@@ -47,7 +47,7 @@
  (defq law-idq-finer
    (pi v val (paths bool (veq v v) true))
    uv-idq-finer)
- ; ..and the same law over the PINNED carrier, by the bridge
+ ; ..and the same law over the pinned carrier, by the bridge
  (defq law-idq-finer-p
    (pi v val (paths pval (pin v) (pin v)))
    (lam v (uv-veq-paths v v (law-idq-finer v))))
@@ -120,7 +120,7 @@
                      (vsat v))))
 )
 
-; --- rows whose CODOMAIN is the proof: the tower assigns the type, so the
+; --- rows whose codomain is the proof: the tower assigns the type, so the
 ; --- range check has nothing left to state ---
  ;   nil?-total    lands in bool
  ;   sat-green     lands in nat

@@ -39,7 +39,7 @@
                             0)))
 
    ; --- the seat scan, the third door ---
-   ; a file that IS the program seats itself: `love crew/moon/moon.l foo.c`, the installed
+   ; a file that is the program seats itself: `love crew/moon/moon.l foo.c`, the installed
    ; shebang's `-l`, a catted script under its own name. no name was typed, a path was.
    ;   (fire ws)      -> (seat-word . args-after) over this invocation's line, else ()
    ;   (scan ws a)    the same over a list handed in -- kore's in-image door

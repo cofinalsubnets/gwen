@@ -1,6 +1,6 @@
 ; re -- the POSIX regex engine, BRE and ERE. love has no regex syntax, so this is
 ; the door: (rebre p) / (reere p) compile a pattern, (rehas ns s) and
-; (refind ns s i) run it. PURE -- no i/o, no seat -- and peg's peer: a module the
+; (refind ns s i) run it. pure -- no i/o, no seat -- and peg's peer: a module the
 ; boot never splices, so each consumer opens with its own top-level (use 're).
 ; grep lives on in crew/kore/re.l, which reads four names off this splice.
 ;
@@ -8,7 +8,7 @@
 ; independent Brzozowski-derivative oracle, and grep is smoked byte-identical
 ; against GNU in `make test_kore`.
 ;
-; TWO DIALECTS, ONE PARSER: BRE and ERE differ only in which sigils wear a
+; two dialects, one parser: BRE and ERE differ only in which sigils wear a
 ; backslash, so `reparse` takes the dialect as a flag and `esc?` is the whole
 ; seam -- ( ) | { } + ? are bare in ERE and \-escaped in BRE, while * . [ ^ $
 ; are bare in both. (rebre p) and (reere p) are its two doors.
@@ -20,9 +20,9 @@
 ; [:name:] classes (a first `]` is literal, an edge `-` is literal). out of
 ; scope, refused by the parser in both dialects: backrefs (\1..\9).
 ;
-; ⚠ THE RAGGED EDGES WERE READ OFF GNU, NOT GUESSED, because the differential is
-; what says so: a repeat with nothing to repeat is a LITERAL in BRE (`\{2\}` is
-; the text {2}) and DROPPED in ERE (`-E '*a'` is `a`, GNU warns and carries on);
+; the ragged edges were read off GNU, not guessed, because the differential is
+; what says so: a repeat with nothing to repeat is a literal in BRE (`\{2\}` is
+; the text {2}) and dropped in ERE (`-E '*a'` is `a`, GNU warns and carries on);
 ; a brace that never closes and a `)` with nothing open are literals in ERE and
 ; malformed in BRE. an empty alternative branch is legal in both and matches the
 ; empty text. an inverted interval (`{3,2}`) is malformed in both.
@@ -34,7 +34,7 @@
 ; unbounded; groups number in ( order from 1. (rehas nodes s) answers the
 ; boolean face; (refind nodes s i) the leftmost match at-or-after i as
 ; (1 start end spans), spans an ([idx start end]..) with the newest pin of each
-; group first -- (..)*'s \1 is the LAST iteration, like GNU; read it with assoc.
+; group first -- (..)*'s \1 is the last iteration, like GNU; read it with assoc.
 ; matching is greedy backtracking in continuation style, so alternation is just
 ; one more node that tries its branches in order on the winning path.
 (module 're
@@ -54,7 +54,7 @@
        (p j = 58 && p (j + 1) = 93) [1 j]
        (recend p n (j + 1)))
    ; a class body at i (past [ and any ^): `first` keeps a leading ] literal.
-   ; answers (items j) | (), items an ([lo hi]..). ONE scanner, both dialects --
+   ; answers (items j) | (), items an ([lo hi]..). one scanner, both dialects --
    ; POSIX spells the bracket expression the same in BRE and ERE
    (recitems p n i first acc) (n > i ? (: c (p i)
     (? (c = 93 && !first) [acc (i + 1)]
@@ -69,12 +69,12 @@
    ; -- the parser, both dialects: pattern text -> (1 nodes ngroups) | () --
    (reparse p ere?)
     (: n #p
-       ; THE ONE SEAM between the dialects: ( ) | { } + ? are bare in ERE and
+       ; the one seam between the dialects: ( ) | { } + ? are bare in ERE and
        ; \-escaped in BRE, so they are asked for here and nowhere else. * . [ ^ $
        ; are bare in both and are read straight off the byte.
        bw (ere? ? 1 2)
-       ; ⚠ AN IF/ELSE, NOT (ere? && bare) || escaped: the || falls through to the
-       ; BRE arm whenever ERE's own test fails, and `\(` is a LITERAL paren in ERE
+       ; an if/else, not (ere? && bare) || escaped: the || falls through to the
+       ; BRE arm whenever ERE's own test fails, and `\(` is a literal paren in ERE
        (esc? i ch) (ere? ? (i < n && p i = ch) (i + 1 < n && p i = 92 && p (i + 1) = ch))
        (dig? c) (48 <= c <= 57)
        (rnum i v got) (? (i < n && dig? (p i)) (rnum (i + 1) (v * 10 + p i - 48) 1) got [1 v i])
@@ -89,7 +89,7 @@
                                     (clo (j + 1) ? [lo () (j + 1 + bw)])))))
        ; can a repeat land? nothing repeats an anchor or an empty head
        (repable acc) (two? acc && !(member? <<acc '(bol eol)))
-       ; WHERE A SIGIL IS AN ANCHOR. POSIX leaves BRE's answer undefined outside
+       ; where a sigil is an anchor. POSIX leaves BRE's answer undefined outside
        ; the head and the tail; GNU and busybox both read `^` wherever nothing has
        ; been read yet -- the head, or just past `\(` or `\|`, which is exactly an
        ; empty acc, since a group and a branch each open a fresh pseq -- and `$`
@@ -124,7 +124,7 @@
            (esc? i 63) (? (repable acc)
                           (pseq (i + bw) (['rep <acc 0 1] . >acc) lvl gi)
                           (nofit i acc lvl gi 63 bw))
-           ; ⚠ the ERE drop is of the WHOLE {n,m}, which is why rivl runs first even
+           ; the ere drop is of the whole {n,m}, which is why rivl runs first even
            ; when nothing can be repeated: skipping just the brace leaves `2}` behind
            ; as literals, and `-E '{2}'` would match nothing where GNU matches all
            (esc? i 123)
@@ -152,7 +152,7 @@
                         (49 <= d <= 57 ? () ; backrefs: refused, both dialects
                            (pseq (i + 2) (['chr d] . acc) lvl gi))))
                  (pseq (i + 1) (['chr c] . acc) lvl gi))))
-       ; the alternation above the sequence: branches joined by the bar, kept FLAT
+       ; the alternation above the sequence: branches joined by the bar, kept flat
        ; in one ['alt ..] node so a three-way reads as three branches
        (palt i lvl gi)
         (: (go j g acc)
@@ -180,7 +180,7 @@
    ; everything with children recurses. the matcher is untouched by -i
    (refold nds)
     (map (\ nd
-           ; ⚠ NOT (recase c @ () .. m ..): pat.l reads () as the form at zero, which
+           ; not (recase c @ () .. m ..): pat.l reads () as the form at zero, which
            ; asks nothing and so fits everything. presence here is a plain test
            (nd @ ['chr c]      (: m (recase c) (? m ['cls 0 [[c c] [m m]]] nd))
                  ['cls neg rs] ['cls neg (cat rs (refoldr rs))]
@@ -190,7 +190,7 @@
                  nd))
          nds)
 
-   ; -- the matcher: greedy backtracking in continuation style, COMPILED --
+   ; -- the matcher: greedy backtracking in continuation style, compiled --
    ; a node list becomes one lambda of (s i sp k), once, before any text is read.
    ; the shape walk and the class ranges are spent there, so what a character costs
    ; at match time is a call and a compare. the node vocabulary is renode's arm list
@@ -206,20 +206,20 @@
                  (: _ (put o (? (rcls neg rs c) 1 0)) (go (c + 1))))
        tbl (go 0)
        (\ c (? (c <= 255) (tbl c) (rcls neg rs c))))
-   ; the PROGRAM a caller holds: the matcher, whether the pattern can only match at
-   ; 0, and a SKIPPER -- the walk's way of reaching the next position that could
+   ; the program a caller holds: the matcher, whether the pattern can only match at
+   ; 0, and a skipper -- the walk's way of reaching the next position that could
    ; start a match instead of asking the matcher about every one. `^` used to be
    ; asked its one failing question at every byte of the line, and a literal used to
    ; be asked its first charm at every byte too
    (recomp ns) (: c (refirst ns)
                   [(recompm ns) (reanch ns)
                    (? (nil? c) ()
-                      (: sc ((from 'scan 'scanner) ())      ; at COMPILE time: never at a
+                      (: sc ((from 'scan 'scanner) ())      ; at compile time: never at a
                          (\ s i n (: j (sc s c i)          ; module binding, which bakes
                                      (j < 0 ? n j)))))])
-   ; the charm a match must OPEN with, or (). only ever answered for a first node
+   ; the charm a match must open with, or (). only ever answered for a first node
    ; that has to consume one -- a repeat that can take nothing answers (), so the
-   ; skip never steps over a match. ⚠ nil? is zero?, so a NUL needle reads as absent
+   ; skip never steps over a match. nil? is zero?, so a NUL needle reads as absent
    ; here and simply declines the skip
    (refirst ns)
     (ns @ (nd >< _)
@@ -265,8 +265,8 @@
           ['rep a lo hi] (: ab (recompm [a])
                             (\ s i sp k (rrepc ab lo hi tail s i sp k 0))))
    ; the repeat: try one more (progress required), else the tail once fed.
-   ; ⚠ AN EMPTY ITERATION CANNOT REPEAT -- that guard is what stops `\(\)*` spinning
-   ; -- BUT IT STILL SATISFIES THE MINIMUM, all at once. without that second half
+   ; an empty iteration cannot repeat -- that guard is what stops `\(\)*` spinning
+   ; -- but it still satisfies the minimum, all at once. without that second half
    ; `a*\+\+` demands an `a`, because the inner a* matches empty, the empty is
    ; refused, and the outer's lo=1 is never met: GNU matches every line there and
    ; we matched only the ones with an a. (the seeded fuzz found it, not a human.)
@@ -296,9 +296,9 @@
    ; the leftmost span at-or-after i: (1 start end spans) | () -- uread's success
    ; shape, since the empty match at 0 is the span (0 0), blue by measure. greedy
    ; end: the span the substitution tools take; spans feed \1
-   ; the leftmost span at-or-after i whose (start end) PASSES p. ⚠ p rides INSIDE
+   ; the leftmost span at-or-after i whose (start end) passes p. p rides inside
    ; the continuation, which is the whole trick: a span it rejects makes `rem`
-   ; answer (), and the greedy backtracker then tries the OTHER lengths at that
+   ; answer (), and the greedy backtracker then tries the other lengths at that
    ; start before the start moves on. a filter applied to refind's answer cannot
    ; do that -- it only ever sees the greedy span. -w is where it shows: `a*.` on
    ; "a._c_" is word-bounded at "a" and not at the greedy "a.", and the outside

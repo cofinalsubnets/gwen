@@ -1,24 +1,24 @@
 ; --- differential oracle: ev's reduction vs a reference normalizer ---
 ; The companion to test/proof/rocq/spec.v's reduction layer (shift/subst/step). spec.v proves
-; that calculus consistent; this checks the BINARY against an INDEPENDENT reference
+; that calculus consistent; this checks the binary against an independent reference
 ; implementation of the same de Bruijn reduction, over thousands of random terms --
 ; the conformance witness the proof alone can't give. ("the math is sound" + "the
 ; binary computes the math" = not slop.)
 ;
 ; The reference is a direct transcription of spec.v's shift/subst, evaluated under
-; love's OWN strategy: N-ARY closures (nested lambdas collapse to one arity-n closure)
-; with CBV, weak (no reduction under a binder) and SATURATING (a beta step fires only
+; love's own strategy: N-ARY closures (nested lambdas collapse to one arity-n closure)
+; with cbv, weak (no reduction under a binder) and saturating (a beta step fires only
 ; when all n args are present; an under-applied closure is held unreduced -- exactly
 ; as ev shows ((B A) stays (B A) until the 2nd arg lands).
 ;
-; Terms are random CLOSED AFFINE lambda terms (each bound var used <=1 => strongly
-; normalizing, so both ev and the reference terminate). Comparison is EXTENSIONAL:
+; Terms are random closed affine lambda terms (each bound var used <=1 => strongly
+; normalizing, so both ev and the reference terminate). Comparison is extensional:
 ; both results are applied to distinct marker symbols (a symbol applied is const-1,
 ; so no church-numeral blowup), grounding away the only legitimate difference -- love
 ; holding a partial application lazily vs the reference materializing the equal
 ; closure. This is representation-independent and robust at every term size; a
 ; deliberately wrong subst index (a mutation test) drops it well below 100%, so it
-; discriminates real reduction bugs. The free-variable SHIFT path of subst is
+; discriminates real reduction bugs. The free-variable shift path of subst is
 ; unreachable here (weak CBV on closed terms only ever fires a closed function, so
 ; free vars are never renumbered) -- that arithmetic is covered by spec.v, not ev.
 (: ; de Bruijn terms as tagged chains: (0 n) Var | (1 b) Lam | (2 f a) App
@@ -37,7 +37,7 @@
       (= (dtag t) 1) (dlam (tsubst (+ j 1) (tshift 1 0 s) (dbody t)))
       (dapp (tsubst j s (dfun t)) (tsubst j s (darg t))))
 
- ; CBV / n-ary / weak / saturating evaluation -- love's strategy
+ ; cbv / n-ary / weak / saturating evaluation -- love's strategy
  (darity t) (? (= (dtag t) 1) (+ 1 (darity (dbody t))) 0)
  (rebuild t args) (? !args t (rebuild (dapp t (cap args)) (cup args)))
  (apply-n t args n) (? (< n 1) t (apply-n (tsubst 0 (cap args) (dbody t)) (cup args) (- n 1)))
@@ -60,7 +60,7 @@
       (= (dtag t) 1) [lam-sym (vname d) (render (+ d 1) (dbody t))]
       [(render d (dfun t)) (render d (darg t))])
 
- ; random CLOSED AFFINE term: partition splits a scope so f/a never share a var
+ ; random closed affine term: partition splits a scope so f/a never share a var
  (partition sc st)
    (? !sc [0 0 st]
       (: r (random st 2) rest (partition (cup sc) (cup r))
@@ -82,7 +82,7 @@
               ra (gen (- g 1) (cat lof sc2) st3) a (cap ra) st4 (cauup ra)
               [(dapp f a) (caup ra) st4])))
 
- ; EXTENSIONAL agreement: apply both results to marker symbols, then compare
+ ; extensional agreement: apply both results to marker symbols, then compare
  (ground v) (v 'm1 'm2 'm3 'm4 'm5)
  (oracle-ok n sd g)
    (: (go n st good)

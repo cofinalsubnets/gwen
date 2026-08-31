@@ -1,8 +1,8 @@
-; test/uupatch.l -- the PATCH GROUPOID's named-slot AND positional slices as uu
-; proof TERMS: the generated leg of the patch arc. test/patch.l's first two
+; test/uupatch.l -- the patch groupoid's named-slot and positional slices as uu
+; proof terms: the generated leg of the patch arc. test/patch.l's first two
 ; forms state the laws as executable asserts; test/proof/rocq/patch.v hand-proved
-; them as scaffolding and PROMISED this file (its provenance note): the laws
-; re-proven inside uu's own kernel, then emitted to Rocq AND Lean by
+; them as scaffolding and promised this file (its provenance note): the laws
+; re-proven inside uu's own kernel, then emitted to Rocq and Lean by
 ; tools/uu2coq.l + tools/uu2lean.l -- two independent kernels re-certifying the
 ; same terms, the de Bruijn criterion the rest of the proof corpus already
 ; rides. Substrate: test/uu.l + test/uulay.l's list vocabulary (this file
@@ -12,7 +12,7 @@
 ; (key -> value, nats -- the .v's closure of "a missing slot reads 0"), a patch
 ; (chg k a b) one slot-change carrying its context, commute the partial swap.
 ; where patch.v case-split on Nat.eqb with tactics, the terms here case on
-; isdeceqnat -- decidable equality as a COPROD, so every branch carries the
+; isdeceqnat -- decidable equality as a coprod, so every branch carries the
 ; path evidence a bool would have dropped; refusal is the unit summand. all
 ; equality of trees is pointwise (no funext anywhere), exactly the .v's rule.
 
@@ -43,7 +43,7 @@
                     (lam e (ii2 tt))
                     (lam ne (ii1 (tpair q p)))
                     (isdeceqnat (pk p) (pk q))))))
- ; the model COMPUTES: apply writes its slot and only its slot; invert is its
+ ; the model computes: apply writes its slot and only its slot; invert is its
  ; own inverse; independent keys swap, a shared key refuses
  (9 = (vof 0 '(apon (lam k 7) (chg 3 7 9) 3)))
  (7 = (vof 0 '(apon (lam k 7) (chg 3 7 9) 5)))
@@ -54,9 +54,9 @@
   = (vof 0 '(ii1 (tpair (chg 5 0 2) (chg 3 0 1)))))
  ((vof 0 '(commute (chg 3 0 1) (chg 3 1 2))) = (vof 0 '(ii2 tt))))
 
-; --- (L1) commute is INVOLUTIVE. cmside is the coprod no-confusion family (a
+; --- (L1) commute is involutive. cmside is the coprod no-confusion family (a
 ; --- recorded refusal is never a success); the ii1 lane rides maponpaths of
-; --- "re-commute the carried pair", so the involution IS the algebra: commute
+; --- "re-commute the carried pair", so the involution is the algebra: commute
 ; --- q p computes straight to ii1 (p,q) once the keys are known distinct ---
 (assert
  (defn cmside (pi c (coprod ppair unit) UU)
@@ -107,10 +107,10 @@
                  (isdeceqnat (pk q) (pk p)))))))
          (isdeceqnat (pk p) (pk q))))))))))
 
-; --- (L2) the INVERSE round-trips IN CONTEXT: where the patch is valid, apply
+; --- (L2) the inverse round-trips in context: where the patch is valid, apply
 ; --- then unpull restores every slot -- pointwise, quantifying the key like
-; --- the .v does; validity opened by ONE convoy on its own decision, the main
-; --- case abstracting BOTH apon layers' shared scrutinee at once ---
+; --- the .v does; validity opened by one convoy on its own decision, the main
+; --- case abstracting both apon layers' shared scrutinee at once ---
 (assert
  (defq invert-roundtrip
    (pi t tree (pi p patch (pi hv (paths bool (valid t p) true)
@@ -144,10 +144,10 @@
  ; and it computes: apply then unpull reads the old value back
  (7 = (vof 0 '(apon (apon (lam k 7) (chg 3 7 9)) (invert (chg 3 7 9)) 3))))
 
-; --- (L3a) independent patches are ORDER-FREE (the semantic heart -- what makes
+; --- (L3a) independent patches are order-free (the semantic heart -- what makes
 ; --- merge and cherry-pick sound). apon-comm is the raw form off the key
 ; --- disequality; commute-sound ties it to the primitive: a successful commute
-; --- WITNESSES order-freedom. the double convoy cases each decision once,
+; --- witnesses order-freedom. the double convoy cases each decision once,
 ; --- abstracting all its occurrences on both sides ---
 (assert
  (defq apon-comm
@@ -220,7 +220,7 @@
  (2 = (vof 0 '(apon (apon (lam k 0) (chg 3 0 1)) (chg 5 0 2) 5)))
  (2 = (vof 0 '(apon (apon (lam k 0) (chg 5 0 2)) (chg 3 0 1) 5))))
 
-; --- (L3b) a FRONTIER is stable under an adjacent swap of independent patches.
+; --- (L3b) a frontier is stable under an adjacent swap of independent patches.
 ; --- patch lists are UniMath-style vectors at patch (a plist's length is pr1,
 ; --- like nlist); applall is the .l's left fold. the lift is two congruence
 ; --- lemmas (one apon, then the whole fold -- patch.v's apon_ext /
@@ -294,22 +294,22 @@
            (IH (pr2 v) (apon t (pr1 v)))))))
          (pr1 pre))
        (pr2 pre))))))))
- ; the fold COMPUTES, and the frontier agrees either order
+ ; the fold computes, and the frontier agrees either order
  (2 = (vof 0 '(applall (pcons (chg 3 0 1) (pcons (chg 5 0 2) pnil)) (lam k 0) 5)))
  ((vof 0 '(applall (pcons (chg 3 0 1) (pcons (chg 5 0 2) pnil)) (lam k 0) 3))
   = (vof 0 '(applall (pcons (chg 5 0 2) (pcons (chg 3 0 1) pnil)) (lam k 0) 3))))
 
 ; ============================================================================
-; the POSITIONAL slice: hunks over a SEQUENCE, where commute genuinely
-; RE-AIMS -- test/patch.l second form, patch.v hunk slice, migrated. the
-; kit: plus-cancellation as bool/nat EQUATIONS (succ-succ steps are
+; the positional slice: hunks over a sequence, where commute genuinely
+; re-aims -- test/patch.l second form, patch.v hunk slice, migrated. the
+; kit: plus-cancellation as bool/nat equations (succ-succ steps are
 ; definitional), the take/drop/append fusion laws, then the model and the
-; four laws, each intermediate SEALED as its own defq (a path-valued let
+; four laws, each intermediate sealed as its own defq (a path-valued let
 ; poisons every later check in its scope -- the eager-NbE let law).
 ; ============================================================================
-; --- the POSITIONAL slice needs an index algebra (plus-cancellation through
+; --- the positional slice needs an index algebra (plus-cancellation through
 ; --- the order and the truncated minus) and a take/drop/append fusion kit.
-; --- every succ-succ step of natgtb and natminus is DEFINITIONAL, so the
+; --- every succ-succ step of natgtb and natminus is definitional, so the
 ; --- cancellation laws are one induction each, steps landing on their IH ---
 (assert
  (defq natlehnplusnm
@@ -511,9 +511,9 @@
  ((vof 0 '(ncons 4 nnil))
   = (vof 0 '(ldrop 2 (lapp (ncons 7 (ncons 9 nnil)) (ncons 4 nnil))))))
 
-; --- the POSITIONAL model: a state is an nlist, a hunk (mkh i o n) aims o->n
+; --- the positional model: a state is an nlist, a hunk (mkh i o n) aims o->n
 ; --- at index i; splice is take/append/drop, so hap's first layer is
-; --- DEFINITIONAL over the seams. commute's tests ride natgthorleh -- the
+; --- definitional over the seams. commute's tests ride natgthorleh -- the
 ; --- dichotomy carries the bool-path evidence into every branch, the same
 ; --- convoy the named-slot slice built on isdeceqnat. refusal (overlap OR
 ; --- touch: strict, the darcs seam) is the unit summand ---
@@ -540,7 +540,7 @@
                  (lam g2 (ii2 tt))
                  (natgthorleh (hi p) (add (hi q) (nlen (ho q))))))
         (natgthorleh (hi q) (add (hi p) (nlen (hn p))))))))
- ; the model COMPUTES: splice replaces the middle, hap lays a hunk, commute
+ ; the model computes: splice replaces the middle, hap lays a hunk, commute
  ; re-aims past unequal lengths and refuses a touching seam
  ((vof 0 '(ncons 1 (ncons 7 (ncons 8 (ncons 3 nnil)))))
   = (vof 0 '(splice (ncons 1 (ncons 2 (ncons 3 nnil))) 1 1 (ncons 7 (ncons 8 nnil)))))
@@ -551,7 +551,7 @@
  ((vof 0 '(hcommute (mkh 0 (ncons 1 nnil) (ncons 7 (ncons 8 nnil))) (mkh 2 (ncons 3 nnil) nnil)))
   = (vof 0 '(ii2 tt))))
 
-; --- (L1) hcommute is INVOLUTIVE, with the genuine index re-aim: the slid
+; --- (L1) hcommute is involutive, with the genuine index re-aim: the slid
 ; --- index slides home. the carried pair rides the same maponpaths trick as
 ; --- the named-slot slice; the arithmetic is the natgtbplusr cancellation
 ; --- through natminusplusnmm's recomposition, once per branch ---
@@ -752,10 +752,10 @@
            h)))
         (natgthorleh (hi q) (add (hi p) (nlen (hn p)))))))))))
 
-; --- (L2) the INVERSE round-trips IN CONTEXT: in range (the bound is what
+; --- (L2) the inverse round-trips in context: in range (the bound is what
 ; --- keeps an out-of-range insert honest -- its inverse would aim past the
 ; --- end) and matching, apply-then-unpull is the identity. splice is
-; --- DEFINITIONALLY take/append/drop, so the whole proof is the seams
+; --- definitionally take/append/drop, so the whole proof is the seams
 ; --- decomposition s = A ++ o ++ W laid twice through the fusion kit ---
 (assert
  (defq hinv-roundtrip
@@ -826,9 +826,9 @@
   = (vof 0 '(hap (hap (ncons 1 (ncons 2 (ncons 3 nnil))) (mkh 1 (ncons 2 nnil) (ncons 7 (ncons 8 nnil))))
                  (hinv (mkh 1 (ncons 2 nnil) (ncons 7 (ncons 8 nnil))))))))
 
-; --- (L3a) the machinery, SEALED RUNG BY RUNG: a path-valued let poisons every
+; --- (L3a) the machinery, sealed rung by rung: a path-valued let poisons every
 ; --- later check in its scope (the eager NbE re-walks it superadditively --
-; --- exactly why defq seals), so each intermediate path is its OWN defq and
+; --- exactly why defq seals), so each intermediate path is its own defq and
 ; --- every use is a stuck neutral. seams is the one decomposition law all the
 ; --- slices lean on: a valid (i, o) window splits s as A ++ o ++ W ---
 (assert
@@ -856,7 +856,7 @@
                 (ltake (nlen o) (ldrop i s)) o hc)
               (maponpaths nlist nlist (lam t (lapp o t))
                 (ldrop (nlen o) (ldrop i s)) (ldrop (add i (nlen o)) s) (ldropdrop i (nlen o) s))))))))))))
- ; the AFTER branch's index ledger: with i + |n1| < j and the window in range,
+ ; the after branch's index ledger: with i + |n1| < j and the window in range,
  ; j sits |A| + (|n1| + kk) in from the patched state's seams (kk the gap)
  (defq after-j
    (pi s nlist (pi i nat (pi o1 nlist (pi n1 nlist (pi j nat
@@ -1429,7 +1429,7 @@
               (ldrop (add i (nlen o1)) (splice s j2 (nlen o2) n2)) (lapp M (lapp n2 Z))
               (after-v2 s i o1 n1 j o2 n2 g hb1 hc1 hb2 hc2)))))))))))))))))))))))))
 
-; --- the BEFORE branch: q aims strictly ahead of p, so p slides FORWARD by
+; --- the before branch: q aims strictly ahead of p, so p slides forward by
 ; --- q's delta. the state decomposes B ++ o2 ++ C ++ o1 ++ W; the same sealed
 ; --- ladder, with A's own seams carrying the front half ---
 (assert
@@ -1517,7 +1517,7 @@
           hc2))))))))))))))
 )
 
-; --- the slid index, ALL NAT (tower lengths named by the guards' arithmetic,
+; --- the slid index, all nat (tower lengths named by the guards' arithmetic,
 ; --- so conv never re-walks a take/drop tower); then the re-aimed state's
 ; --- normal form, its two reads, and the assembly ---
 (assert
@@ -1819,11 +1819,11 @@
                 (lapp (lapp n2 C) (lapp n1 W)) (lapp n2 (lapp C (lapp n1 W)))
                 (lappassoc n2 C (lapp n1 W))))))))))))))))))))))))
 
-; --- (L3a) tied to the primitive: a successful hcommute WITNESSES order-
+; --- (L3a) tied to the primitive: a successful hcommute witnesses order-
 ; --- freedom, in the honest contexts (p belongs on s, q belongs after p).
 ; --- the convoy reads the branch off natgthorleh's evidence and hands the
 ; --- carried pair through the same maponpaths as L1; each branch closes by
-; --- its splice lemma. then (L3b): states are DATA, so the frontier is one
+; --- its splice lemma. then (L3b): states are data, so the frontier is one
 ; --- maponpaths -- the fold's tail rides the two-patch agreement ---
 (assert
  (defn hvec (pi n nat UU)
@@ -1838,7 +1838,7 @@
                      (lam k (lam IH (lam v (lam s2 (IH (pr2 v) (hap s2 (pr1 v)))))))
                      (pr1 l))
                    (pr2 l) s))))
- ; the fold COMPUTES: two hunks land left to right
+ ; the fold computes: two hunks land left to right
  ((vof 0 '(happl (hcons (mkh 0 (ncons 1 nnil) (ncons 7 (ncons 8 nnil)))
                         (hcons (mkh 3 (ncons 3 nnil) (ncons 9 nnil)) hnil))
                  (ncons 1 (ncons 2 (ncons 3 (ncons 4 nnil))))))
@@ -2134,7 +2134,7 @@
         (hap (hap s p) q) (hap (hap s q2) p2)
         (hcommute-sound p q q2 p2 s h hb1 hc1 hb2 hc2)))))))))))))))
 (:
- ; --- the L3a witness COMPUTES: the after-pair agrees in both orders ---
+ ; --- the l3a witness computes: the after-pair agrees in both orders ---
  (heq a b) (? (&& (atom? a) (atom? b)) (id? a b)
               (|| (atom? a) (atom? b)) 0
               (&& (heq (cap a) (cap b)) (heq (cup a) (cup b))))
@@ -2148,16 +2148,16 @@
  0)
 
 ; ============================================================================
-; the ELEMENT TREE: every nat IS a rose tree. labels are nats and kid lists
+; the element tree: every nat is a rose tree. labels are nats and kid lists
 ; are finite, so trees are counted by the cantor pairing -- a node is
 ; (npair label kids-code), a kid list codes by folding npair under succ, and
-; the ZERO-labelled leaf is 0 itself. etree = nat buys the whole nat kit at
+; the zero-labelled leaf is 0 itself. etree = nat buys the whole nat kit at
 ; tree grain for free (isdeceq, isaset, natgtb order for canonical forms),
 ; kids come back as a plain nlist (the list kit rides), and the swal/clash/
 ; metavariable slices get their element grain. the door: doc/misc/proto/patch.l's
 ; rose-tree walks, queued behind this type.
 ; ============================================================================
-; --- the cantor pairing. npair climbs the triangle; unpair WALKS the
+; --- the cantor pairing. npair climbs the triangle; unpair walks the
 ; --- diagonal (a duo-valued nat_rect: at (0 b) jump to (succ b, 0), else
 ; --- step (npred a, succ b) -- una/unb the two step components, niszero/
 ; --- npred the case machinery, so every branch is definitional). ---
@@ -2424,7 +2424,7 @@
         (npairgeb (upa n) (upb n))))))
 
 ; --- a kid list as one nat: nil is 0, cons is succ of the pair, and ldec
-; --- walks it back on FUEL -- the code bounds its own decode (a kid's code
+; --- walks it back on fuel -- the code bounds its own decode (a kid's code
 ; --- rides inside the pair, so upb never grows: upble + istransnatleh feed
 ; --- the guard convoys), the house fuel pattern at nateqb's one-call-per-
 ; --- level shape. round trips sealed both ways. ---
@@ -2562,7 +2562,7 @@
 ; --- the tree itself. enode pairs a label with its kids' code; elabel and
 ; --- ekids read a node back (ekids fuelled by the code it decodes). beta
 ; --- both ways and eta close from the two round trips, and nat's decidable
-; --- equality IS the tree's -- the swal guards' Aeq, for free. ---
+; --- equality is the tree's -- the swal guards' Aeq, for free. ---
 (assert
  (defn etree
    UU
@@ -2599,8 +2599,8 @@
  (defn isdeceqetree
    (pi x etree (pi y etree (coprod (paths etree x y) (pi e (paths etree x y) empty))))
    isdeceqnat)
- ; the tree computes: a leaf is its label's triangle, the zero leaf IS 0,
- ; and eta reads ANY nat as a node -- 5 is (enode 0 (ncons 1 nnil))
+ ; the tree computes: a leaf is its label's triangle, the zero leaf is 0,
+ ; and eta reads any nat as a node -- 5 is (enode 0 (ncons 1 nnil))
  (id? (vof 0 '28) (vof 0 '(enode 7 nnil)))
  (id? (vof 0 '0) (vof 0 '(enode 0 nnil)))
  (id? (vof 0 '2) (vof 0 '(enode 0 (ncons (enode 0 nnil) nnil))))
@@ -2612,14 +2612,14 @@
 
 
 ; ============================================================================
-; the OCCURRENCE/REPLACE kit: patch.v's swallow primitives at element grain
+; the occurrence/replace kit: patch.v's swallow primitives at element grain
 ; (elements are nats, so etree codes ride). occ counts, ffind aims at the
-; first hit, lay replaces one seat, lget reads one back -- all TOTAL (out of
+; first hit, lay replaces one seat, lget reads one back -- all total (out of
 ; range lay is the list, lget the zero point), so the option lanes flatten
 ; to natgtb guards. the decision is nateqb; every lemma is one walk down
 ; the list with the seat case inside, the decision split by uulay's
 ; dependent bool_rect (lgetffind convoys the decision's own idpath in, so
-; the true branch REMEMBERS what it decided). the swal migration's floor.
+; the true branch remembers what it decided). the swal migration's floor.
 ; ============================================================================
 ; --- nateqb closes its own diagonal, and a true verdict is an identification
 ; --- (the corpus had symm; refl + soundness complete the little theory) ---
@@ -2646,7 +2646,7 @@
                 y))))
         x))))
 
-; --- the four primitives: the occ head contribution rides OUTSIDE the fold
+; --- the four primitives: the occ head contribution rides outside the fold
 ; --- (one recursive call per level, nateqb's eager-NbE shape); lay and lget
 ; --- carry the seat as a pi so it decrements alongside the walk ---
 (assert
@@ -2706,7 +2706,7 @@
  (id? (vof 0 '1) (vof 0 '(occ (enode 0 nnil) (ekids (enode 1 (ncons (enode 0 nnil) nnil)))))))
 
 ; --- the lemma kit, patch.v's seven mirrored. laylen and laylay are pure
-; --- walks; layget subsumes lay_id with NO hypothesis (out of range both
+; --- walks; layget subsumes lay_id with no hypothesis (out of range both
 ; --- sides are the list, sigma-eta closes the cons); the occ movers carry
 ; --- the seat guard + the nateqb verdicts patch.v's Aeq destructs carried ---
 (assert
@@ -3154,12 +3154,12 @@
 
 
 ; ============================================================================
-; the SWALLOW commute: patch.v's sixth slice at uu. a shallow patch is a
-; HUNK (hinv is its inverse); the deep patch mke j a b rewrites one
+; the swallow commute: patch.v's sixth slice at uu. a shallow patch is a
+; hunk (hinv is its inverse); the deep patch mke j a b rewrites one
 ; element at seat j. swal re-aims a deep-first pair: undo the deep edit
-; inside BOTH shallow sides, re-aim it at the survivor's seat -- guarded
+; inside both shallow sides, re-aim it at the survivor's seat -- guarded
 ; by the four occurrence counts that make the rewrite canonical, all
-; seven verdicts folded into ONE andb tower so the involution cases a
+; seven verdicts folded into one andb tower so the involution cases a
 ; single bool. the L1 law: swal through the groupoid inverse comes home.
 ; ============================================================================
 ; --- two nat facts the re-aim arithmetic leans on ---
@@ -4169,13 +4169,13 @@
                                     (tpair (mkh i N O) (mke j b a))
                                     (swal-pay i O N j a b e1 e2 e3 e4 e5 e6 e7 e8)))))))))))))))))))
 
-; --- (L1) the swallow commute is INVOLUTIVE through the groupoid inverse:
+; --- (L1) the swallow commute is involutive through the groupoid inverse:
 ; --- invert both results, swal again, and the originals come home. one
 ; --- dependent bool_rect on the folded guard (an idpath convoy remembers
 ; --- the verdict; the refusing branch discriminates through scmside),
 ; --- andbtruel/r unstack the seven verdicts, a/b distinct falls out of
 ; --- the counts (1 = 0 is succ-on-zero absurd), ii1 injects through a
-; --- coprod_rect projection, and ONE transport carries the goal from the
+; --- coprod_rect projection, and one transport carries the goal from the
 ; --- computed pair to the hypothesis' -- sigma-eta does the records ---
 (assert
  (defq swal-involutive
@@ -4511,8 +4511,8 @@
 
 
 ; ============================================================================
-; the CLASH-SEGMENTS slice: patch.v's seventh form at uu -- two co-valid
-; hunks collapse the union HULL of their spans to ONE element, the BUBBLE:
+; the clash-segments slice: patch.v's seventh form at uu -- two co-valid
+; hunks collapse the union hull of their spans to one element, the bubble:
 ; the hull segment plus each rival rendered as the hull with its hunk laid
 ; inside, the rival set cins-canonical by content hash. the three laws:
 ; creation forgets arrival order (M1 at cell grain), padding commutes with
@@ -5683,14 +5683,14 @@
                 (scell-hi hash s p q)
                 (scell-riv hash s p q))))))))
  ; the bubble forgets arrival order, computed at lcode hash (tiny values:
- ; a unary lcode tower grows QUADRATICALLY in the rendered content)
+ ; a unary lcode tower grows quadratically in the rendered content)
  ((vof 0 '(scell lcode (ncons 1 (ncons 2 nnil)) (mkh 0 (ncons 1 nnil) (ncons 2 nnil)) (mkh 1 (ncons 2 nnil) nnil)))
   = (vof 0 '(scell lcode (ncons 1 (ncons 2 nnil)) (mkh 1 (ncons 2 nnil) nnil) (mkh 0 (ncons 1 nnil) (ncons 2 nnil))))))
 
-; --- the WIDENING law: padding commutes with rendering (a rival over a
-; --- narrow hull, padded up when the bubble widens, IS the rival over the
-; --- wide hull) -- pure take/drop/append fusion. the BUBBLE law: the
-; --- conflicted hull contracts to ONE seat, so the merged length reads
+; --- the widening law: padding commutes with rendering (a rival over a
+; --- narrow hull, padded up when the bubble widens, is the rival over the
+; --- wide hull) -- pure take/drop/append fusion. the bubble law: the
+; --- conflicted hull contracts to one seat, so the merged length reads
 ; --- off the hull alone -- every downstream seat determinate before
 ; --- anyone resolves ---
 (assert
@@ -5926,23 +5926,23 @@
 
 
 ; ============================================================================
-; the METAVARIABLE slice: matching is sound, the re-aim swaps home --
-; patch.v's eighth form, its two genuinely new halves. a PATTERN is a
+; the metavariable slice: matching is sound, the re-aim swaps home --
+; patch.v's eighth form, its two genuinely new halves. a pattern is a
 ; depth-indexed family (tm d): atoms and metavariables at the leaves, cells
-; one rung down, so nat_rect on the depth IS structural induction. a GROUND
-; term rides at CODE grain -- one nat under the cantor coding (the etree
-; currency: tag 0 atom, 1 metavariable, 2 cell), so a ground is an ELEMENT:
+; one rung down, so nat_rect on the depth is structural induction. a ground
+; term rides at code grain -- one nat under the cantor coding (the etree
+; currency: tag 0 atom, 1 metavariable, 2 cell), so a ground is an element:
 ; it can sit in a state, be hashed, be laid. the substitution is a duo-list
 ; threaded through a coprod option; teq collapses to nateqb at code grain,
-; so patch.v's teq_eq IS nateqbtopaths, already home. matching binds a
+; so patch.v's teq_eq is nateqbtopaths, already home. matching binds a
 ; fresh metavariable, checks a bound one (a non-linear pattern binds
-; consistently or refuses), and MATCHING IS SOUND: a pattern instantiated
-; with its own bindings SPELLS the ground code (what valid/apon lean on).
+; consistently or refuses), and matching is sound: a pattern instantiated
+; with its own bindings spells the ground code (what valid/apon lean on).
 ; the commute half: the schematic swallow re-aims a deep patch from the
 ; variable's olds seat to its news seat by prefix surgery -- involutive at
 ; address grain, two ldroplenapp reads.
 ; ============================================================================
-; --- the pattern family and its coding: leaves live at EVERY depth (the
+; --- the pattern family and its coding: leaves live at every depth (the
 ; --- left summand), cells one rung down, so any two patterns share a depth;
 ; --- tcode lays a pattern onto the element grain the states speak ---
 (assert
@@ -6025,7 +6025,7 @@
 
 ; --- matching and instantiation: the leaf lane is shared by every depth
 ; --- (an atom compares codes, a bound metavariable CHECKS, a fresh one
-; --- BINDS), the cell lane is guarded by the ground's tag -- upa/upb read
+; --- binds), the cell lane is guarded by the ground's tag -- upa/upb read
 ; --- the ground's kids, and npairunpair will reassemble them; mvside is
 ; --- the result option's no-confusion family ---
 (assert
@@ -6100,12 +6100,12 @@
       (vof 0 '(tcode 1 (mcell 0 (latom 1) (latom 1)))))
  (id? (vof 0 '(tcode 0 (lmv 4))) (vof 0 '(inst 0 (lmv 4) snil))))
 
-; --- bindings only GROW: what a match step bound stays bound, unchanged
+; --- bindings only grow: what a match step bound stays bound, unchanged
 ; --- (patch.v's mtch_mono). the leaf rung carries the verdict convoys --
 ; --- an atom or a checked metavariable hands the substitution through
 ; --- untouched, and a fresh bind's shadowing cons reads through nateqb's
 ; --- decision (agreeing keys land in sqside's empty lane); the cell rung
-; --- threads the two IHs through the remembered intermediate ---
+; --- threads the two ihs through the remembered intermediate ---
 (assert
  (defq mleaf-mono
    (pi p tmleaf
@@ -6377,12 +6377,12 @@
                       p)))))))
         d))))
 
-; --- MATCHING IS SOUND, under any extension of the bindings it produced
+; --- matching is sound, under any extension of the bindings it produced
 ; --- (patch.v's mtch_sound_ext -- the strengthening that lets the cell
-; --- case ride mtch-mono). the leaf rung: an atom's verdict IS the goal,
+; --- case ride mtch-mono). the leaf rung: an atom's verdict is the goal,
 ; --- a checked metavariable reads its binding through the extension, a
 ; --- fresh bind reads its own cons head (nateqbrefl fires the decision);
-; --- the cell rung reassembles the ground from its kids -- the two IHs,
+; --- the cell rung reassembles the ground from its kids -- the two ihs,
 ; --- npairunpair twice, and the tag verdict slid home. then the headline
 ; --- at the empty substitution ---
 (assert
@@ -6749,16 +6749,16 @@
 
 
 ; ============================================================================
-; the STORE/REPO slice: a version IS its patch set, and the repo is keyed
+; the store/repo slice: a version is its patch set, and the repo is keyed
 ; on that identity -- patch.v's identity slice (fid_swap / fid_dup) lands,
 ; then the store patch.v only promised. fid folds a frontier's hashes
-; through cins, the SAME canonical set that carries a clash's rivals, so
-; order-freedom IS cins-commutativity and dup-freedom IS cins-absorption.
+; through cins, the same canonical set that carries a clash's rivals, so
+; order-freedom is cins-commutativity and dup-freedom is cins-absorption.
 ; the key is lcode of the canonical list -- and lcode has a proven decoder
-; (ldeccode), so the digest is INJECTIVE: patch.v's "a real digest when
+; (ldeccode), so the digest is injective: patch.v's "a real digest when
 ; the store lands" parenthetical lands as a theorem (lcode-inj /
 ; repo-faithful), collision-freedom a law, not engineering. the repo
-; speaks PRESENTATIONS: sget hashes canonically before it looks, so the
+; speaks presentations: sget hashes canonically before it looks, so the
 ; store cannot even ask about replay order -- stored under one
 ; presentation, found under any other spelling the same set (repo-found;
 ; repo-swap / repo-dup the adjacent-swap and stutter corollaries), and
@@ -6974,25 +6974,25 @@
   = (vof 0 '(ii2 tt))))
 
 ; ============================================================================
-; the CRITICAL-PAIRS slice (patch.v's ninth), the uu leg: kid surgery at code
+; the critical-pairs slice (patch.v's ninth), the uu leg: kid surgery at code
 ; grain. a cell is a cantor code (gcell a b), gka/gkb read the kids back, and
-; gsub/gput read/write a tree ADDRESS (an nlist of directions, 0 the a-kid).
+; gsub/gput read/write a tree address (an nlist of directions, 0 the a-kid).
 ; the four laws mirror patch.v's RuleCommute kernel: get-put (gsubput), the
 ; two disturbance mirrors (gsubputab/gsubputba: a put on one side of the
 ; diverging seat leaves the other side's read alone), and the commute
 ; (gputcomm: diverging puts land the same tree, NO index re-aim). rw/rw2 and
 ; cp_earned stay Rocq-tier: option/mtch bookkeeping over these four.
 ; ladder style: each induction is a nat_rect over the address length whose
-; step rungs are SEALED defqs taking the IH as a hypothesis; the commute's
-; cell-swap rungs are ABSTRACT over the payloads (P Q A B ride as pis, so
+; step rungs are sealed defqs taking the IH as a hypothesis; the commute's
+; cell-swap rungs are abstract over the payloads (P Q A B ride as pis, so
 ; the towers appear once at the instantiation site, not in every statement).
 ; closed demos ride lof -- vof pays the unary grind on cell codes, lof does
 ; not (24ms vs 5s), and test/uu.l's differential battery ties the two.
 ; ============================================================================
 (assert
- ; the cell code carries its tag in the SECOND seat -- (npair pair 2), not
+ ; the cell code carries its tag in the second seat -- (npair pair 2), not
  ; (npair 2 pair) -- so the charm never meets add/tri's unfolding loop and a
- ; cell at OPEN args stays one small stuck node instead of a succ tower that
+ ; cell at open args stays one small stuck node instead of a succ tower that
  ; duplicates the core (the difference is ~10x on this whole slice's check)
  (defn gka (pi g nat nat) (lam g (upa (upa g))))
  (defn gkb (pi g nat nat) (lam g (upb (upa g))))

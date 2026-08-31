@@ -1,5 +1,5 @@
 ; crew/vi/law.l -- the editor's laws, held by assertion: every key sequence
-; below drives the PURE engine (vstep, one byte at a time) and reads the
+; below drives the pure engine (vstep, one byte at a time) and reads the
 ; tablet back -- no tty, no port, no file. the cat (`make test_vi`):
 ;
 ;   cat test/00-init.l crew/kore/text.l crew/kore/core.l crew/kore/re.l lib/lint.l \
@@ -29,7 +29,7 @@
       (= (at (vgo '("  xy") "^")) '(0 2))
       (= (at (vgo '("abcdef") "3l")) '(0 3))
       (= (at (vgo '("abcdef" "ab") "$j")) '(1 1))              ; clamp on the short line ...
-      (= (at (vgo '("abcdef" "ab" "abcdef") "$jj")) '(2 5))    ; ... but the GOAL survives
+      (= (at (vgo '("abcdef" "ab" "abcdef") "$jj")) '(2 5))    ; ... but the goal survives
       (= (at (vgo '("a" "b" "c") "G")) '(2 0))
       (= (at (vgo '("a" "b" "c") "2G")) '(1 0))
       (= (at (vgo '("a" "b" "c") "Ggg")) '(0 0))
@@ -56,7 +56,7 @@
       (= (at (vgo '("abcabc") "$Ta")) '(0 4))
       (= (at (vgo '("abc") "fz")) '(0 0)))                     ; a miss stands still
 
-; --- insert: i a I A o O, enter, backspace, escape ---
+; --- insert: i a I a o O, enter, backspace, escape ---
    _ (assert
       (= (lns (vgo '("bc") "iaX")) '("aXbc"))                  ; i, then a and X insert
       (= (lns (vgob '("ac") [105 98 27 88])) '("bac"))         ; i b ESC, then X at col 0 bites nothing
@@ -69,9 +69,9 @@
       (= (lns (vgo '("ab") "Ocd")) '("cd" "ab"))
       (= (lns (vgo '("ab" "cd") "jOx")) '("ab" "x" "cd")))
    _ (assert
-      (= (lns (vgob '("abcd") [108 108 105 13])) '("ab" "cd"))            ; ll i CR splits
+      (= (lns (vgob '("abcd") [108 108 105 13])) '("ab" "cd"))            ; ll i cr splits
       (= (at (vgob '("abcd") [108 108 105 13])) '(1 0))
-      (= (lns (vgob '("abcd") [65 120 BS BS 121])) '("abcy"))             ; A x bsp bsp y
+      (= (lns (vgob '("abcd") [65 120 BS BS 121])) '("abcy"))             ; a x bsp bsp y
       (= (lns (vgob '("ab" "cd") [106 105 BS])) '("abcd"))                ; bsp at col 0 joins up
       (= (at (vgob '("ab" "cd") [106 105 BS])) '(0 2))
       (= (at (vgob '("abc") [65 27])) '(0 2))                             ; esc steps left, fenced
@@ -179,7 +179,7 @@
       (= (st? (vgob '("a") ((bytes "x:e!") + [CR])) 'doe) '("t"))
       !(st? (vgob '("a") ((bytes ":e ") + [CR])) 'doe))                         ; no name, no request
    _ (assert
-      ; the swap starts the file over -- and re-decides the paint from the NEW name
+      ; the swap starts the file over -- and re-decides the paint from the new name
       (: q (vgo '("a" "b") "jx") _ (vload q '("x" "y" "z") "n.l")
          ((= (lns q) '("x" "y" "z")) &&
           (= (at q) '(0 0)) &&
@@ -187,30 +187,30 @@
       (: q (vgo '("a") "") _ (pin q 'hl 1) _ (vload q '("z") "n.md") !(q 'hl))
       (: q (vgo '("a") "") _ (vload q () "e.l") (= (lns q) '(""))))             ; an empty read is one empty line
 
-; --- libra ⚖ on the buffer: :lint weighs what you are LOOKING AT. one scanner
+; --- libra ⚖ on the buffer: :lint weighs what you are looking at. one scanner
 ;     (lib/lint.l) under libra's faces and this one ---------------------------
    (ex ls s) (vgob ls ((bytes (":" + s)) + [CR]))
    _ (assert
       (= (st? (ex '("(: a 1)") "lint") 'msg) "balance clean")
       (= (st? (ex '("(: a 1") "lint") 'msg) "1 warning: 1,1 unclosed (")
-      (= (at (ex '("(: a 1") "lint")) '(0 0))                  ; and it goes THERE
-      ; an unclosed opener reports where it OPENED, so the jump lands on the cause
+      (= (at (ex '("(: a 1") "lint")) '(0 0))                  ; and it goes there
+      ; an unclosed opener reports where it opened, so the jump lands on the cause
       (: q (ex '("(f x)" "(: a 1" "(g y)") "lint")
          ((= (at q) '(1 0)) && (= (q 'msg) "1 warning: 2,1 unclosed ("))))
 
-; --- the status line clips from the LEFT: its tail is the news ---------------
+; --- the status line clips from the left: its tail is the news ---------------
    (miniw ls ks m) (: st (vgo ls ks) _ (vmsg st m) _ (pin st 'w 8) _ (pin st 'h 4)
                       (vframe st))
    (frame3 tail) (E$ + "[H" + "ab" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n" + "~" + E$ + "[K\r\n"
                      + tail + E$ + "[K" + E$ + "[1;1H")
    _ (assert
-      ; 11 characters into a view 8 wide: the HEAD goes, `<` says so, and the
+      ; 11 characters into a view 8 wide: the head goes, `<` says so, and the
       ; tail -- which is where the news lives -- is what you are left looking at
       (= (miniw '("ab") "" "abcdefghijk") (frame3 "<efghijk"))
       (= (miniw '("ab") "" "12345678") (frame3 "12345678"))    ; exactly w: untouched
       (= (miniw '("ab") "" "short") (frame3 "short")))
 
-; --- the cursor sits where you are TYPING: on the status line in ex and search -
+; --- the cursor sits where you are typing: on the status line in ex and search -
    _ (assert
       (: f (mini '("ab") ":") (= (snip f (tally f - 6) (tally f)) (E$ + "[4;2H")))
       (: f (mini '("ab") ":wq") (= (snip f (tally f - 6) (tally f)) (E$ + "[4;4H")))
@@ -222,7 +222,7 @@
    hbk (hue-book ())
    (klass s) (map (\ r <r) <(hue-lex hbk s 0 1))
    (runs s in) <(hue-lex hbk s in 1)
-   ; strip SGR and ONLY SGR: \e[<digits;>m goes, \e[H and \e[K and \e[r;cH stay,
+   ; strip SGR and only SGR: \e[<digits;>m goes, \e[H and \e[K and \e[r;cH stay,
    ; because those are the frame's own geometry and the whole point is that the
    ; paint did not touch it
    (bare s)
@@ -240,7 +240,7 @@
    (hlon st) (: _ (pin st 'pens (hue-pens hue-theme ())) _ (pin st 'hl 1) st)
 
 ; --- one class per token, table order: a word lane beats the punct lanes, the
-;     number lane beats a leading sigil, and punct INSIDE a name is the name ---
+;     number lane beats a leading sigil, and punct inside a name is the name ---
    _ (assert
       (= (klass "; hi") '(comment))
       (= (klass "#!/x") '(comment))
@@ -255,17 +255,17 @@
       (= (klass "tau") '(const))
       (= (klass "$x") '(mono))                        ; the valence law, in colour
       (= (klass "a $ b") '(dyad))
-      (= (klass "+") '(dyad))                         ; a bare operator is NOT a book name
+      (= (klass "+") '(dyad))                         ; a bare operator is not a book name
       (= (klass "-3") '(number))
       (= (klass ".5") '(number))
       (= (klass "1.5e-3") '(number))
       (= (klass "1e10") '(number)))
 
-; --- a stop still ENDS the token and the walk still moves on. `,` is one: it
+; --- a stop still ends the token and the walk still moves on. `,` is one: it
 ;     reads as a symbol and terminates one ((sound "a,b") answers a, then ,b),
 ;     so the lexer meets it bare. it wears the `comma` class (hue.l's `sep` tag)
 ;     because it is its own case everywhere else too. a control byte is the case
-;     that stays UNCLAIMED, and it ends a token exactly the same way ----------
+;     that stays unclaimed, and it ends a token exactly the same way ----------
    _ (assert
       (= (klass ",") '(comma))
       (= (runs "," 0) '((comma 0 1)))
@@ -273,16 +273,16 @@
       (= (runs ("map" + (string 1) + "map") 0) '((book 0 3) (book 4 7))))   ; unclaimed: no run of its own
 
 ; --- the carry: a string spans lines (papel.l's css is forty of them), so a
-;     line's class depends on where the line BEFORE it ended -----------------
+;     line's class depends on where the line before it ended -----------------
    _ (assert
       (= (hue-carry hbk '("(: css \"a" "b\" 1)" "x")) '(0 1 0))
       (= (runs "a ; b\" c" 1) '((string 0 6)))        ; carried in: the ; is still string
       (= (runs "a ; b" 1) '((string 0 5)))            ; and it stays open to the end
-      ; keep () is the SAME walk with its answers dropped -- one lexer, provably
+      ; keep () is the same walk with its answers dropped -- one lexer, provably
       (: a (hue-lex hbk "\"x" 0 1) b (hue-lex hbk "\"x" 0 ())
          ((<>a = <>b) && !(two? <b))))
 
-; --- the word lanes are ASKED, not listed. only the three special forms are
+; --- the word lanes are asked, not listed. only the three special forms are
 ;     written out, and they are the grammar rather than the book ---------------
    _ (assert
       (: ls (map hue-arg (hue-tagged 'word))
@@ -292,18 +292,18 @@
       (0 < tally (hue-words 'values))
       (0 < tally (hue-words 'names))
       ; the probes answer what they claim to: a known macro, a known constant, a
-      ; known verb -- each in ITS lane and no other
+      ; known verb -- each in its lane and no other
       (member? "assert" (hue-words 'macros))
-      (member? "&&" (hue-words 'macros))                   ; NOT filtered: a sigil macro is a macro
+      (member? "&&" (hue-words 'macros))                   ; not filtered: a sigil macro is a macro
       (member? "tau" (hue-words 'values))
       (member? "map" (hue-words 'names))
       !(member? "+" (hue-words 'names))                    ; a bare operator belongs to the punct lanes
       !(member? "$" (hue-words 'values))
       ; sorted, because the generator freezes them into a diff-gated file
       (: w (hue-words 'names) (= w (sort w)))
-      ; ⚠ THE STABILITY LAW. both book lanes are POSITIVE tests -- a name DOES
-      ; something or IS something -- so session data (argv, cmdline, `parsed`,
-      ; which is bound only when love was handed a file) falls out of BOTH, and
+      ; the stability law. both book lanes are positive tests -- a name does
+      ; something or is something -- so session data (argv, cmdline, `parsed`,
+      ; which is bound only when love was handed a file) falls out of both, and
       ; the generated syntax file cannot depend on how the generator was started.
       (all (\ w (lit? (ev (intern w)))) (hue-words 'names))
       (all (\ w !(lit? (ev (intern w)))) (hue-words 'values))
@@ -321,7 +321,7 @@
       (: ps (hue-pens hue-theme ()) (all (\ c (string? (ps (hue-cls c)))) hue-classes))
       (all (\ r (any (\ c (id? (hue-grp c) <r)) hue-classes)) hue-theme))
 
-; --- PAINT INVARIANCE: colour adds colour and moves NOTHING. this is what keeps
+; --- paint invariance: colour adds colour and moves nothing. this is what keeps
 ;     every byte-exact frame law above meaningful once the paint exists -------
    (twin ls ks) (: a (vgo ls ks) b (vgo ls ks)
                    _ (pin a 'w 30) _ (pin a 'h 5) _ (pin b 'w 30) _ (pin b 'h 5)
@@ -345,5 +345,5 @@
       (st? (vgob '("a") ((bytes ":hl") + [CR])) 'hl)
       !(st? (vgob '("a") ((bytes ":hl") + [CR] + (bytes ":hl") + [CR])) 'hl))
 
-   _ (test_fin ())                                    ; ⚠ no zz-fin here: quit before claiming ok
+   _ (test_fin ())                                    ; no zz-fin here: quit before claiming ok
    _ (say err "crew/vi/law: motions + words + finds + insert + operators + registers + undo + search + ex + frames + hue ok") _ (put err 10) 0)

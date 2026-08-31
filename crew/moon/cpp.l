@@ -1,8 +1,8 @@
-; crew/moon/cpp.l -- the C preprocessor (rung 3 stage 5), TOKEN-BASED: it sits
+; crew/moon/cpp.l -- the C preprocessor (rung 3 stage 5), token-based: it sits
 ; between clex and cparse, so identifiers inside string/char literals are never
 ; mistaken for macros (they lexed as one opaque token). a token is (kind val
-; line); expansion tacks on a fourth element, a HIDESET (the macros a token may
-; no longer be expanded by -- Prosser's blue paint, so FOO expanding to FOO
+; line); expansion tacks on a fourth element, a hideset (the macros a token may
+; no longer be expanded by -- Prosser's blue paint, so foo expanding to foo
 ; stops). the pipeline: text -> clex -> cpp -> cparse. line splicing (\<nl>) and
 ; # / ## already fell out of the lexer.
 ;
@@ -10,17 +10,17 @@
 ; sys?) -> (1 text) | (), text then lexed and preprocessed sharing the macro
 ; table (so include guards work); () means no includes (the law harness).
 ; directives: #define (object + function, # stringize, ## paste, ... variadic
-; __VA_ARGS__), #undef, #if/#ifdef/#ifndef/#elif/#else/#endif (with defined and
+; __va_args__), #undef, #if/#ifdef/#ifndef/#elif/#else/#endif (with defined and
 ; an integer constant-expression evaluator, undefined names -> 0), #include,
 ; #error, #line (it MOVES the reported line; the file operand is dropped),
 ; #pragma (ignored -- except push_macro/pop_macro, which save and restore a
-; definition). predefined __LINE__ __FILE__ __STDC__.
-; adjacent string literals concatenate (phase 6). fenced: _Pragma, __COUNTER__,
-; the GNU ,##__VA_ARGS__ comma elision, #if with character constants.
+; definition). predefined __line__ __file__ __stdc__.
+; adjacent string literals concatenate (phase 6). fenced: _Pragma, __counter__,
+; the GNU ,##__va_args__ comma elision, #if with character constants.
 (module 'moon
 (use 'kore)
 (:
-   ; ⚠ AT THE HEAD, and they have to be: love0's compiler is single-pass and folds a
+   ; at the head, and they have to be: love0's compiler is single-pass and folds a
    ; pure global at each definition's own compile, so one of these bound mid-list reads
    ; as `;; missing m64` when the #if evaluator below is compiled. The default love
    ; takes it either way, which is exactly why it must be written down -- only the
@@ -35,17 +35,17 @@
    (vof t) <>t
    (lof t) <>>t
    (hof t) (? (3 < tally t) <>>>t ())
-   ; a numeric token's SOURCE SPELLING, which its value cannot answer: 0777 and 511
+   ; a numeric token's source spelling, which its value cannot answer: 0777 and 511
    ; are one value, 1u and 1 are one value, and a float's value is not text at all.
    ; # owes the spelling (C11 6.10.3.2), so the lexer carries it and every rebuild
    ; below hands it on. () on a token the cpp minted itself (__LINE__, defined ..),
-   ; where the value IS the spelling. ⚠ parse reuses this slot once cpp is done.
+   ; where the value is the spelling. parse reuses this slot once cpp is done.
    (sof t) (? (4 < tally t) <>>>>t ())
    (tok k v l) [k v l]
    ; -- #line (C11 6.10.4) -- the delta rides `macs`, the one state already threaded
    ; through every arm of cppgo, so no signature moves. applied where active tokens
-   ; accumulate, which is once; __LINE__ and a parse gripe both read (lof t) and so
-   ; take it for free. ⚠ REPLACE the line, never rebuild with tok: a token may carry
+   ; accumulate, which is once; __line__ and a parse gripe both read (lof t) and so
+   ; take it for free. replace the line, never rebuild with tok: a token may carry
    ; a 5th element (sof, the spelling # owes) and a rebuild would drop it.
    (lndel macs) (: d (peep macs 'lndelta 0) (? (charm? d) d 0))
    (lnbump d (p >< q >< r >< s)) (p >< q >< r + d >< s)
@@ -53,7 +53,7 @@
     (: d (lndel macs)
        (? (d = 0) l (: (go k) (? !(two? k) () (lnbump d <k >< go >k)) (go l))))
    ; -- include markers -- an #include splices the
-   ; header's OWN line numbering into the one flat output stream, so a line
+   ; header's own line numbering into the one flat output stream, so a line
    ; number alone can't say which file it is (and isn't monotone across the
    ; splice). doinc brackets each included run with these; parse's ctag pass
    ; reads them into its position table and strips them, so no later stage
@@ -61,7 +61,7 @@
    (fmin name) ['fmark 'in name]
    fmout ['fmark 'out ()]
    (idt? ('id >< _)) 1
-   ; ⚠ the value is a GUARD, never a second pattern variable: `(pv? ('p v) v)` rebinds
+   ; the value is a guard, never a second pattern variable: `(pv? ('p v) v)` rebinds
    ; v rather than demanding the two agree, so it answered 1 for every punctuator.
    (idv? ('id . v . _) s) ?(v = s)
    (pv? ('p . v . _) s) ?(v = s)
@@ -86,7 +86,7 @@
    ; C11 6.10.3.2's stringize: the argument's own spelling, quotes and escapes and
    ; all. the standard's extra \ before each " and \ buys a text that RE-LEXES to
    ; this; we hand the value straight to codegen and never re-lex it, so the
-   ; spelling IS the answer. ⚠ whitespace: one space between every pair of tokens,
+   ; spelling is the answer. whitespace: one space between every pair of tokens,
    ; where C keeps `a+1` tight -- the lexer would have to record what it dropped.
    (spellcat ts) (: (go l acc) (? !(two? l) acc
                                   (go >l (acc + (? (acc = "") "" " ") + spell <l)))
@@ -98,19 +98,19 @@
    (mfun? ('fun >< _)) 1
 
    ; -- lex a spelling back into one token (## paste result) --
-   ; ⚠ keep the SPELLING: `spell` falls back to (show (vof t)) without it, and a
+   ; keep the spelling: `spell` falls back to (show (vof t)) without it, and a
    ; float's value is pieces, not a number.
    (relex s line)
-    (clex s @ [_ (t >< _)] [<t <>t line () s])   ; ⚠ clex answers (1 toks) -- reach INSIDE
+    (clex s @ [_ (t >< _)] [<t <>t line () s])   ; clex answers (1 toks) -- reach inside
 
-   ; -- split off the first LOGICAL line (tokens sharing the head's line no.) --
+   ; -- split off the first logical line (tokens sharing the head's line no.) --
    (linesplit toks) (: ln (lof <toks)
                        (go ts acc) (? !(two? ts) [(rev acc) ()]
                                       (lof <ts = ln) (go >ts (<ts >< acc))
                                       [(rev acc) ts])
                        (go toks ()))
 
-   ; -- collect function-macro arguments: TS is positioned just after '('.
+   ; -- collect function-macro arguments: ts is positioned just after '('.
    ; returns (args rest) with args a list of token-lists (commas at depth 1
    ; split; nested parens preserved), rest past the closing ')'. () on error. --
    (collargs ts)
@@ -129,11 +129,11 @@
 
    ; -- ## paste: fold a token list, pasting across every (p "##") by joining
    ; the previous result token's spelling with the next token's.
-   ; an EMPTY ## operand is a placemarker (C11 6.10.3.3p2): it pastes to whatever it
+   ; an empty ## operand is a placemarker (C11 6.10.3.3p2): it pastes to whatever it
    ; meets and then vanishes, and two of them paste to another. subst mints them, this
-   ; folds them, and the sweep at the end drops any that met no ##. ⚠ without one, an
+   ; folds them, and the sweep at the end drops any that met no ##. without one, an
    ; empty operand left the ## unfolded -- `A ## B` with B empty emitted a literal ##,
-   ; and `A ## B ; bob` pasted A with the `;` and ATE it when the join failed to relex. --
+   ; and `A ## B ; bob` pasted a with the `;` and ate it when the join failed to relex. --
    (pmk? ('pmark >< _)) 1
    (paste toks line)
     (: (nopm l) (? !(two? l) () (pmk? <l) (nopm >l) (<l >< nopm >l))
@@ -148,7 +148,7 @@
        (go toks ()))
 
    ; -- substitute args into a function-macro body. a param preceded by # is
-   ; stringized; a param that is an operand of ## substitutes UNEXPANDED; else
+   ; stringized; a param that is an operand of ## substitutes unexpanded; else
    ; it substitutes the fully-expanded arg. then ## pastes are folded. --
    ; (adjh is a closure-local, not a sibling -- a lambda PARAMETER named after a
    ; sibling :-local gets shadowed by boxfix's shared cell, so the macro-body
@@ -169,7 +169,7 @@
                  (idt? t && -1 < paramidx params (vof t))       ; a named parameter
                   (: pi (paramidx params (vof t))
                      raw (argn args pi)
-                     ; an EMPTY argument beside a ## is a placemarker, not nothing
+                     ; an empty argument beside a ## is a placemarker, not nothing
                      sub (? !(adjh i) (expand raw macs)
                             (two? raw) raw
                             [(tok 'pmark "" line)])
@@ -196,7 +196,7 @@
                    (<l + (tok 'p "," 0 >< join >l)))
        (join (skip args np)))
 
-   ; -- the expander: rescan TOKS, replacing macro invocations (honoring
+   ; -- the expander: rescan toks, replacing macro invocations (honoring
    ; hidesets), fully. mutually recursive with subst via expand-of-arg. --
    (expand toks macs)
     (? !(two? toks) ()
@@ -249,16 +249,16 @@
                       (ceval r2))
 
    ; -- #if's value model (C11 6.10.1) -- every operand has type intmax_t or
-   ; uintmax_t, so a value is a 64-bit BIT PATTERN plus a signedness, carried as
-   ; (v u) with v in [0,2^64). ⚠ none of this falls out of love's integers, which
-   ; are exact and unbounded: `1UL - 2` must WRAP to a huge unsigned, not answer -1.
+   ; uintmax_t, so a value is a 64-bit bit pattern plus a signedness, carried as
+   ; (v u) with v in [0,2^64). none of this falls out of love's integers, which
+   ; are exact and unbounded: `1UL - 2` must wrap to a huge unsigned, not answer -1.
    (w64 x) (: r (x - (m64 * (x // m64))) (? (r < 0) (r + m64) r))
    (cv v u) [(w64 v) !!u]
    (csg p) (: v <p (? ((cvu p) || (v < h64)) v (v - m64)))   ; the value as C reads it
-   ; ⚠ TRUTH IS `!= 0`, never `0 <`: reading it as positive made every negative #if
-   ; take the wrong arm in silence -- `#if -1` was FALSE, and so was `#if -1 && 1`.
+   ; truth is `!= 0`, never `0 <`: reading it as positive made every negative #if
+   ; take the wrong arm in silence -- `#if -1` was false, and so was `#if -1 && 1`.
    (ctrue p) (? (0 = <p) 0 1)
-   ; ⚠ love's bit ops answer NOTHING on a big, and every pattern past the fixnum is
+   ; love's bit ops answer nothing on a big, and every pattern past the fixnum is
    ; one -- so split into 32-bit limbs, which bigs do take, and recombine. << and >>
    ; route around the same hole through multiply and divide.
    (cbit fn x y) (: xh (x // b32) yh (y // b32)
@@ -268,14 +268,14 @@
    (cabs x) (x < 0 ? -x x)
    (ctdiv a b) (: q (cabs a // cabs b) (? ((a < 0) = (b < 0)) q -q))    ; C truncates toward zero
    (cdiv a b) (: va (cvv a) vb (cvv b) u (cru a b)
-                 (? (vb = 0) (cv 0 u)              ; a divide by zero is UB; answer 0 rather than raise
+                 (? (vb = 0) (cv 0 u)              ; a divide by zero is ub; answer 0 rather than raise
                     u (cv (va // vb) 1)
                     (cv (ctdiv (csg a) (csg b)) 0)))
    (cmod a b) (: va (cvv a) vb (cvv b) u (cru a b)
                  (? (vb = 0) (cv 0 u)
                     u (cv (va - ((va // vb) * vb)) 1)
                     (: x (csg a) y (csg b) (cv (x - ((ctdiv x y) * y)) 0))))
-   ; ⚠ a shift takes the LEFT operand's type -- no conversion pairs the two here
+   ; a shift takes the left operand's type -- no conversion pairs the two here
    (cshift a b left)
     (: p (: k (cvv b) (? (64 <= k) 0 (k 2)))       ; 2**k, and a shift past the word is 0
        (? (p = 0) (cv 0 (cvu a))
@@ -339,14 +339,14 @@
                           (: re (ccond ><>rt) [(? (ctrue <r) <rt <re) <>re])
                           r))
                     r))
-   (ceval ts) (ctrue <(ccond ts))                  ; the BIT -- docond only ever wanted truth
+   (ceval ts) (ctrue <(ccond ts))                  ; the bit -- docond only ever wanted truth
 
    ; -- parse a #define body into a macro entry --
    (defmacro macs line-toks)                        ; line-toks: after the leading (# define)
     (? !(two? line-toks) ()
        (: name (vof <line-toks)
           r >line-toks
-          ; function-like ONLY if '(' immediately follows the name (no space) -- the
+          ; function-like only if '(' immediately follows the name (no space) -- the
           ; lexer marks a glued '(' with a 4th token field (`#define F(x)` vs the
           ; object macro `#define EOF (-1)`, whose '(' is spaced and begins the body).
           (? (two? r && pv? <r "(" && <>>><r)
@@ -369,7 +369,7 @@
    ; -- #pragma push_macro("X") / pop_macro("X") (gcc/msvc): the save is a per-name
    ; stack riding macs under a key no C identifier can spell, each cell the entry as
    ; saved (() = was undefined). a pop with nothing saved is a no-op, gcc's reading;
-   ; the body reads RAW, so a user macro named pop_macro cannot interfere (cts 00206). --
+   ; the body reads raw, so a user macro named pop_macro cannot interfere (cts 00206). --
    (pragmac? body) (two? body && idt? <body &&
                     member? (vof <body) '("push_macro" "pop_macro"))
    (dopragmac macs body)
@@ -382,20 +382,20 @@
                 ()))))
 
    ; -- adjacent string literal concatenation (phase 6) --
-   ; it also RETIRES the file marks here, in the one pass that already rebuilds
+   ; it also retires the file marks here, in the one pass that already rebuilds
    ; the whole spine -- so parse receives a clean stream and pays nothing for a
-   ; separate strip. the SPANS it collects on the way -- ((index file)..),
+   ; separate strip. the spans it collects on the way -- ((index file)..),
    ; which file each stretch of the flat output came from -- land in a stash
    ; rather than riding back up, so the walk keeps its original shape: adding a
    ; return value would have meant either a rev of the whole stream or a pair
    ; allocated per token, and this pass runs over every token of every compile.
-   ; ⚠ the join must see THROUGH a mark: src/main.c splices the egg by
+   ; the join must see through a mark: src/main.c splices the egg by
    ; #include-ing bare string literals between two of its own ("(" then egg.h
    ; then "'(" ..), so the strings a mark sits between are exactly the ones
-   ; that have to join. a mark consumed mid-join takes effect AFTER the merged
-   ; token (index n + 1) -- the joined literal belongs to the file its FIRST
+   ; that have to join. a mark consumed mid-join takes effect after the merged
+   ; token (index n + 1) -- the joined literal belongs to the file its first
    ; piece came from.
-   ; the string FAMILY joins across a prefix: C11 6.4.5p5 -- a narrow piece takes the
+   ; the string family joins across a prefix: C11 6.4.5p5 -- a narrow piece takes the
    ; wide side's kind (its bytes are UTF-8 text, so the decode reads them right), and
    ; two different wide prefixes keep the first (gcc refuses; nothing here spells it)
    (strk? k) (member? k '(str wstr str16 str32))
@@ -403,7 +403,7 @@
    (fmark? ('fmark >< _)) 1
    (fmpush t files) (? (vof t = 'in) (lof t >< files) >files)
    (fmtop files) (two? files ? <files)
-   spanacc {}                               ; the spans, REVERSED, of the strcat-pass now running
+   spanacc {}                               ; the spans, reversed, of the strcat-pass now running
    (spanat n files) (pin spanacc 'l ([n (fmtop files)] >< peep spanacc 'l ()))
    ; -> the rest after a run of marks, the file stack they leave, and whether
    ; the next real token is a string (so the caller knows to join)
@@ -421,43 +421,43 @@
                       (strcat-pass (tok (jork (kof t) (kof <nxt)) (vof t + vof <nxt) (lof t) >< >nxt) n fs)))))))
 
    ; -- the driver: walk logical lines, run directives, expand active code.
-   ; macs is a MUTABLE tablet (so #define/#undef persist and includes share it);
+   ; macs is a mutable tablet (so #define/#undef persist and includes share it);
    ; cond is a stack of (active taken line) frames; buf accumulates active code
    ; tokens, flushed (expanded) whenever a directive or EOF interrupts. --
    (dirname t) (t @ ('kw . q . _) (show q) (_ . q . _) q) ; #if/#else lex as keywords -> their text
    ; the refusal channel: a gripe, which the driver locates.
    ; gripeat mints one at the directive that failed; gripein stamps the file on
-   ; the way out of an #include, which lexed from its OWN line 1.
+   ; the way out of an #include, which lexed from its own line 1.
    (gripeat line msg) (gripe () (two? line ? (lof <line) ()) () msg)
-   (gripein g f) (? <>g g (gripe f <>>g <>>>g <>>>>g))   ; ⚠ moon.l's `el` is catted AFTER this file
+   (gripein g f) (? <>g g (gripe f <>>g <>>>g <>>>>g))   ; moon.l's `el` is catted after this file
    (condactive cond) (? !(two? cond) 1 <<cond)
    (parentactive cond) (? !(two? cond) 1 <<cond)
-   ; buf accumulates REVERSED (a cat per line re-copies the whole run -- love.c's
+   ; buf accumulates reversed (a cat per line re-copies the whole run -- love.c's
    ; longest directive-free run is ~50k tokens); tokflush restores source order (its name must not shadow the core port flush -- the crew shares the default book now).
    (tokflush buf macs out) (revcat (expand (rev buf) macs) out)
    ; -- the header memo. a runtime archive is 197 members that each open with
    ; the same #include against the same macro table, and re-preprocessing those
-   ; headers is half of what a member costs. so a TU's FIRST include is recorded
+   ; headers is half of what a member costs. so a TU's first include is recorded
    ; as (path text pre toks post), and a later TU matching all three of those
    ; replays the tokens and the table instead of doing the work.
-   ; the pre-state is part of the KEY, not a hint: two TUs whose -D lists differ
+   ; the pre-state is part of the key, not a hint: two TUs whose -D lists differ
    ; never share an entry, and an edited header never matches its own record.
-   ; ⚠ __FILE__ is the one predefine that differs per TU, so it is held out of
-   ; both snapshots -- and a header that EXPANDED it would bake the recording
+   ; __file__ is the one predefine that differs per TU, so it is held out of
+   ; both snapshots -- and a header that expanded it would bake the recording
    ; TU's name into every replay, which mleak? declines at record time.
    memo {}                                       ; 'l -> the entries, newest first
    (mkey? k) ((string? k) && !(k = "__FILE__"))
    (msnap macs)                                  ; the table as a value `=` can compare
     (sortby (\ a b (<a <= <b))
             (foldl (\ acc k (? (mkey? k) (acc + [[k (peep macs k ())]]) acc)) () (keys macs)))
-   ; the pre-state is a subset of the post-state's KEYS -- a header only adds
+   ; the pre-state is a subset of the post-state's keys -- a header only adds
    ; names or blanks them (#undef pins ()) -- so pinning the recorded pairs
    ; over a matching table reproduces it exactly.
    (mrestore macs snap) (foldl (\ _ e (pin macs <e <>e, 0)) 0 snap)
    (mleak? toks fname) (any (\ t ((kof t = 'str) && (vof t = fname))) toks)
-   ; COMPARED, never digested: a path, a 4 kB text and a 60-name table are three
+   ; compared, never digested: a path, a 4 kB text and a 60-name table are three
    ; structural equalities, where hashing them costs more per TU than the miss it
-   ; avoids. ⚠ what the key CANNOT see is the -I list a nested include would have
+   ; avoids. what the key cannot see is the -I list a nested include would have
    ; walked, so this rides one assumption: a process does not compile two TUs
    ; under one -D set with different search paths. every driver door here builds
    ; `is` once (moon.l's cc-parse), and the two rtmems lanes differ in their first
@@ -480,20 +480,20 @@
                  dir (? (two? >line) (dirname <>line) ())   ; if/else are keywords; the rest ids
                  dirk (? (two? >line) (kof <>line) ())      ; ..and its kind, which is how a line marker is known
                  body >>line
-                 ; ⚠ a DIRECTIVE line never reaches the accumulator below, so the
+                 ; a directive line never reaches the accumulator below, so the
                  ; #line shift lands here or `#if __LINE__` reads the physical line.
                  ; `line` itself stays raw -- the #line arm computes its delta from it.
                  sline (lnshift macs line)
                  sbody (? (two? sline) >>sline ())
                  (? (member? dir '("if" "ifdef" "ifndef" "elif" "else" "endif"))
                      (: cond2 (docond dir sbody sline macs cond)
-                        (? (id? cond2 'err) (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- FATAL, not empty
+                        (? (id? cond2 'err) (gripeat sline ("#" + dir + " without #if"))   ; unbalanced -- fatal, not empty
                            (cppgo rest macs cond2 () out1 incf)))
                     !(condactive cond) (cppgo rest macs cond () out1 incf)      ; skipped: ignore non-cond directives
                     (dir = "define") (defmacro macs body, cppgo rest macs cond () out1 incf)
                     (dir = "undef") (pin macs (vof <body) (), cppgo rest macs cond () out1 incf)
                     (dir = "include") (doinc body macs cond out1 rest incf)
-                    ; ⚠ SAY THE TEXT. an #error is the program telling you what is wrong in
+                    ; say the TEXT. an #error is the program telling you what is wrong in
                     ; its own words, and "#error directive" throws that away -- pdclib's
                     ; config prints which type it could not match, and the bare form left
                     ; 232 refused files with nothing to read.
@@ -507,10 +507,10 @@
                       cppgo rest macs cond () out1 incf)
                     (dir = "pragma" && pragmac? body)
                      (dopragmac macs body, cppgo rest macs cond () out1 incf)
-                    ; #line N ["file"]: the NEXT line becomes N, so a token at
-                    ; physical P reports P + (N - L - 1). ⚠ the file operand is
-                    ; parsed and DROPPED -- __FILE__ is the TU's name throughout.
-                    ; ⚠ an operand that is not already a digit sequence is MACRO-EXPANDED
+                    ; #line N ["file"]: the next line becomes N, so a token at
+                    ; physical P reports P + (N - L - 1). the file operand is
+                    ; parsed and dropped -- __file__ is the TU's name throughout.
+                    ; an operand that is not already a digit sequence is macro-expanded
                     ; and then has to be one (C11 6.10.4p3) -- `#line line`. one that
                     ; still is not falls to the ignore below, as before.
                     (dir = "line")
@@ -524,7 +524,7 @@
                         !(two? >line) || id? dirk 'num)
                      (cppgo rest macs cond () out1 incf)
                     ; ..and anything else is a directive we do not implement, where
-                    ; ignoring it drops whatever it would have done IN SILENCE --
+                    ; ignoring it drops whatever it would have done in silence --
                     ; an unconfigured `#cmakedefine` template compiles clean and the
                     ; name it owed is simply absent (C11 6.10p1 wants the
                     ; diagnostic). #include_next lands here too: unimplemented, and
@@ -558,13 +558,13 @@
        'err)
 
    ; #include: resolve via incf, lex, and preprocess sharing macs. incf may
-   ; answer (1 text child-incf): the child resolves the INCLUDED file's own
-   ; quote includes relative to ITS dir (gcc's rule -- src/cb.c's unity
+   ; answer (1 text child-incf): the child resolves the included file's own
+   ; quote includes relative to its dir (gcc's rule -- src/cb.c's unity
    ; include of ../crew/quay/quay.c needs quay.c's "quay.h" found beside it);
    ; a plain (1 text) keeps this incf (the laws feed includes as data).
    (doinc body macs cond out rest incf)
     (? !(condactive cond) (cppgo rest macs cond () out incf)
-       ; the THIRD form (C89 6.8.2): tokens matching neither <h> nor "h" are
+       ; the third form (C89 6.8.2): tokens matching neither <h> nor "h" are
        ; macro-expanded and must then match one -- freetype's `#include FT_FREETYPE_H`,
        ; which every Xft consumer reaches through.
        (: b (? (incname body) body (expand body macs))
@@ -572,38 +572,38 @@
           name (incname b)
           txt (? name (incf name sys?) ())
           spelt (? sys? ("<" + name + ">") ("\"" + name + "\""))
-          ; only a TU's FIRST include is a memo candidate: a deeper one runs
+          ; only a TU's first include is a memo candidate: a deeper one runs
           ; against a table this very include already moved, so its pre-state
           ; is its includer's business and the compare would never hit.
           nth (peep macs 'ninc 0)
           _ (pin macs 'ninc (nth + 1))
-          (? !(two? txt) (gripeat body ("cannot resolve #include " + spelt))      ; unresolved -> FATAL
+          (? !(two? txt) (gripeat body ("cannot resolve #include " + spelt))      ; unresolved -> fatal
              (: ipath (? (3 < tally txt) <>>>txt "")   ; incload's resolved path; "" from a bare (1 text)
                 pre (? (nth = 0) (msnap macs) ())
                 got (? (nth = 0) (mfind ipath <>txt pre) ())
-                ; the marks bracket the header's run. `out` is the REVERSED
+                ; the marks bracket the header's run. `out` is the reversed
                 ; accumulator, so a link onto it appends in source order: the
                 ; 'in mark lands before the header's tokens, the 'out mark
-                ; after them. the marks are minted HERE, never memoized -- they
-                ; carry the spelling THIS #include used.
+                ; after them. the marks are minted here, never memoized -- they
+                ; carry the spelling this #include used.
                 (rejoin toks)
                  (cppgo rest macs cond () (fmout >< ((rev toks) + (fmin name >< out))) incf)
                 (? (two? got) (: _ (mrestore macs <>>>>got) (rejoin <>>>got))
                    (: lr (clex <>txt)
-                      ; ⚠ okv?, not two? -- a gripe IS a pair, and a two? here would read
-                      ; a refusal as a token list and walk it. a LOCATED refusal is the
+                      ; okv?, not two? -- a gripe is a pair, and a two? here would read
+                      ; a refusal as a token list and walk it. a located refusal is the
                       ; header's own and takes its name; a bare one is knowable only at
                       ; the #include, and stays there.
                       (? !(okv? lr) (? (gripe? lr) (gripein lr name) (gripeat body ("lex error in " + spelt)))
                          (: itoks <>lr
                             chf (: c <>>txt (? c c incf))
-                            ; ⚠ the #line delta is the header's OWN: macs is shared, so save
+                            ; the #line delta is the header's own: macs is shared, so save
                             ; it across the recursion or a header's #line follows the return
                             sv (lndel macs)
                             _ (pin macs 'lndelta 0)
-                            raw (cppgo itoks macs () () () chf)       ; recurse with FRESH cond; shares macs
+                            raw (cppgo itoks macs () () () chf)       ; recurse with fresh cond; shares macs
                             _ (pin macs 'lndelta sv)
-                            ; a nested failure PROPAGATES up, wearing the file it happened
+                            ; a nested failure propagates up, wearing the file it happened
                             ; in (never wipe `out` for it, and never answer () -- an empty
                             ; answer masks as an empty include, and the ancestor doinc then
                             ; drops its accumulated `out` and reorders the stream).
@@ -620,15 +620,15 @@
    (cpp toks incf fname)                              ; -> (1 out) | a gripe (test with okv?, never two?)
     (: macs (: t {}
                _ (pin t "__STDC__" ['obj [(tok 'num 1 0)]])
-               ; WHO IS COMPILING. every other predefine here says something about
+               ; who is compiling. every other predefine here says something about
                ; the language or the machine; this one says the compiler, and it is
                ; the seam a source uses to pick a spelling only we accept -- the
-               ; kernel's asmops.h reaches for it to write holo's NEUTRAL inline-asm
-               ; template for us and GNU's AT&T/ARM string for clang, one header,
+               ; kernel's asmops.h reaches for it to write holo's neutral inline-asm
+               ; template for us and GNU's at&T/ARM string for clang, one header,
                ; both builds. cpp's, not the driver's: it is true of every mooncc
                ; compile, target and flags alike.
                _ (pin t "__mooncc__" ['obj [(tok 'num 1 0)]])
-               ; __FILE__ -> the TU path as a string literal. pinned as an object
+               ; __file__ -> the TU path as a string literal. pinned as an object
                ; macro (not per-token) so it costs nothing until used; includes
                ; share this table, so it reads the top file's name throughout --
                ; fine for assert/error diagnostics, which live in the .c anyway.
@@ -637,52 +637,52 @@
                ; C11: cc has _Static_assert (+ _Alignas/varargs). advertising 201112
                ; lets gnulib take its _Static_assert lane (verify.h) not a fallback trick.
                _ (pin t "__STDC_VERSION__" ['obj [(tok 'num 201112 0)]])
-               ; HOSTED: a cc-built object links against libc into a hosted program,
-               ; so love.c must take its hosted lanes -- the W^X mmap+mprotect code
-               ; arena (toast/nif), NOT the freestanding heap copy (which is NX, so
+               ; hosted: a cc-built object links against libc into a hosted program,
+               ; so love.c must take its hosted lanes -- the w^x mmap+mprotect code
+               ; arena (toast/nif), not the freestanding heap copy (which is NX, so
                ; a glazed native body jumped into non-executable heap and faulted).
                ; the whole tco=0 corpus missed it: the glaze is the only arena user
                ; and it's gated off on trampoline builds.
                _ (pin t "__STDC_HOSTED__" ['obj [(tok 'num 1 0)]])
-               ; the ARCH predefine (__x86_64__ / __aarch64__) is the DRIVER's:
+               ; the arch predefine (__x86_64__ / __aarch64__) is the driver's:
                ; cc.l prepends it as a -D-style define by target (love.c's AiArch/
                ; ImageArch read it -- a build without one believed its arch was
                ; "other" and the glaze handed holo an unknown target).
-               ; __SIZEOF_INT128__ rides the DRIVER's -D channel too, on the
+               ; __sizeof_int128__ rides the driver's -D channel too, on the
                ; targets gen carries the d128 lane for (x64, arm64): love.c
                ; takes 64-bit limbs there -- and on x64 the `divq` __asm__ lane
                ; with them; every other target keeps the portable 32-bit branch.
-               ; the OS predefines (__linux__ and kin) are the DRIVER's too,
+               ; the OS predefines (__linux__ and kin) are the driver's too,
                ; like the arch's: moon.l's osdefs rides them down the -D
                ; channel, picked by -os. cpp says the language and the
-               ; compiler; the machine AND the OS are the driver's to name.
+               ; compiler; the machine and the OS are the driver's to name.
                ; gcc's limit predefines, the ones the host seam reads. only the
-               ; target-blind ones live here -- __LONG_MAX__ and the whole
+               ; target-blind ones live here -- __long_max__ and the whole
                ; <stdint>-shaped family fork on the word width, so they ride the
                ; driver's table (moon.l stddefs) down the -D channel.
                _ (pin t "__INT_MAX__" ['obj [(tok 'num 2147483647 0)]])
-               ; FLT_MAX exactly: (2 - 2^-23) * 2^127 = 2^128 - 2^104, double-exact
+               ; flt_max exactly: (2 - 2^-23) * 2^127 = 2^128 - 2^104, double-exact
                ; (love.c's 32-bit dtoa branch reads it; gcc predefines it everywhere)
                _ (pin t "__FLT_MAX__" ['obj [(tok 'flo ((2.0 - (/ 1.0 8388608.0)) * 127 2.0) 0)]])
-               ; ..and the DOUBLE twin, (2 - 2^-52) * 2^1023, built the same exact way
+               ; ..and the double twin, (2 - 2^-52) * 2^1023, built the same exact way
                ; (love.c's dtoa reads it as its finite ceiling)
                _ (pin t "__DBL_MAX__" ['obj [(tok 'flo ((2.0 - (/ 1.0 4503599627370496.0)) * 1023 2.0) 0)]])
-               ; bool/true/false BUILTIN (C23-style, no <stdbool.h> needed): modern C
-               ; (gnulib, gzip) uses them bare. bool IS _Bool -- one byte, stores
+               ; bool/true/false builtin (C23-style, no <stdbool.h> needed): modern C
+               ; (gnulib, gzip) uses them bare. bool is _Bool -- one byte, stores
                ; normalize to 0/1; true/false the 1/0 constants.
                _ (pin t "bool"  ['obj [(tok 'kw '_Bool 0)]])
                _ (pin t "true"  ['obj [(tok 'num 1 0)]])
                _ (pin t "false" ['obj [(tok 'num 0 0)]])
                t)
        r (cppgo toks macs () () () incf)
-       ; the spans ride the stream's HEAD as one marker token, so cpp keeps its
+       ; the spans ride the stream's head as one marker token, so cpp keeps its
        ; single (1 out) channel and parse peels them in O(1). a caller that
        ; feeds parse raw lexer output simply has none, and parse reads ().
-       ; the spans ride the stream's HEAD as one marker token, so cpp keeps its
+       ; the spans ride the stream's head as one marker token, so cpp keeps its
        ; single (1 out) channel and parse peels them in O(1). a caller that
        ; feeds parse raw lexer output simply has none, and parse reads ().
        (? (gripe? r) r
           (: _ (pin spanacc 'l ())
              out (strcat-pass r 0 ())
-             [1 (tok 'fspans (rev (peep spanacc 'l ())) 0 >< out)]))))       ; an EMPTY token list is a valid empty TU, not a failure -- only a gripe fails
+             [1 (tok 'fspans (rev (peep spanacc 'l ())) 0 >< out)]))))       ; an empty token list is a valid empty TU, not a failure -- only a gripe fails
 ) ; module 'moon

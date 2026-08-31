@@ -1,5 +1,5 @@
 ; --- lush 🐚 the line -- prompt, history, completion, the repl loops ---
-; NO BRACKETS HERE: the runtime supplies the layer (see job.l for the cat law).
+; no brackets here: the runtime supplies the layer (see job.l for the cat law).
 ;
 ; line editing on a real tty is bao's editor -- `edlnc`, edln + Tab completion:
 ; sh-complete takes the text left of the cursor, finds the word under it, and
@@ -7,10 +7,10 @@
 ; in command position, pathnames (the glob walk, ~ unfolded and refolded)
 ; everywhere else; one candidate also lands its "/" or " ". the prompt is the
 ; grml feel: last status when nonzero, cwd with ~ shrunk, the git branch when
-; a .git sits on the walk up, then $ (or # for root). history PERSISTS:
+; a .git sits on the walk up, then $ (or # for root). history persists:
 ; ~/.lush_history is append-on-Enter (a crash loses nothing) and the last 100
 ; lines seed edln's recall at birth. the raw/cooked dance and the "> " (PS2)
-; continuation ride as before; lush-help is the interactive FLOOR -- a scare
+; continuation ride as before; lush-help is the interactive floor -- a scare
 ; drops to cooked, prints ;; a b, welps to the zero point, and the loop
 ; re-prompts: a crash never eats the terminal (installed in (sh _), main.l).
 

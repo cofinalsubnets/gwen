@@ -1,15 +1,15 @@
-; peg -- gw.js-style PARSER COMBINATORS. A parser is (\ s y n) over a string s, with a SUCCESS
-; continuation y = (\ rest payload) and a FAILURE continuation n = (\ rest); payloads are lists that
+; peg -- gw.js-style parser combinators. a parser is (\ s y n) over a string s, with a success
+; continuation y = (\ rest payload) and a failure continuation n = (\ rest); payloads are lists that
 ; `seq` concatenates. The leaves are `lit` (a literal prefix), `one` (one char by predicate) and `span`
 ; (a maximal run) -- love has no regex. `parse` requires the whole input consumed; `runp` is the lenient
-; twin (keeps the payload, ignores trailing slack). An EMPTY payload is the UNIT, never the 0 nil-tail
+; twin (keeps the payload, ignores trailing slack). An empty payload is the unit, never the 0 nil-tail
 ; fossil: `cat` propagates whatever tail it is handed, so a single 0 from eps/opt/skip/many rides all the
 ; way out and `=` tells the two terminators apart -- a payload that should equal a map-built list would
 ; not. The unit is the only nil that leaves here.
 ;
-; a MODULE THE BOOT NEVER SPLICES: it is registered with the rest, and each consumer opens with
+; a module the boot never splices: it is registered with the rest, and each consumer opens with
 ; its own top-level (use 'peg), then reads the names bare off that splice -- crew/holo/text.l,
-; crew/cook/cook.l, crew/lapiz/lapiz.l, crew/sat/dimacs.l. ⚠ the (use ..) must be its OWN
+; crew/cook/cook.l, crew/lapiz/lapiz.l, crew/sat/dimacs.l. the (use ..) must be its own
 ; top-level form: a `:` body compiles as one unit, so a use nested inside the form that reads
 ; the names runs too late to serve it.
 
@@ -18,7 +18,7 @@
    (lit l s y n) (? (#l <= #s && l = snip s 0 #l)
                   (y (snip s #l #s) [l])
                   (n s))
-   ; ⚠ the payload element is a ONE-CHAR STRING, not the charm: every element a peg
+   ; the payload element is a one-char string, not the charm: every element a peg
    ; parser yields is then a string fragment, so a consumer's join is pure concat.
    ; the predicate still sees the charm.
    (one p s y n) (? (0 < #s && p (s 0))
@@ -40,13 +40,13 @@
    ; --- the set the consumers kept re-deriving (crew/lapiz/lapiz.l had all of these
    ; --- under a comment reading "the combinators peg's set lacked") ------------
    (nope s y n) (n s)                                            ; the always-failing parser: alts' unit
-   (notp a s y n) (a s (_ \ _ \ n s) (_ \ y s ()))              ; NEGATIVE LOOKAHEAD -- consumes nothing either way
+   (notp a s y n) (a s (_ \ _ \ n s) (_ \ y s ()))              ; negative lookahead -- consumes nothing either way
    (many1 a) (seq a (many a))
    alts (foldr alt nope)
-   (pack a) (pmap (p \ [p]) a)                                   ; a whole payload folded to ONE element
+   (pack a) (pmap (p \ [p]) a)                                   ; a whole payload folded to one element
    (tag f a) (pmap (p \ [(f p)]) a)                              ; ..and that element built into a node
-   (dflt a v) (alt a (pmap (_ \ [v]) eps))                       ; a always yields ONE element, v when absent
-   (parse p s) (p s (r \ x \ r @ "" x) ())     ; STRICT: whole input must parse
-   (runp p s)  (p s 0 ()))                           ; LENIENT: keep the payload, ignore trailing slack
+   (dflt a v) (alt a (pmap (_ \ [v]) eps))                       ; a always yields one element, v when absent
+   (parse p s) (p s (r \ x \ r @ "" x) ())     ; strict: whole input must parse
+   (runp p s)  (p s 0 ()))                           ; lenient: keep the payload, ignore trailing slack
 
 ) ; module peg

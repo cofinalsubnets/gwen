@@ -5,8 +5,8 @@
 (map (\ n (? (member? n (names ())) () (ev [': [n 'x] ()]))) '(quit close run getenv))
 (? (member? 'open (names ())) () (ev '(: (open x y) ())))
 
-; the READER UNDER TEST -- the socket. every print->read
-; differential in the tree reads through this ONE binding (test/roundtrip.l,
+; the reader under test -- the socket. every print->read
+; differential in the tree reads through this one binding (test/roundtrip.l,
 ; test/fuzz.l, test/host/rdiff.l), so the whole set moves by rebinding it here
 ; and nowhere else. the protocol is `sound`'s: (r text) answers the datum consed
 ; onto the rest, () at a clean end, or `torn` where the shape ran out of text.
@@ -14,7 +14,7 @@
 
 (: test_t0 (clock 0)
  ; a name the book lacks ends the run, file mode's law. a welp window says a miss is the
- ; SUBJECT; outside one, absence read as data is a bug the tally would otherwise hide.
+ ; subject; outside one, absence read as data is a bug the tally would otherwise hide.
  (test-strict a b) (: _ (say err (";; " + show a + " " + show b)) _ (put err 10)
                       _ (flush err) _ (quit 1) (welp a b))
  (term_esc string) (do (putc 27) (puts string))
@@ -30,8 +30,8 @@
    test_state (tablet 0)
    (test_set k v) (pin test_state k v)
    (test_get k) (peep test_state k 0)
-   ; a failed assert RECORDS and carries on, so one run shows every failure -- zz-fin.l
-   ; prints the list and quits 1. ⚠ a runner that does not end in zz-fin.l owes a
+   ; a failed assert records and carries on, so one run shows every failure -- zz-fin.l
+   ; prints the list and quits 1. a runner that does not end in zz-fin.l owes a
    ; (test_fin ()) of its own before it claims ok, or its failures exit 0 in silence.
    (test_fin u) (: f (test_get 'fail)
                    (? (two? f)

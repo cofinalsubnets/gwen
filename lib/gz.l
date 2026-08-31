@@ -433,7 +433,7 @@
    ; the previous length three to six times, 17 and 18 are runs of zero, three to ten
    ; and eleven to a hundred and thirty-eight. a value is always spelled once before
    ; 16 may repeat it.
-   ; the order is the format'S, not ours: the code-length code declares its own
+   ; the order is the format's, not ours: the code-length code declares its own
    ; lengths in this permutation so the rarely-used ones sit at the tail and can be
    ; trimmed off. both sides read the same row.
    gz-clord (star-tray '(19) '(16 17 18 0 8 7 9 6 10 5 11 4 12 3 13 2 14 1 15))

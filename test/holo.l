@@ -1,22 +1,22 @@
-; the crew/holo/ assembler -- a CORE language service, baked into the post-egg layer of both
+; the crew/holo/ assembler -- a core language service, baked into the post-egg layer of both
 ; the host `love` and the bootstrap `love0` (src/main.c), so the corpus exercises it under
-; BOTH compilers, like prel/ev. Its whole surface is ONE public name: `holo`, a book --
+; both compilers, like prel/ev. Its whole surface is one public name: `holo`, a book --
 ; reached through the module registry: (from 'holo) answers the opaque accessor, so
 ; (A 'assemble) is the call and the internals live one probe away (the loader wraps the
 ; whole entry in one layer and registers it: namespacing, not hiding).
-; NOT in the kernel/wasm frontends (a host-only bake, like the parser combinators), so
+; not in the kernel/wasm frontends (a host-only bake, like the parser combinators), so
 ; guard on its presence: (from 'holo) answers () where it was never baked -- no
-; missing-read warning. and the HOST bakes its NATIVE backend only (mooncc.image carries
+; missing-read warning. and the host bakes its native backend only (mooncc.image carries
 ; all), so each backend's goldens gate on its presence in (A 'backends) -- under love0
 ; (every backend baked) both blocks run, on the host the native one does. The full
 ; encoder gate (every backend golden, objdump-checked, + the text/elf frontends) stays in
-; test/holo/golden.l (`make test_holo`, its own cat-stream of the sources), and the AT&T
-; front's in test/holo/as.l (`make test_as`); this is the SMOKE that the MODULE reaches the
-; runtime and assembles bit-identically -- it lives HERE, at test/'s top, because the corpus
+; test/holo/golden.l (`make test_holo`, its own cat-stream of the sources), and the at&T
+; front's in test/holo/as.l (`make test_as`); this is the smoke that the module reaches the
+; runtime and assembles bit-identically -- it lives here, at test/'s top, because the corpus
 ; glob is a non-recursive test/*.l.
 ; reg map: r0=rax, r7=x86-r8 .. r10=x86-r11; goldens copied from golden.l (objdump-verified).
 (? (lit? (from 'holo))                                     ; presence check via the registry -- () when holo isn't baked (wasm/kernel)
-   (: A (from 'holo)                                       ; the module accessor; bindings LOCAL (a body-having :)
+   (: A (from 'holo)                                       ; the module accessor; bindings local (a body-having :)
       holo-hex (A 'holo-hex)  assemble (A 'assemble)  label-at (A 'label-at)
       _
       (? (peep (A 'backends) 'amd64 0)
@@ -34,7 +34,7 @@
            (holo-hex 'amd64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret))))
         (= 17 (label-at (assemble 'amd64 '((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret))) 'done)))
        0)
-      ; -- the aarch64 backend rides the SAME neutral IR (a second target, byte-checked as data) --
+      ; -- the aarch64 backend rides the same neutral IR (a second target, byte-checked as data) --
       (? (peep (A 'backends) 'arm64 0)
        (assert
         (= "2000028b" (holo-hex 'arm64 '((add r0 r1 r2))))

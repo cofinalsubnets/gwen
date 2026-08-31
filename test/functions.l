@@ -13,17 +13,17 @@
  (= 2 (1 2))                                  ; (1 2) = 2 ** 1
  (= 1 (2 1))                                  ; (2 1) = 1 ** 2
  (= 9 ((\ f n (f n)) 2 3))                    ; (2 3) = 3 ** 2
- (= 97 ('abc 0))                              ; a NAMED point indexes its spelling, the sequence
+ (= 97 ('abc 0))                              ; a named point indexes its spelling, the sequence
  (= 99 ('abc 2))                              ;   it already is to tally, net and `+`
  (nil? ('abc 9))                              ; past the spelling: nothing there
  (= 'abcx ('abc 'x))                          ; two named points join to a point
- (nil? ((mint 0) 5))                          ; an ANONYMOUS point has no spelling: nothing there
+ (nil? ((mint 0) 5))                          ; an anonymous point has no spelling: nothing there
  (= 8 (3 2))                                  ; (3 2) = 2 ** 3
  (= 13 ((3 (+ 1)) 10)))                       ; non-numeric operand -> (+ 1) composed 3 times on 10
 ; the whole numeric tower is a Church numeral, not just fixnums (data.c data_num_apply
 ; routes float/box/complex/array/bignum operators through num-ap, like the odd-tag
 ; fixnum path). 0 applied to anything is 1 -- it *is* const-1, the zero numeral.
-; the compose count is ($ n) -- SATURATING, true to the !!$ truth bits: a non-positive
+; the compose count is ($ n) -- saturating, true to the !!$ truth bits: a non-positive
 ; numeral acts as the zero numeral, a float ceils, a complex/array its saturated net.
 (assert
  (= 8 (3 2.0))                                ; float operand: 2.0 ** 3 = 8.0, = bridges to 8
@@ -35,7 +35,7 @@
  (= 1 (0 'anything))                          ; 0 is const-1: (0 x) = 1 for every x
  (nil? ((cask 4) 'anything))                ; opaque handles (cask/port) hold nothing to answer
  (aall (= (2 (star-tray '(3) '(2 3 4))) (star-tray '(3) '(4 9 16))))  ; array operand: elementwise ** broadcast
- (aall (= ((star-tray '(3) '(2 3 4)) 5) (gem-tray '(3) '(25.0 125.0 625.0))))  ; array OPERATOR: 5 ** [2 3 4] elementwise (vmap2 power)
+ (aall (= ((star-tray '(3) '(2 3 4)) 5) (gem-tray '(3) '(25.0 125.0 625.0))))  ; array operator: 5 ** [2 3 4] elementwise (vmap2 power)
  (= 15 (((star-tray '(2) '(2 3)) (+ 1)) 10))   ; array operator on a fn: compose ($ [2 3]) = 2+3 = 5, the net sum
  (= 13 (((3 ~ 4) (+ 1)) 10))               ; complex operator on a fn: compose ($ (3 ~ 4)) = 3, the real part
  (= 10 (((-3 ~ 4) (+ 1)) 10))             ; ... but a complex sorting negative saturates to 0

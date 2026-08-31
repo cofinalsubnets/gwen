@@ -1,13 +1,13 @@
 ; test/bell.l -- port of test/bell.rb: Bell numbers B(0),B(1),... rendered in
 ; base 36, one per line, while the rendering's length stays <= n (Ruby's
-; ARGV[0], default 280). Built from binomials, with n! and B both memoized:
+; argv[0], default 280). Built from binomials, with n! and B both memoized:
 ;     B(n) = sum_{k<n} C(n-1,k) * B(k)      (B(0)=B(1)=1)
 ;     C(n,k) = n! / (k! (n-k)!)
 ; The output exceeds 64-bit integers almost immediately, so this leans on the
 ; bignum tower (* / %); the last lines are 280-digit base-36 numbers.
 ;
 ; Faithful port, with one forced deviation: Ruby's `memo` closes the cache
-; hash over a *returned* closure. A l closure that closes over a variable
+; hash over a *returned* closure. a l closure that closes over a variable
 ; currently miscomputes when called re-entrantly (a self-call), e.g.
 ;     (: (mk z) (\ n (? (< n 1) 1 (* n (self (- n 1))))) self (mk 0))
 ;     (self 1)   ; => 0, should be 1
@@ -328,7 +328,7 @@
     "mi8h4wpnceb9ujej8gucr6ak2zyxl1e1en7ptpbzh04w72nw5c3ch498aggxpe8cm8fc0fgcwh6vaw8mkh51sn9yrvcl6jgutdyk62mwsm78cms5p8plrrna9qfg667uzepm8uu6wmr6hd9c8bgtdvrubg85rmzj0ch0829vv5zw5ysh0ddv2nz03ksab4dydj6sh50yvcdo5njnu1v8ivvmpr7h3j3lgchduhq8asn7it2lg8jxlfm66id8xlknzgglg9wlcauq4zsgk5ppmwci"
    )
  (assert
-  ; the Bell numbers themselves, decimal, cross-checked vs OEIS A000110
+  ; the Bell numbers themselves, decimal, cross-checked vs oeis a000110
   (= 1 (bell 0)) (= 1 (bell 1)) (= 2 (bell 2)) (= 5 (bell 3)) (= 15 (bell 4))
   (= 52 (bell 5)) (= 203 (bell 6)) (= 877 (bell 7)) (= 4140 (bell 8))
   (= 21147 (bell 9)) (= 115975 (bell 10)) (= 4213597 (bell 12)) (= 27644437 (bell 13))

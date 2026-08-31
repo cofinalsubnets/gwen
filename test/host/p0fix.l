@@ -1,4 +1,4 @@
-; test/host/p0fix.l -- p0's SPECIMEN. never evaluated (deliberately absent from
+; test/host/p0fix.l -- p0's specimen. never evaluated (deliberately absent from
 ; hostnif_tests): it is TEXT, read by rdiff's A/B leg. p1.l and love/egg.l are the
 ; only .l files p0 reads for real, and they are two forms between them -- too thin
 ; to measure agreement on, so this spans the subset p0 owns on purpose.
@@ -25,11 +25,11 @@
 ; floats, the lane a token takes when it is none of the three integer shapes
 (0.0) (1.5) (-1.5) (3.141592653589793) (2.718281828459045) (100000.0)
 
-; strings, and love's escapes -- n t r e 0 x and NOTHING else
+; strings, and love's escapes -- n t r e 0 x and nothing else
 ("") ("a") ("a b c") ("(not a form)") (";not a comment")
 ("\n") ("\t") ("\r") ("\e") ("\0") ("\x41") ("\\") ("\"")
 
-; a spaced operator is a plain symbol to both readers -- it is the GLUE that parts them
+; a spaced operator is a plain symbol to both readers -- it is the glue that parts them
 (= a b) (+ 1 2) (< a b) (- a b) (a = b)
 
 ; comments run to end of line, including after a form

@@ -1,17 +1,17 @@
-; crew/lux/sigs.l -- lux's OVERLAY: an optional, observe-only type domain for
+; crew/lux/sigs.l -- lux's overlay: an optional, observe-only type domain for
 ; the pure StackSet (crew/lux/core.l) + the layout geometry (crew/lux/layout.l).
-; The vocabulary as dies: a WINDOW is not a TAG is not a RECT -- nominal kinds
+; The vocabulary as dies: a window is not a tag is not a rect -- nominal kinds
 ; over values that are all innocent charms/lists at runtime, so the classic
 ; slip (a tag handed to zins, a window handed to wsview) is flagged at compile
 ; time and nothing changes at run time (the overlay law: erasable). Gradual:
-; an unknown (a cap/cup harvest, a local) rides through; only a KNOWN kind in
+; an unknown (a cap/cup harvest, a local) rides through; only a known kind in
 ; the wrong seat clashes. Install with (overlay-set lux-dom lux-sigs), or check
 ; a form pure with ((overlay 'ov-check1) lux-dom lux-sigs form) -- boot/overlay.l
-; gates core.l + layout.l CLEAN against this table, and the deliberate wound
+; gates core.l + layout.l clean against this table, and the deliberate wound
 ; flagged. This is rung 1 of typing lux; the uu-proved StackSet laws ride
 ; on top of it (memory: the verified-xmonad ladder).
 ;
-; a body-LESS `:` -- lux-dom/lux-sigs leak; neither shadows a nif.
+; a body-less `:` -- lux-dom/lux-sigs leak; neither shadows a nif.
 (:
    (lux-join a b) (a = b ? a 'top)
    (lux-tr op a b) 'top

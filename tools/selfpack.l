@@ -1,41 +1,41 @@
 ; tools/selfpack.l -- cut the source archive from the tree itself.
 ;
-;   love tools/selfpack.l ARCHIVE.tar.gz TOP [STAMP [DROP..]]
+;   love tools/selfpack.l archive.tar.gz top [stamp [drop..]]
 ;
-; the ONE cutter, every world: the tree on disk is the source, checkout and
-; seed-laid tree alike. pack it under TOP (love-<ver>) -- everything sb ignores
+; the one cutter, every world: the tree on disk is the source, checkout and
+; seed-laid tree alike. pack it under top (love-<ver>) -- everything sb ignores
 ; (.sb/ignore + its built-ins, so the vcs walk and this cut read ONE list and a
 ; generated file named there leaves both), plus this cut's own structural skips:
-; bin/ dl/, everything HIDDEN at the root (.git .sb .claude .cache .gitignore ..)
+; bin/ dl/, everything hidden at the root (.git .sb .claude .cache .gitignore ..)
 ; is the machine's and the checkout's and never the source's, doc/misc is the
-; design record rather than the product, and each DROP nom is left out by name
-; -- with a sorted walk and every mtime pinned to STAMP, so
+; design record rather than the product, and each drop nom is left out by name
+; -- with a sorted walk and every mtime pinned to stamp, so
 ; the same files answer the same bytes wherever they sit. test_distboot
 ; holds a re-cut to the byte.
 ;
-; AND THE ONE STAMP: the sha of the leveled tar is the tree's content id, kept
-; in ARCHIVE.sha. run every make (a force rule); the gzip is paid only when the
+; and the one stamp: the sha of the leveled tar is the tree's content id, kept
+; in archive.sha. run every make (a force rule); the gzip is paid only when the
 ; tree's content actually moved -- a touch settles, a delete or rename is seen.
-; the walk PRUNES before it reads (sp-keep?), and the coder is src/deflate.c
+; the walk prunes before it reads (sp-keep?), and the coder is src/deflate.c
 ; through gz.l's door, so a full cut is seconds -- on a runner that carries the
 ; nifs; love0 carries none, which is why the recipe prefers the tree's own love.
 ;
-; ⚠ AND THE QUIET RUN NEVER BUILDS THE ARCHIVE. Every make asks the same question
+; and the quiet run never builds the archive. Every make asks the same question
 ; -- has the tree moved? -- and the answer used to cost a full cut: read every
 ; file, pack ten megabytes, hash them, drop them. The thin pass (tar-thin? +
-; tar-hash) answers it as a STREAM instead: stat the tree, then hash the archive
-; those entries DESCRIBE, a bufferful at a time, holding neither the bodies nor
+; tar-hash) answers it as a stream instead: stat the tree, then hash the archive
+; those entries describe, a bufferful at a time, holding neither the bodies nor
 ; the tar. Same id, same rule -- content, never an mtime -- for 175 MB against
 ; 293 MB and about half the time. The cut below still reads each file once, and
 ; it is the cut that writes the sidecar, so what .sha names is always the archive
 ; that was written and never the pass that only looked.
-; named as PATHS, not module names, because love0 has no image to carry them: it is
+; named as paths, not module names, because love0 has no image to carry them: it is
 ; gcc-built from the love/*.l headers alone, so `(use 'tar)` under it has no registered
 ; tablet to find and the loader has no business inventing one. each file's own
 ; (module 'nm ..) head registers it as it loads, which is all a later `use` needs.
 ; the order is the dependency order: kore's text+diff floor under sb, dns under sb's http.
 ;
-; a path, never `-l`: `-l FILE` whose basename names a verb SEATS it (love/verbs.l's
+; a path, never `-l`: `-l FILE` whose basename names a verb seats it (love/verbs.l's
 ; seatof -- the installed shebang's lane), so `-l crew/sb/sb.l` runs sb instead of
 ; loading it. `use` on a string touches no command line.
 (use "lib/tar.l")
@@ -53,22 +53,22 @@
                      _ (? q 0 (sp-die ("cannot write " + p)))
                      _ (say q s)
                      (close q))
-   ; THE RULES, AND SB OWNS THEM: .sb/ignore plus sb's own built-ins, so the vcs
+   ; the rules, and sb owns them: .sb/ignore plus sb's own built-ins, so the vcs
    ; walk and the dist cut cannot disagree about what this tree is -- one law, one
-   ; file, and a generated file named there drops out of BOTH. then the cut's own
+   ; file, and a generated file named there drops out of both. then the cut's own
    ; structural skips, which no ignore file may take away: `.*` is hidden at the
-   ; ROOT, the machine's and the checkout's and never the source's; doc/misc is
+   ; root, the machine's and the checkout's and never the source's; doc/misc is
    ; the design record rather than the product (doc/ itself stays -- the man pages
    ; are written in doc/{love,cook,lush}.md and `make install` in an unpacked
-   ; release generates all three from them); and each DROP nom by name.
+   ; release generates all three from them); and each drop nom by name.
    sp-own '("bin" "dl" "doc/misc" ".*")
    sp-ign? (from 'sb 'ign?)
    (sp-rules drops) (((from 'sb 'igs) 0) + sp-own + drops)
-   ; handed to the WALK, not run after it: what the archive will not carry is never
+   ; handed to the walk, not run after it: what the archive will not carry is never
    ; read (out/ and dl/ are gigabytes on a build box, and a rejected directory is
    ; never descended into at all).
    (sp-keep? rules nom) (! (sp-ign? nom rules))
-   ; re-home the kept entries under TOP -- the walk is already sorted, so order
+   ; re-home the kept entries under top -- the walk is already sorted, so order
    ; is preserved.
    (sp-take es top acc)
     (? !(two? es) (rev acc)
@@ -76,8 +76,8 @@
           _ (pin e 'nom (top + "/" + (tar-get e 'nom "")))
           (sp-take >es top (e >< acc))))
 
-   ; the tree root leads the walk; TOP goes in behind it wearing the root's mode,
-   ; and the rest is re-homed under TOP. shared, so the thin pass and the cut level
+   ; the tree root leads the walk; top goes in behind it wearing the root's mode,
+   ; and the rest is re-homed under top. shared, so the thin pass and the cut level
    ; the same entries the same way and their digests are comparable.
    (sp-lev es top stamp)
     (: root <es
@@ -97,7 +97,7 @@
        have (sp-read arch)
        fresh (two? old && two? have && (= (<(>old)) h))
        ; an archive with no sidecar (a seed-laid tree, a fresh checkout of out/):
-       ; adopt it when its content IS this content -- no rewrite, so its mtime
+       ; adopt it when its content is this content -- no rewrite, so its mtime
        ; holds and nothing downstream re-links.
        adopt (? (fresh || !(two? have)) 0
                 (: u (gz-unzip (<(>have))) (two? u && (= (<(>u)) a))))
@@ -115,16 +115,16 @@
        arch <av
        top (<(>av))
        stamp (? (3 <= n) (<(sound (<(>(>av))))) 0)
-       ; ⚠ TOP joins the drops: a tree never packs an unpacked copy of itself.
+       ; top joins the drops: a tree never packs an unpacked copy of itself.
        ; a release untarred at the root (a field test's leftover) otherwise
        ; rides the next blob, and the artifact swallows a whole second love.
        drops (top >< (? (3 <= n) (>(>(>av))) ()))
        side (arch + ".sha")
-       ; THE THIN PASS: stat the tree, hash the archive it describes, and settle the
+       ; the thin pass: stat the tree, hash the archive it describes, and settle the
        ; run when that id is the one the sidecar already names and the archive is
        ; still there. `stat` and not a read -- the question is whether the file
-       ; EXISTS, and its three megabytes have nothing to say about that.
-       ; ⚠ a () is not an answer. a torn read (a file that moved under the walk) or
+       ; exists, and its three megabytes have nothing to say about that.
+       ; a () is not an answer. a torn read (a file that moved under the walk) or
        ; a nom too long for ustar answers one, and both fall through to the cut,
        ; which reads each file once and so cannot disagree with itself.
        rules (sp-rules drops)

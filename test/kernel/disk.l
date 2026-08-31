@@ -1,9 +1,9 @@
 ; --- test/kernel/disk.l: the disk (rung 5) -- the virtio driver's raw door,
 ; then lib/fat.l (off the ramfs, the module walk) mounted on the real device.
-; GUARDED on (disk ()): a door whose bus hides the disk skips with a word and
+; guarded on (disk ()): a door whose bus hides the disk skips with a word and
 ; stays green -- the driver already said why at boot, on the serial console.
-; ⚠ the raw probe writes sector 16: inside FAT32's reserved region, which the
-; fs below never touches -- the two halves share one disk across REBOOTS, and
+; the raw probe writes sector 16: inside FAT32's reserved region, which the
+; fs below never touches -- the two halves share one disk across reboots, and
 ; that is the point: tools/kdisk.l boots this corpus twice on one image and
 ; greps the second log for "disk: fat kept" -- the reset-persistence gate.
 (: dn (disk ())

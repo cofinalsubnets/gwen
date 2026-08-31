@@ -14,10 +14,10 @@
    ; new one is a row here and not another leg on a tuple every caller re-spells
    (gflag t c) (peep t c 0)
    ; a pattern text -> its node list, by the dialect and the -F/-i flags. a
-   ; NEWLINE SPLITS: GNU reads one pattern per line, which is also how -e stacks
+   ; newline splits: GNU reads one pattern per line, which is also how -e stacks
    (gnodes t txt)
-    ; ⚠ THE PARSER'S SHAPE IS (1 nodes ngroups), so -F answers the same three.
-    ; ⚠ AND -F WALKS BY INDEX: `two?` is false for a string, so (map f s) is () --
+    ; the parser's shape is (1 nodes ngroups), so -F answers the same three.
+    ; and -F walks by index: `two?` is false for a string, so (map f s) is () --
     ; which reads as the empty pattern and matches every line
     (: (one s) (? (gflag t 70) [1 (map (\ i ['chr (s i)]) (jot (tally s))) 0]
                   ((? (gflag t 69) reere rebre) s))
@@ -27,12 +27,12 @@
         (ls @ (l >< more)
            (one l @ [_ nds _] (go more ((wrap nds) >< acc)) ())
            [1 (rev acc)])
-       ; ⚠ the empty pattern is ONE empty pattern, not none: `lines ""` is (), and
+       ; the empty pattern is one empty pattern, not none: `lines ""` is (), and
        ; a walk over () would answer no patterns at all -- so `grep ''`, which
        ; matches every line in GNU, would match nothing here
        ls (lines txt)
        (go (? (two? ls) ls [""]) ()))
-   ; -w: the span must not sit inside a word. checked at the SPAN, not the
+   ; -w: the span must not sit inside a word. checked at the span, not the
    ; pattern, because a word boundary is not a node this engine can hold
    (gword? c) ((48 <= c <= 57) || (65 <= c <= 90) || (97 <= c <= 122) || (c = 95))
    ; the leftmost match of any of ms (compiled) in ln, word-bounded if w? -> (1 st en) | ()
@@ -48,7 +48,7 @@
        (foldl best () ms))
    (grep-main as)
     (: t (tablet 0)
-       o (uopts as t '(101 109) ())              ; -e PATTERN (stacks), -m COUNT
+       o (uopts as t '(101 109) ())              ; -e pattern (stacks), -m count
        _ (? (two? o) () (udie 2 "grep: bad option"))
        eps <>o rest <>>o
        ; with -e the whole tail is files; without it the first word is the pattern
@@ -69,7 +69,7 @@
        (emit1 label no ln)
         (: (go i)
             (gfind ast ln w? i @ [_ st en]
-              ; ⚠ a ZERO-LENGTH match prints NOTHING (GNU's rule, and `-o '[a-z]*'`
+              ; a zero-length match prints nothing (GNU's rule, and `-o '[a-z]*'`
               ; is how you meet it) -- but it still advances, or the walk sits still
               (: _ (? (st < en)
                       (: _ (pfx label)
@@ -79,7 +79,7 @@
                  (? (en < tally ln) (go (? (en = st) (en + 1) en)) ()))
               ())
            (go 0))
-       ; one input through the chosen face; answers the hit flag onward. ⚠ it READS a
+       ; one input through the chosen face; answers the hit flag onward. it reads a
        ; line at a time -- grep of 50 MB used to hold 8.2 GB, because `lines` made a
        ; string and a cell for every line before the first one was matched. -q and -l
        ; stop at the first hit, which is now a stop and not just a shortcut.
@@ -107,7 +107,7 @@
                                    ())
                               (lp (no + 1) (? m 1 h) (? m (seen + 1) seen))))))
                  (lp 1 hit 0))))
-       ; `bad`, not `err`: err is the PORT, and a shadow here would say into a charm
+       ; `bad`, not `err`: err is the port, and a shadow here would say into a charm
        st (tablet 0) _ (pin st 'hit 0) _ (pin st 'bad 0)
        _ (ureachm (\ f (: _ (say err ("grep: " + f + ": No such file or directory"))
                           _ (put err 10) _ (pin st 'bad 1) 0))

@@ -24,7 +24,7 @@
  (nil? (= (dig [1 (\ a (\ 5)) 2]) (dig [3 (\ a (\ 5)) 2]))))
 
 ; {…} reader form: splices a list operand into (hash …), wraps an atom as (hash x) --
-; a BOX. {} reads to the EMPTY MAP directly: the reader emits (tablet 0) -- () is the
+; a box. {} reads to the empty map directly: the reader emits (tablet 0) -- () is the
 ; zero-point, distinct from 0. hashes print as {…}, the empty map as {}.
 (: ht {1 100 2 200 3 300})
 (assert
@@ -38,17 +38,17 @@
  (= "{}" (show {}))                              ; {} is the empty map, and round-trips
  (= "{1 \"hi\"}" (show {1 "hi"})))
 
-; a brace over a NON-LIST datum boxes it: {x} = {() x}, a fresh mutable hash pinning x
+; a brace over a non-list datum boxes it: {x} = {() x}, a fresh mutable hash pinning x
 ; at () (the unit -- the do-nothing key is NOTHING, the 0->() flip) -- still distinct
-; from {} the empty map (one ()-keyed entry vs no entries). key 0 is a MISS now.
+; from {} the empty map (one ()-keyed entry vs no entries). key 0 is a miss now.
 (: bx {0})
 (assert
  (tablet? {0}) !!{0} (= 1 ${0})                    ; a box is a nonempty 1-entry hash
  (= 0 (peep bx () 9))                           ; the boxed value sits at key () (the unit)
- (= 9 (peep bx 0 9))                            ; ... and key 0 is a MISS (the flip's tell)
+ (= 9 (peep bx 0 9))                            ; ... and key 0 is a miss (the flip's tell)
  (= 9 (: _ (pin bx () 9) (peep bx () 0)))       ; ... and is mutable in place
  (= 5 (peep {5} () 0)) (= "s" (peep {"s"} () 0))  ; any scalar boxes (at the unit)
- (= 'a (peep {'a} () 0))                        ; a quote form is a chain, and the brace still BOXES it
+ (= 'a (peep {'a} () 0))                        ; a quote form is a chain, and the brace still boxes it
  (= "{() 5}" (show {5}))                     ; a box prints as {() v}, reads back
  (= 7 (peep {1 2 7} () 0))                      ; an odd trailing operand lands in the box slot (the unit key)
  (= 2 (peep {1 2 7} 1 0)))

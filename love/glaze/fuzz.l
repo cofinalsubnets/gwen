@@ -15,8 +15,8 @@
 ; the trailing `fires=` line is the proof of work: nonzero in the glazed run, zero in
 ; the other, or the diff is over nothing.
 ;
-; three dimensions the value pools alone do not reach. gfz4 carries an EFFECT and its ledger
-; rides every line, so a lane whose deopt RESTARTS over a call-out diverges on the count even
+; three dimensions the value pools alone do not reach. gfz4 carries an effect and its ledger
+; rides every line, so a lane whose deopt restarts over a call-out diverges on the count even
 ; where the answer agrees. the 100 arity runs an accumulating loop past fixnum range, which is
 ; the only way an overflow guard -- and the deopt behind it -- is ever reached. and bleaf holds
 ; a constant past that range, which cannot be laid as a tagged immediate at all.
@@ -30,7 +30,7 @@
    (gfz1 i) (i * 2)                                ; two handing back a value the integer lane cannot hold
    (gfz2 i) (i < 2 ? " " i)
    (gfz3 i) (i < 2 ? '(1 2) i)
-   FZL (tablet 0)                                  ; gfz4's ledger: an EFFECT, so a lane whose deopt
+   FZL (tablet 0)                                  ; gfz4's ledger: an effect, so a lane whose deopt
    (gfz4 i) (: _ (pin FZL 'n (1 + peep FZL 'n 0)) (i + 1))   ; restarts over one diverges on the count, not the answer
    _ (rng-set (wheel 20260729))                    ; fixed seed: the two runs must generate the same forms
    (pick l) (l (rand #l))

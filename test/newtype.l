@@ -1,6 +1,6 @@
-; newtypes -- a DIE strikes COINS: user-defined kinds that ride the generic +/*.
-; a coin is a typed hot (die + payload) reading KHot, so every +/* combination
-; routes to the KHot lane where the coin is intercepted and the die's plus/times
+; newtypes -- a die strikes coins: user-defined kinds that ride the generic +/*.
+; a coin is a typed hot (die + payload) reading khot, so every +/* combination
+; routes to the khot lane where the coin is intercepted and the die's plus/times
 ; run over the loaded payloads. () stays the +/* identity for free (the mint hoist
 ; sits above the matrix); net/=/</show default over the payload in the C core.
 ; `coin`/`load`/`coin?`/`die-of` are the raw primitives; `ring`/`monoid` the builders.
@@ -9,15 +9,15 @@
    z5 (ring 'z5 (\ x y ((x + y) % 5)) (\ x y ((x * y) % 5)))
    a  (z5 3)
    b  (z5 4)
-   ; a SUM monoid -- a plus but no times (a monoid has no product)
+   ; a sum monoid -- a plus but no times (a monoid has no product)
    sm (monoid 'sm (\ x y (x + y)))
    smp (sm 2)
    smq (sm 3)
-   ; a COUNTED kind -- net-mode 1 (slot 6): nets by tally, not by content
+   ; a counted kind -- net-mode 1 (slot 6): nets by tally, not by content
    cntd {0 'cnt 6 1}
    (cnt p) (coin cntd p)
    (assert
-    ; --- what a coin IS ---
+    ; --- what a coin is ---
     (coin? a)                      ; a is a coin
     !(coin? 5)               ; a plain value is not
     !(coin? "s")
@@ -38,10 +38,10 @@
     (z5 2 = a * b)             ; (3*4) mod 5 = 2
     (z5 0 = z5 2 + z5 3)   ; wraps to 0
 
-    ; --- the () laws, inherited FREE (one per face) ---
+    ; --- the () laws, inherited free (one per face) ---
     (a = () + a)                 ; () is +'s identity
     (a = a + ())                 ; ... either side
-    (() = () * a)                ; ... and *'s ZERO: it annihilates
+    (() = () * a)                ; ... and *'s zero: it annihilates
     (() = a * ())
 
     ; --- a monoid has a +, but no * ---
@@ -65,7 +65,7 @@
     (6 = +[(sm 1) (sm 2) (sm 3)])    ; net flows through a list of coins: 1+2+3
     (6 = $[(sm 1) (sm 2) (sm 3)])    ; ... and $ saturates the same sum
 
-    ; --- two DISTINCT newtypes have no canonical +/* -> nil (like string*string) ---
+    ; --- two distinct newtypes have no canonical +/* -> nil (like string*string) ---
     !(a + sm 3)            ; z5 coin + sm coin
     !(a * sm 3)
     (sm 5 = sm 2 + sm 3)   ; ... but same-die still combines
@@ -73,9 +73,9 @@
     ; --- tally delegates to the payload ---
     (3 = (tally (sm [7 8 9])))    ; a coin over a 3-list tallies its payload
 
-    ; --- net-mode 1 (slot 6): net by TALLY -- truth reads "has any", never "sums green" ---
-    (2 = $(cnt [1 -5]))      ; content sums -4; the COUNT is 2
-    !!(cnt [-3])      ; red content, still true: one element is SOMETHING
+    ; --- net-mode 1 (slot 6): net by tally -- truth reads "has any", never "sums green" ---
+    (2 = $(cnt [1 -5]))      ; content sums -4; the count is 2
+    !!(cnt [-3])      ; red content, still true: one element is something
     !(cnt ())                ; an empty payload counts 0 -> nothing
     (0 = $(cnt ()))
     (3 = +[(cnt [1]) (cnt [1 1])])      ; counts flow through the list sum: 1+2
@@ -87,7 +87,7 @@
     (q 1 2 = q 2 3 * q 3 4)    ; 2/3 * 3/4 = 1/2
     (q 1 2 = q 2 4)                ; reduced on construction
     (q 1 2 = q [1 2])             ; the 2-list form (what show reads back)
-    ; show is reduced, and REPARSABLE -- which wants the payload quoted: a bare (1 2)
+    ; show is reduced, and reparsable -- which wants the payload quoted: a bare (1 2)
     ; in a form is an application, so the old (q (1 2)) read back as q applied to 2.
     ("(q '(1 2))" = show (q 2 4))
     (q 1 2 = ev (cap (sound (show (q 2 4)))))   ; ..and that is the whole claim, checked
@@ -114,14 +114,14 @@
     !(a / z5 2)                ; a die without slot 8 -> nil
     !(a / sm 3)                ; distinct dies never combine
 
-    ; --- a method OWNS its domain: off it (no star / (n d)-of-stars face), () ---
+    ; --- a method owns its domain: off it (no star / (n d)-of-stars face), () ---
     !(q 1 2 + [(q 1 1) (q 0 1)])    ; a chain of coins is not an (n d)
     !(q 1 2 * ['x])                 ; nor a chain of symbols
     !(q 1 2 - "s")                   ; nor text
     (q 1 1 = q 1 2 + [1 2])           ; ... but a bare (n d) of stars reads as n/d
 
-    ; --- an OPEN star (slot 7): q declares its coins numeric, so a numeral
-    ;     POWERS them through their own * (exact squaring) instead of composing ---
+    ; --- an open star (slot 7): q declares its coins numeric, so a numeral
+    ;     powers them through their own * (exact squaring) instead of composing ---
     (q 1 4 = 2 (q 1 2))            ; (n x) = x**n, through the die
     (q 8 27 = 3 (q 2 3))
     (q 1 4 = q 1 2 ** 2)         ; the apply operator rides the same law
@@ -132,21 +132,21 @@
     (q 9 4 = q 2 3 ** -2)        ; the apply operator rides the same law
     !(-1 (q 0 1))                ; zero has no reciprocal power
     !((1 / 2) (q 4 1))           ; a non-whole exponent off the tower: ()
-    !(coin? (2 (sm 3)))          ; an UNflagged coin still composes (a closure)
+    !(coin? (2 (sm 3)))          ; an unflagged coin still composes (a closure)
 
-    ; --- net-mode 2 (RATIO): a rational's TRUTH is its VALUE's sign, exactly ---
-    !(q -1 2)                    ; a negative rational IS nothing: red by value
+    ; --- net-mode 2 (RATIO): a rational's truth is its VALUE's sign, exactly ---
+    !(q -1 2)                    ; a negative rational is nothing: red by value
     !!(q 1 2)              ; a positive one is something
     !(q 0 5)                     ; zero is the blue floor
     (1 = $(q 1 2))                ; $ ceils the magnitude: 1/2 -> 1
     (2 = $(q 3 2))                ; ceil 3/2
     (0 = $(q -7 2))               ; ... and clamps red to the floor
-    !!(q 1 2 - q 1 3)     ; the subtract-and-test sign idiom HOLDS: 1/2 - 1/3 is green
+    !!(q 1 2 - q 1 3)     ; the subtract-and-test sign idiom holds: 1/2 - 1/3 is green
     !(q 1 3 - q 1 2)            ; ... and 1/3 - 1/2 is red: nothing
     !!(q 1 (1000 10))      ; a 10^1000 denominator underflows the double --
     !(q -1 (1000 10))            ; ... the sign survives it, both ways
 
-    ; --- the order half: a ratio coin seats IN the number band, by VALUE ---
+    ; --- the order half: a ratio coin seats in the number band, by VALUE ---
     (q 1 3 < q 1 2)                ; value order, not payload order
     !(q 1 2 < q 1 3)
     !(q 1 2 < q 2 4)         ; equal values tie (either side)
@@ -157,21 +157,21 @@
     (1 < q 3 2)
     (q 3 2 >= 1)                     ; the reversed faces ride the same lane
     (q 1 2 <= q 2 4)
-    (1 < q 9007199254740993 9007199254740992)   ; 1 + 2^-53: the double quotient TIES at 1.0;
+    (1 < q 9007199254740993 9007199254740992)   ; 1 + 2^-53: the double quotient ties at 1.0;
                                        ; the exact cross-multiply tier does not
     ([(q -1 2) (q 1 3) (q 1 2) 1 (q 3 2) 2] =
      (sort [2 (q 1 2) 1 (q 3 2) (q 1 3) (q -1 2)]))    ; sort interleaves by value
-    (q 9 1 < cnt [1])             ; a NON-ratio coin keeps the coin band, above the numbers
+    (q 9 1 < cnt [1])             ; a non-ratio coin keeps the coin band, above the numbers
 
-    ; --- rung 2: a declared star SELF-NETS, so the vocabulary follows the flag ---
-    (q 1 2 = +(q 1 2))          ; net answers the coin ITSELF (the fixpoint, by declaration)
+    ; --- rung 2: a declared star self-nets, so the vocabulary follows the flag ---
+    (q 1 2 = +(q 1 2))          ; net answers the coin itself (the fixpoint, by declaration)
     (star? (q 1 2))                    ; ... so star? holds with no coin branch of its own
     !(star? a)                   ; an undeclared coin still nets its payload: no star
     !(star? (sm 3))
-    (q 5 6 = +[(q 1 2) (q 1 3)])    ; additivity lands IN the ring: an exact rational sum
+    (q 5 6 = +[(q 1 2) (q 1 3)])    ; additivity lands in the ring: an exact rational sum
 
-    ; --- a coin's lit?-ness is its die's call: fresh DATA by default ---
-    !(lit? (q 1 2))          ; a rational is DATA -- a value, not a reference (like a number)
+    ; --- a coin's lit?-ness is its die's call: fresh data by default ---
+    !(lit? (q 1 2))          ; a rational is data -- a value, not a reference (like a number)
     !(lit? a)                ; a mod-n residue too
     !(lit? (sm 5))
     !(lit? (coin {0 'd} 5))  ; a plain die -> data

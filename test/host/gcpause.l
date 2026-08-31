@@ -1,11 +1,11 @@
 ; --- test/host/gcpause.l: the pause gauge ---
 ; what one collection costs, and that the cost keeps its shape. the collector
-; is a copier, so a collection's pause IS its copy volume: a MINOR copies the
+; is a copier, so a collection's pause is its copy volume: a minor copies the
 ; nursery's survivors (the churn's live edge) and owes nothing to the tenured
-; set -- grow the live set 16x and the worst minor stays flat; a MAJOR copies
+; set -- grow the live set 16x and the worst minor stays flat; a major copies
 ; the live set itself, the honest linear cost. words are the deterministic
 ; measure and carry the asserts; wall ns ride along in the printed table only
-; (machines flake, words don't). both shapes are THEOREMS in the model first --
+; (machines flake, words don't). both shapes are theorems in the model first --
 ; test/proof/rocq/gc.v's minor_work_bounded (the minor's work bounded by the nursery
 ; alone, old absent from the statement) and minor_flat (the survivor set
 ; identical under tenure-blind growth) -- so this gate is the instance-check,
@@ -26,16 +26,16 @@
    (gget i) (peep (gauge 0) i 0)
    (mx a b) (? (a < b) b a)
 
-   ; one churn step: raise a fresh 4k list, force a minor UNDER it (the list
+   ; one churn step: raise a fresh 4k list, force a minor under it (the list
    ; is the survivor set), answer `(minors words ns) for that one collection --
-   ; counting MINORS specifically, so the asserts prove nothing escalated.
+   ; counting minors specifically, so the asserts prove nothing escalated.
    (step _) (: e0 (gget G_EVAC) g0 (gget G_MINOR)
                keep (map (+ 1) (jot 4000))
                t0 (nclock 0)
                _  (please ())
                ns (nclock t0)
                dg ((gget G_MINOR) - g0) de ((gget G_EVAC) - e0)
-               _  (tally keep)                       ; keep lives ACROSS the minor
+               _  (tally keep)                       ; keep lives across the minor
              [dg de ns])
 
    ; a forced major fires on a near-empty nursery, so gen_major sizes its
@@ -59,7 +59,7 @@
                          [ww wn cs])
               (go 0 0 0 0))
 
-   ; tenure n 64KB casks: build them young, then the TIMED forced major
+   ; tenure n 64KB casks: build them young, then the timed forced major
    ; promotes them -> `(major-words major-ns casks); the casks ride in the
    ; answer so a later read holds every level live to the end.
    (tenure n) (: l (map (\ _ (cask 65536)) (jot n))
@@ -82,9 +82,9 @@
    _ (tally <>>t1 + tally <>>t2 + tally <>>t3)       ; every cask list live past the last minor
 
    _ (assert
-      (8 = <>>r1) (8 = <>>r2) (8 = <>>r3)     ; every churn collection was a MINOR, one each
+      (8 = <>>r1) (8 = <>>r2) (8 = <>>r3)     ; every churn collection was a minor, one each
       (0 < <r1)                               ; the minors did real work (the claim isn't vacuous)
-      (<r2 < <r1 + 1024)                      ; THE FLAT LINE: 12x the tenured set moves the
+      (<r2 < <r1 + 1024)                      ; the flat line: 12x the tenured set moves the
       (<r3 < <r1 + 1024)                      ;   worst minor by less than 8KB of copy volume
       (<t1 < <t2) (<t2 < <t3)                 ; the major's work grows with the live set
       (<r1 <= gget G_MINHI)                   ; the whole-run peaks cover what we watched

@@ -1,6 +1,6 @@
-; tools/law2uu.l -- EMIT test/uuvallaw.l: CLAUDE.md's laws, ONE SPELLING for both
+; tools/law2uu.l -- emit test/uuvallaw.l: claude.md's laws, one spelling for both
 ; lanes. test/law.l quantifies each law as a lambda over a corpus (refutation);
-; this tool reads THOSE ROWS as data and compiles the ones the measure tower can
+; this tool reads those rows as data and compiles the ones the measure tower can
 ; state into uu obligations over test/uuval.l's model (proof). Run on the host:
 ;
 ;   love tools/law2uu.l > test/uuvallaw.l        (or: make uuvallaw)
@@ -8,47 +8,47 @@
 ; so a law is written once. edit its spelling in law.l and the obligation moves
 ; with it -- `make test_uuvallaw` regenerates and diffs, and the proof is re-found.
 ;
-; the lift is KIND-DIRECTED by the tower itself: every expression has a level in
+; the lift is kind-directed by the tower itself: every expression has a level in
 ;   bool -- nat -- zed -- rea -- msr -- val
 ; and a word fixes the level of its argument (net wants a val, re wants a msr)
-; and of its answer. an argument at the wrong level is coerced along the SECTIONS
+; and of its answer. an argument at the wrong level is coerced along the sections
 ; going up (nbit nzed zrea rmsr vnum, or one of the named val shortcuts nval zval
-; rval bval) and the RETRACTIONS going down -- so (net (net x)), whose inner net
+; rval bval) and the retractions going down -- so (net (net x)), whose inner net
 ; answers a measure where the outer wants a value, lifts to (vnet (vnum (vnet v)))
 ; and needs no rule of its own. that is the whole type oracle: crew/lux/sigs.l does
 ; this job for wm2uu, and here the tower is its own.
 ;
-; the PROOF is searched, not transcribed. three strategies, tried in order
+; the proof is searched, not transcribed. three strategies, tried in order
 ; against the live kernel (the tool loads test/uu.l + test/uuval.l and runs defq):
-;   1. BY CONVERSION -- (lam v (idpath LHS)). the tower's round trips are
+;   1. by conversion -- (lam v (idpath LHS)). the tower's round trips are
 ;      definitional, so most rungs land here.
-;   2. BY CASES ON THE SATURATED MEASURE -- nat_rect on (vsat v), both arms
+;   2. by cases on the saturated measure -- nat_rect on (vsat v), both arms
 ;      idpath. the same translation run at v := (nval 0) and v := (nval (succ k))
 ;      gives the two arms and at v := (nval n) the motive; (vsat (nval n)) is n,
 ;      so the motive at (vsat v) converts back to the obligation.
-;   3. BY THE LEMMA THE MODEL NAMES -- `uv-<row>` in test/uuval.l, cited bare. the
+;   3. by the lemma the model names -- `uv-<row>` in test/uuval.l, cited bare. the
 ;      structural laws (cap/cup/link, veq's reflexivity) need an induction over
-;      the tree and are hand-proved there; the OBLIGATION still comes from law.l,
+;      the tree and are hand-proved there; the obligation still comes from law.l,
 ;      so a row that moves leaves its lemma behind and the tool says so.
-; a row no strategy discharges is SKIPPED and COUNTED, never silently dropped.
+; a row no strategy discharges is skipped and counted, never silently dropped.
 ;
-; a GUARD the tower cannot read erases -- (? (coin? x) 1 e) -- the way core.l's
-; ()-lane erases under wm2uu, and the obligation it makes is then STRONGER than
+; a guard the tower cannot read erases -- (? (coin? x) 1 e) -- the way core.l's
+; ()-lane erases under wm2uu, and the obligation it makes is then stronger than
 ; the row, not weaker; each such row names the guard it dropped. a guard the
-; tower CAN read (two?) stays, as the orb it always was. a `:` binds into the
+; tower can read (two?) stays, as the orb it always was. a `:` binds into the
 ; environment, which is substitution at the term level. `?` and `=` are no name
 ; characters downstream (uu2coq emits Coq), so they spell q and eq in an emitted
 ; name, the way kinds2uu writes numq for num?.
 ;
-; love's `=` between two VALUES is veq, not paths: the depth index is a height
+; love's `=` between two values is veq, not paths: the depth index is a height
 ; bound, so one value has many spellings and identity is finer than love's own
 ; equality. below val the carriers are canonical and the claim stays a path.
 ;
 ; untrusted like every translator here: a wrong lift can miss a law, never fake
 ; one, and each row prints its source form over its term.
 ;
-; load the kernel and the model FIRST, in their own form -- the next form's bare
-; references resolve at ITS compile, which must follow this run. their asserts
+; load the kernel and the model first, in their own form -- the next form's bare
+; references resolve at its compile, which must follow this run. their asserts
 ; ride a jug meanwhile so the artifact stays clean.
 (: j (jug 0) _ (wear [in j err])
    _ (reads (open "test/uu.l" "r"))
@@ -65,14 +65,14 @@
    (zero? e) (charm? e && e = 0)
    (one? e) (charm? e && e = 1)
    (same? a b) ((show a) = (show b))
-   ; an OPERATOR head is matched by its spelling: the lambda sigil has no quote
+   ; an operator head is matched by its spelling: the lambda sigil has no quote
    ; form to compare against, and neither `?` nor `:` reads back as a bare nom.
    (is? x s) (nom? x && (string x) = s)
    (hd? e s) (two? e && is? <e s)
    bs (intern "\\")
    (unq x) (? (two? x && id? <x bs) (at x 1) x)     ; reads shows a quote as (\ ..)
 
-   ; --- THE TOWER, as a type oracle: the levels, and the rung between each pair ---
+   ; --- the tower, as a type oracle: the levels, and the rung between each pair ---
    lv-order '(bool nat zed rea msr val)
    (ht l) (idxin l lv-order 0)
    up-rungs '((bool nbit nat) (nat nzed zed) (zed zrea rea) (rea rmsr msr) (msr vnum val))
@@ -85,7 +85,7 @@
        (: r (look f dn-rungs) (co [(at r 1) t] (at r 2) g)))
 
    ; --- the word map: each love word, the level it wants, its model name, its
-   ; --- answer. love's ceil/saturate/bit/nil? read a WHOLE value (they compose
+   ; --- answer. love's ceil/saturate/bit/nil? read a whole value (they compose
    ; --- the rungs below them), which is why they all want a val.
    wordmap '((net val vnet msr) (re msr mre rea) (ceil val vceil zed)
              (saturate val vsat nat) (bit val vbit bool) (nil? val vnil bool)
@@ -105,7 +105,7 @@
        (? (! (won? A)) A (! (won? B)) B
           (ok [(at w 3) (co (at A 1) (at A 2) (at w 1)) (co (at B 1) (at B 2) (at w 2))]
               (at w 4))))
-   ; love's `=` between two VALUES is structural, not identity -- that is what veq
+   ; love's `=` between two values is structural, not identity -- that is what veq
    ; is for. below val the carriers are canonical and their own eqb reads them.
    (eqof e env)
     (: A (tx (at e 1) env) B (tx (at e 2) env)
@@ -115,7 +115,7 @@
              (? (id? L 'bool) (ok ['beqb ta tb] 'bool)
                 (id? L 'nat)  (ok ['nateqb ta tb] 'bool)
                 (ok ['veq (co ta L 'val) (co tb L 'val)] 'bool)))))
-   ; a guard the tower CAN read stays: it becomes the implication it was
+   ; a guard the tower can read stays: it becomes the implication it was
    (guard-orb e env)
     (: P (tx (at e 1) env)
        (? (! (won? P)) P
@@ -124,7 +124,7 @@
              (? (! (won? E)) E
                 (: p (co (at P 1) (at P 2) 'bool)
                    (ok ['orb (? yes p ['negb p]) (co (at E 1) (at E 2) 'bool)] 'bool))))))
-   ; (? (< 0 E) E 0) at the integers IS the clamp -- saturate's own shape
+   ; (? (< 0 E) E 0) at the integers is the clamp -- saturate's own shape
    (clamp? e)
     (: c (at e 1)
        (hd? c "<" && (tally c) = 3 && zero? (at c 1)
@@ -132,7 +132,7 @@
    (tx e env)
     (? (charm? e) (ok e 'nat)
        (nom? e) (: p (look e env) (? (two? p) (ok (at p 1) (at p 2)) (bad (show e))))
-       (id? e ()) (ok 'vnilv 'val)                       ; the empty list IS the model's ()
+       (id? e ()) (ok 'vnilv 'val)                       ; the empty list is the model's ()
        (! (two? e)) (bad (show e))
        (: h <e n (tally e) w (look h wordmap) w2 (look h wordmap2)
         (? (n = 2 && two? w) (un1 (at e 1) env (at w 1) (\ t [(at w 2) t]) (at w 3))
@@ -153,7 +153,7 @@
    ; --- the body: peel a band guard, bind a `:` into the environment, then read
    ; --- the claim. a guard that erases is reported, never dropped in silence.
    (guard1? b) (hd? b "?" && (tally b) = 4 && (one? (at b 2) || one? (at b 3)))
-   ; only a guard the tower CANNOT read erases; one it can becomes an orb above
+   ; only a guard the tower cannot read erases; one it can becomes an orb above
    (peel b env) (? (guard1? b && ! (won? (tx (at b 1) env)))
                    [(at (peel (? (one? (at b 2)) (at b 3) (at b 2)) env) 0) (show (at b 1))]
                    [b ()])
@@ -174,7 +174,7 @@
                  ; at val the claim is veq's; below it the carrier is canonical
                  (? (id? L 'val) (: q ['veq ta tb] [1 ['paths 'bool q 'true] q])
                     [1 ['paths L ta tb] ta]))))
-       ; anything else the tower reads as a BOOL is the claim "..and it is true"
+       ; anything else the tower reads as a bool is the claim "..and it is true"
        (: r (tx b env)
           (? (won? r && id? (at r 2) 'bool) [1 ['paths 'bool (at r 1) 'true] (at r 1)]
              (won? r) (bad ("a claim at the " + (string (at r 2)) + " rung"))
@@ -182,7 +182,7 @@
                      (two? b) (show <b)
                      (show b))))))
 
-   ; --- a RANGE CHECK is not an obligation: the tower already assigns the
+   ; --- a range check is not an obligation: the tower already assigns the
    ; --- codomain, so (|| (= b 0) (= b 1)) and (&& (<= 0 s) (charm? s)) have
    ; --- nothing left to say. detected by shape, answered by the type.
    (unlet b env) (? (letish? b)
@@ -205,7 +205,7 @@
                    r (tx inner en)
                    (? (won? r) (at r 2) ()))))))
 
-   ; --- the kernel, live: a strategy is TRIED, not asserted ---
+   ; --- the kernel, live: a strategy is tried, not asserted ---
    dq (uu 'defq)
    _ (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
    (checks? nm ty tm) (id? 'accepted (rejects (\ z (dq nm ty tm))))
@@ -291,7 +291,7 @@
    (howof d) (? (id? (at d 4) 'conv)  "by conversion"
                 (id? (at d 4) 'cases) "by cases on the saturated measure"
                 "by the lemma the model names")
-   ; a val-rung claim is veq's, because a GUARDED row needs a decidable one --
+   ; a val-rung claim is veq's, because a guarded row needs a decidable one --
    ; an orb takes a bool and a path is not one. where the guard erased and the
    ; claim stands alone, the bridge restates it over the pinned carrier, which
    ; is mechanical: the same law, as an equality rather than a decision.

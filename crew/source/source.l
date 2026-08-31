@@ -7,7 +7,7 @@
 
 (: (src-die m) (say err (";; " + m + "\n"), quit 1)
 
-   ; the directory is positional, so a mistyped flag would be TAKEN as one and a whole
+   ; the directory is positional, so a mistyped flag would be taken as one and a whole
    ; tree laid under it. a leading dash is never a directory here: name the flags, ask
    ; about anything else.
    (src-dash? w) (: n #w ((0 < n) && (w 0 = 45)))
@@ -174,8 +174,8 @@
        _ (chdir here)
        _ (0 != st ? (src-die ("the build failed (exit " + show st + ")")))
        (? (string? xa) (seed-cross root xa dst)
-          ; the ONE artifact (seed-universal U2): the seed is the laid tree's own
-          ; binary, and the rebuild must BE this binary, byte for byte.
+          ; the one artifact (seed-universal U2): the seed is the laid tree's own
+          ; binary, and the rebuild must be this binary, byte for byte.
           (: out (root + "/out/host/love")
              (? (src-same? exe out)
                (puts (";; fixpoint ok -- " + out + "\n"), 0)
@@ -190,7 +190,7 @@
    ; is no second table here; `arch-mach` puts the triple word back on where make wants it
    ; (a cross toolchain's prefix is spelled aarch64-, never arm64-).
    seed-arches '(amd64 arm64 rv64)
-   ; the arch word is positional and A PATH STILL WINS: `./aarch64` is the
+   ; the arch word is positional and A PATH still wins: `./aarch64` is the
    ; directory, the verb rail's own rule worn one level down.
    (seed-arch? w) (: n #w
                      (go i) (? (n <= i) (member? (arch-nom w) seed-arches)
@@ -211,9 +211,9 @@
     (: _ ((two? as0) && (src-help? <as0) ? (seed-usage 0, quit 0))
        self? (two? as0 ? (<as0 = "--self") 0)
        as1 (self? ? >as0 as0)
-       ; naming THIS machine is a NATIVE seed, fixpoint and all: the cross lane
+       ; naming this machine is a native seed, fixpoint and all: the cross lane
        ; exists for a machine we are not, and the fixpoint is scoped to where the
-       ; output ought to BE this binary -- which `love seed x86_64` on an x86_64
+       ; output ought to be this binary -- which `love seed x86_64` on an x86_64
        ; box asks for exactly as much as a bare `love seed`. the word is eaten either
        ; way, or the arch would go on to be read as the directory.
        xa0 (? ((two? as1) && (seed-arch? <as1)) (arch-nom <as1) ())
@@ -228,7 +228,7 @@
        _ (string? exe ? 0 (src-die "can't find seed path"))
        farm (src-farm root exe)
        path ("" + getenv "PATH")
-       ; ours LAST fills the gaps only; --self puts them FIRST, so ours win wherever
+       ; ours last fills the gaps only; --self puts them first, so ours win wherever
        ; we carry a tool of that name.
        _ (setenv "PATH" (self? ? (farm + ":" + path) (path + ":" + farm)))
        env (getenv "CC")
@@ -262,10 +262,10 @@
           dst (two? a3 ? <a3 ())
           (seed-wait root xa dst)))
 
-   ; --- `love kernel OUT.elf` -- the metal projection of THIS binary ----------
+   ; --- `love kernel OUT.elf` -- the metal projection of this binary ----------
    ; the artifact is the kernel (doc/misc/plan/inle-fusion.md): this verb emits
    ; the flat image a boot door eats, from nothing but what it already carries.
-   ; the boot stub is LAID here, not stored: mkboot.l rides the source blob and
+   ; the boot stub is laid here, not stored: mkboot.l rides the source blob and
    ; holo is baked, so the lay's cat (kore text/u/asbook, then mkboot, then
    ; kproject) evals off the in-memory tar, exactly the shape kernel.mk cats
    ; from the tree. the arch is the binary's own -- e_machine says it, and a
@@ -297,11 +297,11 @@
        _ (two? t ? 0 (src-die "the embedded archive is torn"))
        es <>t
        top (src-top es)
-       ; the INPUTS cross on the verb table -- the one tablet every layer can
+       ; the inputs cross on the verb table -- the one tablet every layer can
        ; reach ((from 'verbs 'tab) hands the real thing) -- under a key pulled
        ; back off below, so `love verbs` never lists it. the stream evals in
-       ; its own layer, where a plain name cannot cross either way; its LAST
-       ; FORM does the whole projection where everything is visible, so
+       ; its own layer, where a plain name cannot cross either way; its last
+       ; form does the whole projection where everything is visible, so
        ; nothing has to cross back out either.
        _ (pin kern-box 'pie pie)
        _ (pin kern-box 'out out)

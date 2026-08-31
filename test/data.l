@@ -53,15 +53,15 @@
   (= 104 ("hi" 0))                          ; 'h'
   (= 105 ("hi" 1))                          ; 'i'
   (nil? ("hi" 2))                            ; past the end -> 1
-  (= 105 ("hi" -1)) (= 104 ("hi" -2))       ; a negative index counts from the END
+  (= 105 ("hi" -1)) (= 104 ("hi" -2))       ; a negative index counts from the end
   (nil? ("hi" -3))                           ; ... and past the front is out of range too
-  (= "hix" ("hi" 'x))                       ; a POINT operand is text: it juxtaposes
+  (= "hix" ("hi" 'x))                       ; a point operand is text: it juxtaposes
   (= 255 ((string 255) 0))                  ; high byte returns unsigned 0..255
-  ; ⚠ apply and peep agree on the NON-NEGATIVE indexes only: peep answers its default on a
+  ; apply and peep agree on the non-negative indexes only: peep answers its default on a
   ; negative (and snip clamps one to the front), so counting from the end is apply's alone.
   (= (peep "vaporeon" 3 0) ("vaporeon" 3))
   (= 0 (peep "vaporeon" -1 0)) (= 110 ("vaporeon" -1))
-  ; pin writes exactly where peep reads, and text has no cell, so it answers a FRESH string
+  ; pin writes exactly where peep reads, and text has no cell, so it answers a fresh string
   (= "vapoReon" (pin "vaporeon" 4 82)) (= "vaporeon" (pin "vaporeon" -1 82))
   (= "eon" (stripPrefix "vapor" "vaporeon"))
  (= '("eon" "vapor")

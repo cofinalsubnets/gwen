@@ -1,17 +1,17 @@
 ; The ramfs, inle's rung 0 (doc/misc/inle.md). The initrd is .rodata -- tools/lcatfs.l
 ; bakes one {path, bytes, len} row per file into out/lib/kfs.h -- and reads come
-; straight off it; the FIRST write copies the blob into the kernel heap and the file
+; straight off it; the first write copies the blob into the kernel heap and the file
 ; reads from the copy ever after. So: a baked path opens and reads, an unbaked one
 ; answers the zero point for a read (a write CREATES since rung 2), and a write
-; is visible to the NEXT open, because the copy is per FILE and not per fd.
+; is visible to the next open, because the copy is per file and not per fd.
 ;
-; KERNEL ONLY -- kernel.mk's kt, never $t: on the host `open` is the real
+; kernel only -- kernel.mk's kt, never $t: on the host `open` is the real
 ; filesystem and these laws would write the tree. The scratch is a real baked row on
 ; purpose: lib/json.l is a file the boot never loads, and the write laws put its
 ; bytes back, so nothing downstream in the corpus sees a clobbered tree.
 ;
-; ⚠ the `:` HAS a body -- the assert itself -- so the helpers stay local; and each
-; law is its own assert ARGUMENT, since assert maps over its args and a `do` would
+; the `:` has a body -- the assert itself -- so the helpers stay local; and each
+; law is its own assert argument, since assert maps over its args and a `do` would
 ; report only the last one.
 
 (: f "lib/json.l"
@@ -26,12 +26,12 @@
    (< 0 (tally orig))
    ; ... and reads the same on the second open: a file does not drain
    (= orig (rd f))
-   ; an unbaked path is ABSENT for a read; a write CREATES it now (rung 2 --
+   ; an unbaked path is absent for a read; a write creates it now (rung 2 --
    ; wfs.l holds those laws), so here it is unmade the moment it is proved
    (! (port? (open "lib/no-such-thing.l" "r")))
    (: q (open "lib/no-such-thing.l" "w")
       (&& (port? q) (: _ (close q) (id? (unlink "lib/no-such-thing.l") ()))))
-   ; the write copies the blob out of .rodata, and the NEXT open sees it
+   ; the write copies the blob out of .rodata, and the next open sees it
    (wr f "hi" "w")
    (= "hi" (rd f))
    ; ... and append lands past what is there, not over it
@@ -47,11 +47,11 @@
    (wr f orig "w")
    (= orig (rd f))))
 
-; THE PAYOFF, and the end-to-end proof the rung is real: prel's module walk is gated
+; the payoff, and the end-to-end proof the rung is real: prel's module walk is gated
 ; on the presence of `open` (love/prel.l's fsopen, by peep), so with the row in
 ; defs[] `use` resolves lib/<x>.l off the ramfs with zero prel change -- json is in
-; no baked ai_libs table on this seat, only in the initrd. ⚠ it also reads the
-; scratch back through the COMPILER, so it is the restore above proving itself byte
+; no baked ai_libs table on this seat, only in the initrd. it also reads the
+; scratch back through the compiler, so it is the restore above proving itself byte
 ; for byte; it has to stay after those laws.
 (use "lib/json.l")
 (assert (member? 'json-read (names ())))

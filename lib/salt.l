@@ -1,4 +1,4 @@
-; lib/salt.l -- SALT, what you add to taste: the config door every crew app can
+; lib/salt.l -- salt, what you add to taste: the config door every crew app can
 ; share. (salt 'libra) answers a tablet of that app's settings, read from two
 ; files, the second overlaying the first:
 ;
@@ -24,7 +24,7 @@
  ; is the presence test. `sound` answers three ways -- the datum consed onto the
  ; rest, () at a clean end, `torn` on a dropped paren -- so ask two?, never spin.
  (salt-file path c)
-  ; a TEST, not a match on (): a refusal answers -errno and no negative matches
+  ; a test, not a match on (): a refusal answers -errno and no negative matches
   ; the empty pattern
   (: q (open path "r")
      (? !q c

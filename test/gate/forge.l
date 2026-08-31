@@ -1,21 +1,21 @@
-; test/gate/forge.l -- lib/forge.l's gate: a nif WRITTEN IN LOVE, assembled through crew/holo
+; test/gate/forge.l -- lib/forge.l's gate: a nif written in love, assembled through crew/holo
 ; for this cpu and installed through the `nif` seam, must agree with the twin it deopts into on
-; every shape -- the lane it says natively AND the lanes it hands back.
+; every shape -- the lane it says natively and the lanes it hands back.
 ;
-; ⚠ THE DIFFERENTIAL IS THE WHOLE GATE, and here the twin is the C nif itself, so this is one
+; the differential is the whole gate, and here the twin is the C nif itself, so this is one
 ; denotation with two presentations: love.c's answer and the bytes love wrote for the same job.
-; A disagreement is a bug in the kernel's IR, in holo's encoder, or in the install -- and all
+; a disagreement is a bug in the kernel's IR, in holo's encoder, or in the install -- and all
 ; three are silent otherwise, since a wrong answer from an array reduction looks like data.
 ;
-; ⚠ AND IT HAS ALREADY CAUGHT ONE THE OTHER WAY. `outer`'s first differential red was the C
+; and it has already caught one the other way. `outer`'s first differential red was the C
 ; side: love.c's lvm_outer wrote 4*M of its M*N cells (a mooncc declarator-scope bug, fixed
-; 2026-08-16, test/cc/146-declscope.c). A differential does not know which side it is holding.
+; 2026-08-16, test/cc/146-declscope.c). a differential does not know which side it is holding.
 ;
-; ⚠ THE DEOPT LANES ARE ASSERTED, not assumed. A kernel says one monomorphic lane and hands
+; the deopt lanes are asserted, not assumed. a kernel says one monomorphic lane and hands
 ; everything else to the twin, so the guards are most of it: a guard that falls through where
 ; it should jump runs the fast loop over a float payload and answers confident nonsense.
 ;
-; ⚠ ZERO FITTED IS A FAILURE UNLESS IT IS NAMED. A build with no glaze module, and a target
+; zero fitted is a failure unless it is named. a build with no glaze module, and a target
 ; whose lvm ABI the kit does not spell, both decline gracefully -- that is the design -- but a
 ; gate whose subject never installed reads exactly like a gate that passed. So a zero has to
 ; come with a reason in `forge-why`, and a silent one is still red. Where nothing installs the
@@ -23,7 +23,7 @@
 (: _ (use "lib/forge.l")
    (die m) (: _ (say err ("forge-gate: " + m + "\n")) _ (flush err) (quit 1))
    fitted (forge-fit 0)
-   ; read BEFORE the roster grows a deliberately-bogus kernel below, whose own decline
+   ; read before the roster grows a deliberately-bogus kernel below, whose own decline
    ; would else answer for a fit that died silently
    why0 (forge-why 0)
    _ (say out ("forge: " + show fitted + " kernel(s) fitted, "
@@ -31,7 +31,7 @@
    _ (? why0 (say out ("  declines: " + show why0 + "\n")) 0)
 
    ; --- the shapes ---------------------------------------------------------------------------
-   ; ⚠ the empty and the all-nonzero cases are the two a loop bound can get wrong in opposite
+   ; the empty and the all-nonzero cases are the two a loop bound can get wrong in opposite
    ; directions -- an off-by-one at the top answers 0 for a full array, one at the bottom
    ; answers 1 for an array whose only zero is last.
    (seq sh) (: k (foldl (*) 1 sh) (foldl (\ g j (g (j + 1))) (array sh) (jot k)))
@@ -70,19 +70,19 @@
    _ (chk2 "inner native" (want 'inner) inner ts)
    _ (chk2 "inner deopt " (want 'inner) inner (ds + ts))
 
-   ; --- the EXTRAS slot, which no kernel in the roster uses right now --------------------------
-   ; ⚠ a kit piece nobody exercises reads exactly like a working one. `nifx` carries one love
+   ; --- the extras slot, which no kernel in the roster uses right now --------------------------
+   ; a kit piece nobody exercises reads exactly like a working one. `nifx` carries one love
    ; value in the cell at Ip+32 -- the door for a constant a kernel cannot spell, and the only
    ; way `sort` could reach the zero-point terminator before it was dropped. This kernel is the
    ; whole mechanism and nothing else: ignore the argument, answer what rode along. The value is
-   ; a HEAP one on purpose, since the point of the slot over an `li` immediate is that the
+   ; a heap one on purpose, since the point of the slot over an `li` immediate is that the
    ; collector walks it and the image codec encodes it.
    (xt-ir _) ((forge-extras 'r0) + forge-epi-ptr)
    xtval '(the extras slot)
    _ (forge-putx 'xt 1 xt-ir (\ q xtval) xtval)
 
-   ; --- the ARITY>=2 shape, registered here rather than in the roster -------------------------
-   ; ⚠ the curried cell is a DIFFERENT cell (love.c lvm_nif lays 8 words behind lvm_cur, not 6)
+   ; --- the arity>=2 shape, registered here rather than in the roster -------------------------
+   ; the curried cell is a different cell (love.c lvm_nif lays 8 words behind lvm_cur, not 6)
    ; and its deopt skips the twin's own curry preamble. `outer` and `inner` ride it, but both
    ; guard on trays; this one is the ABI's own law over plain fixnums, where nothing else can
    ; explain a disagreement.
@@ -91,9 +91,9 @@
     + ('((ld r0 r1 0) (sar r0 1) (ld r7 r1 8) (sar r7 1) (and r0 r0 r7)) + forge-epi)))
    _ (forge-put 'fx-and 2 fx-and-ir (&))
    fitted2 (forge-fit 0)
-   ; ⚠ conditional on the seam, like every other native-only claim here: where nothing can
+   ; conditional on the seam, like every other native-only claim here: where nothing can
    ; install, `fitted` stays 0 and the row not growing is the correct answer, not a red. The
-   ; one requirement that is NOT conditional is the last line of the file.
+   ; one requirement that is not conditional is the last line of the file.
    _ (? (|| (= fitted 0) (= fitted2 (fitted + 2))) 0
         (die ("the roster did not grow: fit " + show fitted + " -> " + show fitted2)))
    _ (? (= ((want 'xt) 0) xtval) 0
@@ -107,16 +107,16 @@
    _ (? (nil? bad2) (say out ("  arity 2: agrees on " + show (tally pairs) + " pairs\n"))
         (die ("the arity-2 kernel DISAGREES with its twin on " + show bad2)))
 
-   ; --- ALLOCATION: the room guard, and the law that no collection runs mid-body --------------
-   ; a native body's registers are not GC roots, so a kernel proves the room BEFORE any Hp or Sp
+   ; --- allocation: the room guard, and the law that no collection runs mid-body --------------
+   ; a native body's registers are not GC roots, so a kernel proves the room before any Hp or Sp
    ; motion and deopts to the twin when it is not there. `link`, the 3-word cons, is the
    ; smallest thing that can hold the law.
-   ; ⚠ GATE-ONLY, and the measurement is the reason: 300k conses run 7 ms through the C nif and
+   ; gate-only, and the measurement is the reason: 300k conses run 7 ms through the C nif and
    ; 18 ms through this, because the body is smaller than the curried cell's own indirection.
-   ; The lane pays where there is a LOOP in it and loses where there is not, so this one holds
+   ; The lane pays where there is a loop in it and loses where there is not, so this one holds
    ; the ABI and stays out of the roster.
-   ; ⚠ the churn is the real assertion: 2M conses through the native builder, which forces the
-   ; guard to fire over and over. A kernel that let a collection run mid-body would answer a
+   ; the churn is the real assertion: 2M conses through the native builder, which forces the
+   ; guard to fire over and over. a kernel that let a collection run mid-body would answer a
    ; cell in the old semispace -- not a crash, a wrong list, which is why the deep build is
    ; compared against the C one rather than merely counted.
    (link-ir _)
@@ -144,7 +144,7 @@
    _ (say out ("  allocation: " + show (tally cx * tally cx) + " pairs, a 5000-deep build and 2M conses\n"))
 
    ; --- the wake rung: a fit is idempotent, because a woken image must be able to re-run it ---
-   ; ⚠ a native cell does not survive a bake (the image codec reverts it to the twin), so
+   ; a native cell does not survive a bake (the image codec reverts it to the twin), so
    ; `forge-fit` is what a wake calls to get native back. Called twice it must install twice and
    ; answer the same, never accumulate a second roster or hand back a stale cell.
    again (forge-fit 0)
@@ -154,10 +154,10 @@
    _ (chk1 "aall  refit" (want 'aall) aall zs)
    _ (chk2 "outer refit" (want 'outer) outer ts)
 
-   ; --- a decline is DATA, and one bad kernel does not take the roster with it -----------------
-   ; ⚠ a kernel's IR is a program and holo RAISES on an op it cannot lower, so an untrapped
+   ; --- a decline is data, and one bad kernel does not take the roster with it -----------------
+   ; a kernel's IR is a program and holo raises on an op it cannot lower, so an untrapped
    ; assemble would end the fit and every kernel after it -- and the tree would read as a build
-   ; where the seam was simply absent. the bogus row must decline BY NAME, keep its twin, and
+   ; where the seam was simply absent. the bogus row must decline by NAME, keep its twin, and
    ; leave its neighbours native.
    (bogus-ir _) '((no-such-op r0 r1))
    _ (forge-put 'bogus 1 bogus-ir aall)
@@ -169,7 +169,7 @@
    _ (chk1 "aall  after a decline" (want 'aall) aall zs)
    _ (say out ("  decline: named " + show (forge-why 0) + ", roster intact\n"))
 
-   ; ⚠ LAST, because everything above still had to run: forging nothing is a legal build
+   ; last, because everything above still had to run: forging nothing is a legal build
    ; (no glaze module, or a target the ABI kit does not spell) and the twins carry it. What
    ; is not legal is a tree that thinks it forged and did not.
    _ (? (fitted > 0) 0 why0 0

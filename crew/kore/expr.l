@@ -1,14 +1,14 @@
 ; crew/kore/expr.l -- expr, the little arithmetic-and-matching language POSIX hands a
 ; shell script. its own file because it rides re.l's BRE engine for `:`, and a body
-; captures its free names at its define -- so it loads AFTER re.l, exactly as sed.l and
+; captures its free names at its define -- so it loads after re.l, exactly as sed.l and
 ; awk.l do. a toolbox of one: an expr-main, no seat, kore.l is its door.
 ;
 ; the grammar, loosest binding first:
 ;   |   &   < <= = == != >= >   + -   * / %   :
-; then the primaries: ( E ), length S, substr S POS LEN, index S CHARS, match S RE,
+; then the primaries: ( E ), length S, substr S pos len, index S chars, match S re,
 ; `+ TOKEN` (the quote that makes a keyword an ordinary word), and a bare word.
 ;
-; ⚠ EVERY VALUE IS A TEXT. a text that reads as a whole number is a number wherever one
+; every VALUE is A TEXT. a text that reads as a whole number is a number wherever one
 ; is wanted and a text everywhere else, and that single rule is the whole of expr's type
 ; system -- `2 < 10` is 1 and `2 < 10a` is 0, because the second pair has no number in it.
 ; the exit code is expr's own third channel: 0 the answer is neither "" nor "0", 1 it is,
@@ -32,7 +32,7 @@
        (? (n <= st) () (: r (go st 0) (? (two? r) [1 (? neg (0 - <>r) <>r)] ()))))
    (ex-true? v) (!(v = "") && !(v = "0"))
    (ex-bool b) (? b "1" "0")
-   ; ⚠ the division TRUNCATES toward zero and the remainder wears the DIVIDEND's sign,
+   ; the division truncates toward zero and the remainder wears the dividend's sign,
    ; which is C's rule and expr's -- love's // floors, so the sign is taken out and put
    ; back rather than divided with
    (ex-arith op a b)
@@ -55,9 +55,9 @@
                    (op = "!=") !eq
                    (op = ">=") !lt
                    (!lt && !eq))))
-   ; S : RE -- the BRE ANCHORED at the head. a pattern carrying \( \) answers group 1's
-   ; text (empty on a miss), a pattern without one answers the match's LENGTH ("0" on a
-   ; miss). ⚠ anchored through refindp's predicate rather than a leading (bol) node: the
+   ; S : re -- the BRE anchored at the head. a pattern carrying \( \) answers group 1's
+   ; text (empty on a miss), a pattern without one answers the match's length ("0" on a
+   ; miss). anchored through refindp's predicate rather than a leading (bol) node: the
    ; predicate rides inside the backtracker, so a start it refuses cannot be walked past
    ; with a shorter match still to try at it.
    (ex-match a b)
@@ -69,14 +69,14 @@
                             (? (two? e) (snip a <>e <>>e) ""))
                 "")
           (? (two? m) (show (<>>m - <>m)) "0")))
-   ; index S CHARS: the 1-based seat of the first charm of S that CHARS also holds, or 0
+   ; index S chars: the 1-based seat of the first charm of S that chars also holds, or 0
    (ex-index s cs)
     (: n (tally s) m (tally cs)
        (has c) (: (hit j) (? (m <= j) 0 (cs j = c) 1 (hit (j + 1)))
                   (hit 0))
        (go i) (? (n <= i) "0" (has (s i)) (show (i + 1)) (go (i + 1)))
        (go 0))
-   ; substr S POS LEN: 1-based, and every way of falling outside answers the empty text
+   ; substr S pos len: 1-based, and every way of falling outside answers the empty text
    (ex-substr s ps ls)
     (: n (tally s)
        x (ex-num ps) y (ex-num ls)
@@ -92,7 +92,7 @@
        (op = ":") (ex-match a b)
        (member? op '("+" "-" "*" "/" "%")) (ex-arith op a b)
        (ex-cmp op a b))
-   ; the whole descent is ONE function taking its own depth, so the primary can call
+   ; the whole descent is one function taking its own depth, so the primary can call
    ; back into the loosest level for a parenthesis without any two names needing to
    ; know each other -- a body sees its own name, and nothing after it
    (ex-parse lv ts)

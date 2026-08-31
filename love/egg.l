@@ -10,7 +10,7 @@
  now (clock 0)
  ; sit twice so ev compiles itself
  _ (pin book 'ev (sit (sit ev 0 egg) 0 egg))
- ; post sits ONCE, on the hatchling -- the last seat that still sees the mopped noms
+ ; post sits once, on the hatchling -- the last seat that still sees the mopped noms
  _ (sit (peep book 'ev 0) 0 post)
  _ (pin book 'born (clock now))
  ; the mop sweeps the compiler's internal noms off the book. the debug door

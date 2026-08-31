@@ -1,12 +1,12 @@
 ; quay.l -- the xterm-256 palette, laid as C through clay (crew/quay/xterm256.h).
 ; the recipe is xterm's own: 16 classics, a 6x6x6 cube, a 24-step grey ramp. it was
-; written TWICE -- src/cb.c's xpal and src/kmain.c's palette -- each a mutable
+; written twice -- src/cb.c's xpal and src/kmain.c's palette -- each a mutable
 ; global a seat filled at boot from a copy of these same three loops. laid here it is
 ; one .rodata table both read, and a cell means the same pixels on a framebuffer and
-; in a window BY CONSTRUCTION rather than by two recipes agreeing.
-; ⚠ EDIT THIS FILE, NOT crew/quay/xterm256.h. `make mx` regenerates it.
-; ⚠ static, and included ONLY by the two seats that index it: a header carrying a
-; DEFINITION cannot ride a shared one (two TUs, one symbol), and a static table in a
+; in a window by construction rather than by two recipes agreeing.
+; edit this file, not crew/quay/xterm256.h. `make mx` regenerates it.
+; static, and included only by the two seats that index it: a header carrying a
+; definition cannot ride a shared one (two TUs, one symbol), and a static table in a
 ; header no TU reads sits unread under -Werror. mx.h keeps the same rule.
 (: _ (use "crew/moon/clay.l")
    (q-at l k) (? (k = 0) <l (q-at >l (k - 1)))
@@ -24,7 +24,7 @@
                (jot 24))                              ; 232..255
    q-pal ((q-base + q-cube) + q-grey)
    q-clay ['gdecl [["xterm256" '(arr (const (named "uint32_t")) 256) ['init q-pal]]] '(static)]
-   ; a shape check before a byte is written: 256 entries, every one an XRGB pixel.
+   ; a shape check before a byte is written: 256 entries, every one an xrgb pixel.
    ; the C compiler would take a short table without a word, and the seats index it
    ; by a byte -- so the length is the whole safety here.
    q-ok (&& ((tally q-pal) = 256)

@@ -615,7 +615,7 @@
    ;
    ;     the interesting case is a path that moved on since P wrote it. undoing
    ;     wholesale would silently discard the later work (a hunk is file-grain,
-   ;     so P's hunk IS the whole file). instead it is a three-way merge, and the
+   ;     so P's hunk is the whole file). instead it is a three-way merge, and the
    ;     three sides are already named: base = what P wrote, ours = what the path
    ;     holds now, theirs = what P replaced. that keeps the later edits and lifts
    ;     out P's, which is what a revert means; a true overlap lands in markers ---

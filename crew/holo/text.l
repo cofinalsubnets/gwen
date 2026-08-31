@@ -1,5 +1,5 @@
-; text -- a human-writable TEXT front-end for the neutral assembler, parsed with the PARSER
-; COMBINATORS (love/peg.l, the same set cook and sat use). it turns lines like
+; text -- a human-writable TEXT front-end for the neutral assembler, parsed with the parser
+; combinators (love/peg.l, the same set cook and sat use). it turns lines like
 ;     li   r0, 60        ; a comment
 ;     add  r0, r0, r1
 ;     label loop
@@ -15,7 +15,7 @@
 ; and on the baked host alike:
 ;   out/host/love -l crew/holo/text.l ...
 
-; the combinators (love/peg.l). the use is its OWN top-level form -- a `:` body compiles
+; the combinators (love/peg.l). the use is its own top-level form -- a `:` body compiles
 ; as one unit, so a use inside the form below would run too late to serve it.
 (module 'holo
 (use 'peg)
@@ -25,7 +25,7 @@
    (txsep? c) (txws? c || c = 44)                             ; ... or a comma, between operands
    (txdig? c) (48 <= c <= 57)
    (txidc? c) (97 <= c <= 122 ||                     ; a-z
-               65 <= c <= 90 ||                      ; A-Z
+               65 <= c <= 90 ||                      ; a-z
                txdig? c || c = 95 || c = 45)                ; 0-9 _ -  (kebab labels welcome)
 
    ;; -- small string helpers (a payload piece is a one-char string from `one` or a substring
@@ -57,8 +57,8 @@
 
    ;; -- the front door: TEXT -> IR. blank/comment-only lines vanish; a line that won't parse is a
    ;; deliberate raise (a typo shouldn't silently drop an instruction). the assemble step stays
-   ;; with the caller ((holo-hex t (asm-text s)) and kin): this file binds NO assembler names, so
-   ;; it loads clean in both worlds -- the raw holo.l stream AND the baked host (book-only). --
+   ;; with the caller ((holo-hex t (asm-text s)) and kin): this file binds no assembler names, so
+   ;; it loads clean in both worlds -- the raw holo.l stream and the baked host (book-only). --
    (asm-text src)
       (foldr (\ ln acc
                 (: clean (txtrim (txdecomment ln))

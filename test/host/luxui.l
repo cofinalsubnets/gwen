@@ -1,10 +1,10 @@
 ; --- test/host/luxui.l: lux end to end under a headless X ---
-; NOT in the test/*.l corpus (connectu/tether are host/*.c). Spawns an Xvfb,
-; sails the REAL lux driver (the same seven modules `make install` cats into
-; bin/lux) as one child, then a PROBE (test/host/luxui-probe.l) as another: the
-; probe drives synthetic input -- XTEST FakeInput for the super+drags, SendEvent
+; not in the test/*.l corpus (connectu/tether are host/*.c). Spawns an Xvfb,
+; sails the real lux driver (the same seven modules `make install` cats into
+; bin/lux) as one child, then a probe (test/host/luxui-probe.l) as another: the
+; probe drives synthetic input -- xtest FakeInput for the super+drags, SendEvent
 ; ClientMessages for the EWMH requests -- and asserts every effect off
-; GetGeometry/GetProperty/GetInputFocus, exiting 0 iff all held. TWO processes
+; GetGeometry/GetProperty/GetInputFocus, exiting 0 iff all held. two processes
 ; on purpose: lux's stream and the probe's never share a socket, so neither
 ; can desync the other (the one-process attempt kept mis-reading geometry;
 ; a -displayfd handshake is the cure).
@@ -14,7 +14,7 @@
 ; no Xvfb on the box -> a polite skip (the sentinel still prints).
 
 ; the display number off Xvfb's -displayfd stdout: take the first line that is
-; ENTIRELY digits (server chatter shares the pty).
+; entirely digits (server chatter shares the pty).
 (: xv (tether ["Xvfb" "-displayfd" "1" "-screen" "0" "640x480x24" "-nolisten" "tcp"])
    (wfx p) (: g2 (gather p) (? (two? g2) g2 (: _ (rest 2) (wfx p))))
    camp {}
@@ -50,8 +50,8 @@
  _ (must 'stale-planted (any (\ n (= n stale)) (readdir rdir)))
 
  ; the real driver, the same module set bin/lux ships (DISPLAY rides env).
- ; ⚠ HOME rides too, at a scratch seat: crew/lux/config.l reads ~/.love/etc/lux.l
- ; through salt, and the probe below drives NAMED chords (super+space) against the
+ ; HOME rides too, at a scratch seat: crew/lux/config.l reads ~/.love/etc/lux.l
+ ; through salt, and the probe below drives named chords (super+space) against the
  ; stock layout -- so the box's own lux config must not reach this gate.
  luxhome "out/host/.luxui-home"
  _ (mkdir luxhome 493)                                                          ; already there -> -EEXIST, which is the same good news

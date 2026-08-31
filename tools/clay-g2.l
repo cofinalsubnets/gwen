@@ -1,14 +1,14 @@
-; tools/clay-g2.l -- G2, doc/misc/clay.md's CONVERSION gate: does the C a generator lays
+; tools/clay-g2.l -- g2, doc/misc/clay.md's conversion gate: does the C a generator lays
 ; mean what the C it replaces meant?
 ;
-; parse two whole translation units and compare the named top-level DEFINITIONS as
+; parse two whole translation units and compare the named top-level definitions as
 ; trees. parsing whole is what makes it exact: both sides meet the same cpp, the same
 ; typedefs and the same macro expansions, so a difference that survives is a
-; difference in what the C MEANS and never in how it was spelled. that is the one
+; difference in what the C means and never in how it was spelled. that is the one
 ; comparison a byte diff cannot make -- the generator says `A(l)`, prints `A(l)`, and
 ; cpp turns both into the same tree whatever the macro happens to be today.
 ;
-; ⚠ it runs ONCE, at a conversion, against the file the region came out of -- the
+; it runs once, at a conversion, against the file the region came out of -- the
 ; original is deleted afterwards and there is nothing left to compare to. what stands
 ; afterwards is the regeneration-drift cmp in test_clay, and the corpus.
 ;
@@ -34,7 +34,7 @@
                       (: ps (cparse-t <>pp 'amd64)
                          (? (okv? ps) (g2-el (caup ps) 1) 'parsefail))))))))
 
-   ; the DEFINITION, never the prototype that announces it: the two wear one name, and
+   ; the definition, never the prototype that announces it: the two wear one name, and
    ; comparing the wrong one would pass on a signature while the body drifted.
    (g2-find tops nm)
     (: (go l) (? (! (two? l)) ()
@@ -56,7 +56,7 @@
        oks (foldl (+) 0 (map one names))
        _ (g2-say ("g2: " + (show oks) + " / " + (show (tally names))
                   + " definitions identical as trees"))
-       ; ⚠ A VACUOUS PASS IS A FAIL: a front end that answered nothing reports 0/0,
+       ; a vacuous pass is a fail: a front end that answered nothing reports 0/0,
        ; and 0/0 is not agreement -- it is a gate that measured nothing.
        (? (&& (oks = (tally names)) (0 < oks))
           (: _ (g2-say "g2: pass") 1)

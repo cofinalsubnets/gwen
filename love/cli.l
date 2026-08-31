@@ -22,7 +22,7 @@
     cli2
  (trap (\ x
  (: (cli-leave c) (scare 'cli-leave c)
-    ; a TEST, not a match on (): a refusal answers -errno and no negative
+    ; a test, not a match on (): a refusal answers -errno and no negative
     ; matches the empty pattern
     (load1 p) (: q (open p "r")
                  (? q (reads q) (say err $ "love: cannot open " + p, cli-leave 1)))
@@ -78,7 +78,7 @@
            "--"                 (t @ (_ . _) ('file . t) '(stdin))
            (from 'verbs 'word h @ '() ('file . a) f ('verb . f . a)))
       '(none))
-    ; stdin is the answer to an EMPTY command line, or to `--` with nothing after it --
+    ; stdin is the answer to an empty command line, or to `--` with nothing after it --
     ; never to a line that carried flags and named no program.
     p (two? >ln ? (pre >ln) '(stdin))   ; runs -l preloads + -v/-h + -m; the program kind
     k <p

@@ -1,10 +1,10 @@
-; crew/moon/val.l -- the VALUE LAYER (moon-ssa rung 0): CFG, escape census,
-; per-def chains and interval liveness over FINAL forms. an instrument today,
+; crew/moon/val.l -- the VALUE layer (moon-ssa rung 0): cfg, escape census,
+; per-def chains and interval liveness over final forms. an instrument today,
 ; the allocator's substrate later; touches no codegen. the python twin is
 ; doc/misc/proto/ssagap/ (two implementations, one answer -- differ.sh).
-; the determinism law: every list a v-fn answers is SORTED, and no answer may
+; the determinism law: every list a v-fn answers is sorted, and no answer may
 ; depend on tablet iteration order (joins are unions, keys sort before walks).
-; a frame op that misses the base+const shape READS EVERYTHING -- the floor:
+; a frame op that misses the base+const shape reads everything -- the floor:
 ; every count downstream is conservative, never flattering.
 (module 'moon
 (:
@@ -327,7 +327,7 @@
        (row (n - 1) ()))
 
    ; -- reaching defs at cell grain: rt i -> the defs (a sorted subset of dfs)
-   ; reaching INTO i, over the index window [lo, hi] (a repack hull is such a
+   ; reaching into i, over the index window [lo, hi] (a repack hull is such a
    ; window: no path leaves it and returns unseen). forward fixpoint; unions.
    (vreach lo hi succ dfs)
     (: rt {}
@@ -379,7 +379,7 @@
        [(map (\ r2 [(peep gt r2 ()) (peep ut r2 ())]) (sort (keys gt))) nod])
 
    ; -- one value's boolean liveness at cell grain over [lo, hi]: kills at the
-   ; stores, uses at the loads. answers i -> live OUT of i.
+   ; stores, uses at the loads. answers i -> live out of i.
    (vclive lo hi succ kills uses)
     (: lo9 {}
        ut (foldl (\ t u (pin t u 1)) {} uses)
@@ -395,7 +395,7 @@
        (fix 0))
 
    ; -- per-def chains: each cell's stores grouped by the loads that join them,
-   ; and the call-crossing verdict per CHAIN, not per hull. [sb base defs uses cross]
+   ; and the call-crossing verdict per chain, not per hull. [sb base defs uses cross]
    (vchains ctx)
     (: n (ctx 'n) succ (ctx 'succ) lv (ctx 'lv) ci (ctx 'ci)
        (out ss seed)

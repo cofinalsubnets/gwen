@@ -1,20 +1,20 @@
 #!/bin/love
 ; --- boot.l: the initramfs /init -- love as pid 1 on the Linux kernel ---
-; the REAL bringup companion to init.l's (pid1 0) tour. where (pid1 0) mounts into
-; /tmp/love-* demo paths and reaps a planted orphan to PROVE the shape, this is what the
-; kernel actually execs as process 1 out of the initramfs: mount the FHS filesystems,
+; the real bringup companion to init.l's (pid1 0) tour. where (pid1 0) mounts into
+; /tmp/love-* demo paths and reaps a planted orphan to prove the shape, this is what the
+; kernel actually execs as process 1 out of the initramfs: mount the fhs filesystems,
 ; then hand the console to lush (crew/lush, catted to /lib/sh.l) and never exit (pid 1 leaving panics the kernel).
 ;
 ; packaged by mk/distro.mk as /init (this file, shebang -> /bin/love), beside /bin/love,
 ; /bin/kore (+ applet symlinks) and /lib/sh.l. boot line:
-;   qemu ... -kernel <bzImage> -initrd initramfs.cpio.gz -append "console=ttyS0 rdinit=/init"
+;   qemu ... -kernel <bzImage> -initrd initramfs.cpio.gz -append "console=ttys0 rdinit=/init"
 ;
-; SAFE TO DRY-RUN ON THE HOST: `out/host/love init/boot.l` sees getpid != 1, prints the
+; safe to dry-run on the host: `out/host/love init/boot.l` sees getpid != 1, prints the
 ; banner and returns -- no mounts, no shell handoff (so it never blocks a dev machine).
 (: (say1 s) (: _ (puts s) (puts "\n"))              ; a console line
 
-   ; mount one early filesystem at its FHS path (mkdir first; mount is () success /
-   ; +errno failure -- e.g. EBUSY when the kernel already auto-mounted devtmpfs).
+   ; mount one early filesystem at its fhs path (mkdir first; mount is () success /
+   ; +errno failure -- e.g. ebusy when the kernel already auto-mounted devtmpfs).
    (mnt src tgt typ)
      (: _ (mkdir tgt 493)
         r (mount src tgt typ)
@@ -27,7 +27,7 @@
    (console _) ["/bin/love" "-l" "/lib/sh.l" "-e" "(: _ (use 'lush) (sh 0))"]
 
    ; a boot self-check: run a real userland command (kore, forked + captured) so the
-   ; console SHOWS the base system works end to end before we hand off the tty. `hark`
+   ; console shows the base system works end to end before we hand off the tty. `hark`
    ; returns (exit . stdout); the shebang on /bin/kore points at /bin/love.
    (selfcheck _)
      (: r (hark ["/bin/kore" "ls" "/proc"])
@@ -35,7 +35,7 @@
                  (+ ", " (+ (show (tally (cup r))) " bytes --"))))))
 
    ; pid 1's forever loop: harvest every child (waitpid(-1) via `glean`). the console dying
-   ; RESPAWNS it (a getty); any other pid is a reparented orphan we just harvest. a
+   ; respawns it (a getty); any other pid is a reparented orphan we just harvest. a
    ; non-pair glean (nothing pending / -ECHILD) paces the loop so we never busy-spin.
    (harvest shpid)
      (: ev (glean 0)

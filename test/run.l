@@ -1,8 +1,8 @@
 ; Subprocess capability (host-only nifs `hark` and `getenv`).
 ;
-; (hark argv) takes a LIST of strings and spawns the program named by its head
+; (hark argv) takes a list of strings and spawns the program named by its head
 ; (PATH-resolved via execvp). It returns:
-;   (status . output)  -- a PAIR -- when the process ran: status is the exit
+;   (status . output)  -- a pair -- when the process ran: status is the exit
 ;                         code (or 128+signal if killed), output is the child's
 ;                         captured stdout as one string;
 ;   a positive fixnum  -- the OS errno -- when the program couldn't be spawned;
@@ -30,7 +30,7 @@
   ; --- multiple args are marshalled in order, with no shell in between ---
   (: r (hark ["printf" "%s-%s" "ab" "cd"]) (= "ab-cd" (cup r)))
 
-  ; --- a program that can't be spawned -> positive errno fixnum, NOT a chain ---
+  ; --- a program that can't be spawned -> positive errno fixnum, not a chain ---
   (: r (hark ["/no/such/prog-xyzzy"]) (&& (charm? r) (< 0 r)))    ; abs path: ENOENT
   (: r (hark ["no-such-prog-xyzzy"])  (&& (charm? r) (< 0 r)))    ; PATH miss: ENOENT
 

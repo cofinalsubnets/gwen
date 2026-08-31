@@ -5,7 +5,7 @@
 ; udie) and text.l's lines/unlines.
 ;
 ; keys: one byte at a time via (see in); ESC [ A/B/C/D decode to k/j/l/h, any
-; other post-ESC byte is DELIVERED AFTER the bare 27 (a one-byte pushback), so
+; other post-ESC byte is delivered after the bare 27 (a one-byte pushback), so
 ; `ESC x` interleaves right. port EOF quits -- a piped script (the smoke lane)
 ; ends with :wq and never dangles. the tty raws via the `raw` nif (cooked
 ; restores at exit, bao's atexit); the frame lives on the alternate screen,
@@ -18,7 +18,7 @@
        r (? (< 0 (tally f)) (uread f) ())
        st (vnew (? (two? r) (lines <>r) ()) f)
        _ (? ((< 0 (tally f)) && !(two? r)) (vmsg st (+ f ": new file")) ())
-       ; the pens are the FACE's to hand over -- they want $COLORTERM and the
+       ; the pens are the face's to hand over -- they want $colorterm and the
        ; user's own theme file, and the engine reads neither
        _ (pin st 'pens (hue-wake ()))
        ws (winsize 0)
@@ -37,13 +37,13 @@
                        (? q (: _ (say q (unlines (s2 'lines))) _ (close q)
                                _ (pin s2 'dirty ())
                                (vmsg s2 (+ nm " written")))
-                          (: _ (pin s2 'quit ())          ; a failed wq must NOT quit
+                          (: _ (pin s2 'quit ())          ; a failed wq must not quit
                              (vmsg s2 (+ "cannot write " nm)))))
                     (: _ (pin s2 'quit ())
                        (vmsg s2 "no file name"))))))
        ; the ex read requests: (name) means put that file in the buffer. a name
        ; that does not open is not an error -- it is a new file, the same welcome
-       ; the startup above gives one. ⚠ presence is uread's (1 text) WRAPPER, not
+       ; the startup above gives one. presence is uread's (1 text) wrapper, not
        ; the text: an empty file is a real file with nothing in it.
        (doe s2)
         (: rq (s2 'doe)

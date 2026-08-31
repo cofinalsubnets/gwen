@@ -1,22 +1,22 @@
-; crew/lux/manage.l -- the manageHook DSL: a new window's properties decide where it
-; lands. A HOOK is (ctx sh -> sh): given the manage context and the sheaf (the
-; window already admitted TILED by the driver), it may re-place the window --
+; crew/lux/manage.l -- the manageHook dsl: a new window's properties decide where it
+; lands. a hook is (ctx sh -> sh): given the manage context and the sheaf (the
+; window already admitted tiled by the driver), it may re-place the window --
 ; float it, center it, ignore it (evict) -- or pass the sheaf through unchanged.
 ; This mirrors xmonad: the core manages/tiles every window first, then the
-; manageHook transforms. The COMBINATORS + float ACTIONS are pure (crew/lux/law.l
-; asserts them with mock predicates); the PREDICATES query X (prop?/class-of?/
+; manageHook transforms. The combinators + float actions are pure (crew/lux/law.l
+; asserts them with mock predicates); the predicates query X (prop?/class-of?/
 ; transient) so they, do-raise, and the assembled default are host-only -- they
-; call crew/lux/wire.l's GetProperty. A body-LESS `:` -- it all leaks to the driver.
+; call crew/lux/wire.l's GetProperty. a body-less `:` -- it all leaks to the driver.
 ;
 ; ctx = (socket window screen-rect win-geom): the socket for property queries,
 ; the new window, the screen rect (0 0 W H), and the window's current geometry.
 
 ; the two combinators are spelled as operators, so they read as the rules they
 ; are: `pred -?> act`, `p <||> q`. `grip` is the one door onto the grammar left
-; open after the hatch, and it must stand in its OWN form -- opfix factors a whole
+; open after the hatch, and it must stand in its own form -- opfix factors a whole
 ; form at once, so a row pinned inside the `:` below would land too late for it.
 ; <||> sits in the logical band with ||, -?> just under it, both right-handed. the
-; leading 2 is the LANE -- a left operand and a right, which is what an infix one takes;
+; leading 2 is the lane -- a left operand and a right, which is what an infix one takes;
 ; the band is a bare charm, positive for the right hand these two want.
 (grip 2 '<||> 30)
 (grip 2 '-?> 25)
@@ -35,13 +35,13 @@
    (do-raise c sh) (: _ (x-raise (mg-sock c) (mg-win c)) sh)                     ; restack above (X); returns the sheaf unchanged
 
    ; --- predicates: (ctx) -> bool. prop?/class-of? query X properties. ---
-   (prop? propnm valnm) (c \ x-has-atom (mg-sock c) (mg-win c) propnm valnm)   ; isInProperty ATOM VALUE
+   (prop? propnm valnm) (c \ x-has-atom (mg-sock c) (mg-win c) propnm valnm)   ; isInProperty atom VALUE
    (class-of? names) (? !(two? names) (c \ 0)                                    ; an empty roster asks X nothing
                         (c \ : cl (x-getclass (mg-sock c) (mg-win c)) (any (n \ n = cl) names)))
-   (<||> p q) (c \ p c || q c)                                                 ; predicate OR
+   (<||> p q) (c \ p c || q c)                                                 ; predicate or
 
    ; --- combinators. A Maybe-hook (from -?>) is (ctx sh) -> (sh') | () : matched
-   ;     yields a 1-list, else nothing. compose-one takes the FIRST match;
+   ;     yields a 1-list, else nothing. compose-one takes the first match;
    ;     compose-all threads a list of plain hooks. ---
    (-?> pred act) (\ c sh (pred c ? [(act c sh)] ()))
    (compose-one mhs) (\ c sh (: (go l) (? !(two? l) sh
@@ -51,15 +51,15 @@
    ; --- xmonad's transience' and manageDocks as plain hooks (VALUES, not nullary
    ;     helpers -- (f) == f would hand back the wrapper unrun) ---
    transience (\ c sh (x-transient (mg-sock c) (mg-win c) ? (do-center-float c sh) sh))   ; a dialog floats centered on its parent
-   manage-docks (\ c sh (? ((prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK"          ; checkDock: a dock OR a desktop --
+   manage-docks (\ c sh (? ((prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DOCK"          ; checkDock: a dock or a desktop --
                              <||> prop? "_NET_WM_WINDOW_TYPE" "_NET_WM_WINDOW_TYPE_DESKTOP") c)     ; the file manager's wallpaper window
                            (do-ignore c sh) sh))                                                    ; is a client only by accident
 
    ; --- run a hook against a freshly-admitted window ---
    (manage-window hook c sh) (hook c sh)
 
-   ; --- the class ROSTERS a config can name (crew/lux/config.l reads them out of
-   ;     salt). they come in as symbols or strings; WM_CLASS is text, so spell
+   ; --- the class rosters a config can name (crew/lux/config.l reads them out of
+   ;     salt). they come in as symbols or strings; wm_class is text, so spell
    ;     every entry as text once, here. ---
    (mg-classes ns) (map (n \ name? n ? (string n) n) (filter (n \ name? n || string? n) ns))
    mg-center-def '("Xmessage" "Xscreensaver-settings" "feh" "vlc")               ; dialogs by nature, whatever they say they are

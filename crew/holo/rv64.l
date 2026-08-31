@@ -1,15 +1,15 @@
-; riscv -- the RV64 BACKEND for the neutral assembler (crew/holo/holo.l), the fifth target (the
-; pine64 ox64's T-Head C906 and qemu -M virt). like the others it pins a {lower,patch} pair -- here
+; riscv -- the rv64 backend for the neutral assembler (crew/holo/holo.l), the fifth target (the
+; pine64 ox64's T-Head c906 and qemu -M virt). like the others it pins a {lower,patch} pair -- here
 ; under 'rv64 and 'rv64 -- and the driver, IR forms and byte plumbing stay untouched. little-endian
-; instructions, native three-address ALU. these tables are RV64IMFD: no Zbb/Zba, and no A -- moon's
+; instructions, native three-address ALU. these tables are rv64imfd: no Zbb/Zba, and no A -- moon's
 ; __sync seam hands its two atomic words (amoswap.aq, the release fence) in raw. the emitted words are
 ; then squeezed to their 2-byte C forms where the operands fit (see rvc-of), so a linked image asks
-; for RV64IMAFDC -- rv64gc exactly, which every general-purpose rv64 core is. every word here was
+; for rv64imafdc -- rv64gc exactly, which every general-purpose rv64 core is. every word here was
 ; checked against `llvm-mc --triple=riscv64` (--show-encoding / --disassemble). load after holo.l.
 ;
-; the novel bit: RISC-V HAS NO FLAGS REGISTER, and the IR is flag-shaped (cmp .. br cond). so the
+; the novel bit: risc-v has no flags register, and the IR is flag-shaped (cmp .. br cond). so the
 ; assembler itself is the flags register: cmp/test/ucomisd emit nothing (or only an immediate
-; materialization) and REMEMBER their operands in `rv-flags`; br/set read the memory and fuse it
+; materialization) and remember their operands in `rv-flags`; br/set read the memory and fuse it
 ; into the native compare-and-branch (beq/blt/bltu ..) or compare-into-register (slt/sltu/feq/flt/
 ; fle) forms. the contract is exactly x86's: a br/set must be reached by a cmp in the same program
 ; with its operand registers still live -- a br on a stale memory reads garbage precisely where x86
@@ -17,17 +17,17 @@
 ; (no V flag to set), so `br vs` reads a register's sign.
 ;
 ; branches: the fused compare-branch reaches only +-4KB, too short for love.c-scale texts, so every
-; label branch LAYS wide (thumb1's move): the INVERTED fused branch hops over a jal x0 (+-1MB, one
+; label branch lays wide (thumb1's move): the inverted fused branch hops over a jal x0 (+-1MB, one
 ; j21 fixup). where holo measures the distance (laylax, the 'short hook below) it comes back down
 ; -- to the bare fused branch inside +-4KB, and to c.beqz/c.bnez or c.j inside the C forms' own
 ; reach. call/la/lar are the auipc pair (+-2GB, one 8-byte 'pcrel fixup carrying both base words).
 ; immediates never scare: past 12 bits they materialize through a scratch, so moon's immok seam can
 ; treat this target like x64.
 ;
-; scratch discipline (two, both outside the abstract file): x31 (t6) is the PER-INSTRUCTION
+; scratch discipline (two, both outside the abstract file): x31 (t6) is the per-instruction
 ; scratch -- address synthesis, immediate materialization, rotate temps -- dead after every lowered
-; chunk. x30 (t5) is the FLAG scratch: it holds a materialized cmp immediate, a test result, or an
-; adds/subs overflow bit FROM the compare TO its br/set, so it must survive between instructions --
+; chunk. x30 (t5) is the flag scratch: it holds a materialized cmp immediate, a test result, or an
+; adds/subs overflow bit from the compare to its br/set, so it must survive between instructions --
 ; the one riscv-specific caveat: a far-displacement stx/stxb between a cmp and its br borrows x30
 ; and breaks the fusion (real codegen keeps cmp and br adjacent; nothing emits that shape).
 
@@ -58,7 +58,7 @@
           ('f16 >< 28) ('f17 >< 29) ('f18 >< 30) ('f19 >< 31)])
    (rvf r) (look rv-fregs r 'badfreg)
 
-   ;; -- the six instruction formats, each a word builder. immediates arrive SIGNED; & masks
+   ;; -- the six instruction formats, each a word builder. immediates arrive signed; & masks
    ;;    two's-complement bits into the field (exact on negative charms). --
    (rv-r f7 rs2 rs1 f3 rd op) (le32 ((f7 << 25) | ((rs2 << 20) | ((rs1 << 15) | ((f3 << 12) | ((rd << 7) | op))))))
    (rv-i imm rs1 f3 rd op)    (le32 (((imm & 4095) << 20) | ((rs1 << 15) | ((f3 << 12) | ((rd << 7) | op)))))
@@ -120,7 +120,7 @@
          (? (reg? b) (rv-flag-set 0 an (rvn b) -1)
             (b = 0)  (rv-flag-set 0 an 0 -1)                                 ; compare against x0, free
             (: bs (rv-li-rec 30 b) _ (rv-flag-set 0 an 30 -1) bs)))          ; imm -> x30, the flag scratch
-   (rv-test a b)                                                             ; x30 = a AND b; compare vs x0
+   (rv-test a b)                                                             ; x30 = a and b; compare vs x0
       (: an (rvn a)
          bs (? (reg? b) (rv-alu-rrr 7 0 30 an (rvn b))
                (rv-fits12 b) (rv-i b an 7 30 0x13)                           ; andi x30, a, b
@@ -128,8 +128,8 @@
          _ (rv-flag-set 0 30 0 -1)
          bs)
 
-   ;; adds/subs: do the op AND leave the overflow sign bit in x30 (v = (d^a)&(d^b) for add,
-   ;; (a^b)&(a^d) for sub -- both need the operands' OLD values, saved first so d may alias).
+   ;; adds/subs: do the op and leave the overflow sign bit in x30 (v = (d^a)&(d^b) for add,
+   ;; (a^b)&(a^d) for sub -- both need the operands' old values, saved first so d may alias).
    ;; the flag memory then reads d-vs-x0 for eq/ne/lt.., x30's sign for vs/vc.
    (rv-addsub-s op d a b)
       (: dn (rvn d) an (rvn a)
@@ -157,9 +157,9 @@
          (cond = 'above) [6 bn an] (cond = 'be) [7 bn an]
          (scare 'rv-badcc cond))
    ;; fp conds compute a 0/1 predicate into x31 (flt/fle/feq write GPRs, quiet on NaN), plus the
-   ;; branch SENSE: 1 = taken when x31 is set, 0 = taken when clear (below = NOT ae, etc; p/np
+   ;; branch sense: 1 = taken when x31 is set, 0 = taken when clear (below = NOT ae, etc; p/np
    ;; check both operands ordered). x86's ucomisd conds map: above/ae/below/be/eq/ne/p/np -- and
-   ;; the SIGNED four read as A64's FCMP condition codes: gt/ge are unordered-FALSE, lt/le their
+   ;; the signed four read as a64's FCMP condition codes: gt/ge are unordered-false, lt/le their
    ;; exact complements (unordered-TRUE, so a branch on the NEGATED relation is NaN-honest --
    ;; the arm-family convention moon's fcmp lanes lean on). so lt == below and le == be here.
    (rv-fp-pred cond fa fb)
@@ -185,7 +185,7 @@
          _ (? (a < 0) (scare 'rv-no-cmp tag) 0)
          [a (peep rv-flags 'b -1) (peep rv-flags 'f 0) (peep rv-flags 'v -1)])
 
-   ;; (br cond label): the INVERTED fused branch hops the wide jal (thumb1's shape). s/ns re-derive
+   ;; (br cond label): the inverted fused branch hops the wide jal (thumb1's shape). s/ns re-derive
    ;; the sign of a-b through x31; vs/vc read the adds/subs overflow register.
    (rv-br cond label)
       (: st (rv-flag-read 'br) an (at st 0) bn (at st 1)
@@ -355,7 +355,7 @@
    (rv-urem d a b t)  (rv-alu-rrr 7 1 (rvn d) (rvn a) (rvn b))               ; remu
 
    ;; mulo: mulh holds the high 64; the product fits signed 64 iff that equals the low half's
-   ;; sign fill. t is clobbered and MUST differ from a, b, d (mulh runs first). flag-free, so
+   ;; sign fill. t is clobbered and must differ from a, b, d (mulh runs first). flag-free, so
    ;; the hop-over-jal shape directly.
    (rv-mulo d a b t lbl)
       (: dn (rvn d) an (rvn a) bn (rvn b) tn (rvn t)
@@ -369,11 +369,11 @@
    ;; one 8-byte fixup whose aux packs both base words -- 'pcrel patches hi20 into the first,
    ;; lo12 into the second). la and lar coincide: auipc is byte pc-relative by nature, so the
    ;; pair is translation-invariant (x86's rip-rel lea already is; arm64 needed ADR for that).
-   ;; -- the SHORT branch (holo's 'short hook). rv-br always ends (.. hop jal): a fused
-   ;;    compare-branch INVERTED so it hops the wide jal. inside the fused form's own +-4KB the
+   ;; -- the short branch (holo's 'short hook). rv-br always ends (.. hop jal): a fused
+   ;;    compare-branch inverted so it hops the wide jal. inside the fused form's own +-4KB the
    ;;    jal is dead weight -- drop it, flip the hop back, and aim it at the label. all four
    ;;    rv-br shapes end in that pair, so one rewrite serves them and each saves exactly the jal.
-   ;;    ⚠ a REWRITE and not a re-lower: rv-flags carries the cmp that fed this br only while pass
+   ;;    a rewrite and not a re-lower: rv-flags carries the cmp that fed this br only while pass
    ;;    one runs, and by the time the relaxer decides, it has moved on to the last cmp in the text.
    (rvb-fits? rel) ((rel >= -4096) && (rel <= 4094))
    (rv-bword rel)  (: u (rel & 8191)                    ; the B-form's scattered 13-bit field
@@ -382,20 +382,20 @@
    (rv-first k l)  (? ((k < 1) || !(two? l)) () (<l >< rv-first (k - 1) >l))
    ;;    one rung tighter, the C branches: c.j for the jal, and c.beqz/c.bnez for a hop that
    ;;    compares against x0 with its register in the x8..x15 window. these cannot ride the local
-   ;;    rvc-squeeze -- it reads a WORD and these turn on a DISTANCE -- so they are the 'short
+   ;;    rvc-squeeze -- it reads a WORD and these turn on a distance -- so they are the 'short
    ;;    hook's own business, answering a 2-byte fixup where the 4-byte one would do.
    (rvj-fits? rel)  ((rel >= -2048) && (rel <= 2046))
    (rvcb-fits? rel) ((rel >= -256) && (rel <= 254))
-   (rv-cjword rel) (: u (rel & 4095)                    ; CJ: imm[11|4|9:8|10|6|7|3:1|5]
+   (rv-cjword rel) (: u (rel & 4095)                    ; cj: imm[11|4|9:8|10|6|7|3:1|5]
                       ((((u >> 11) & 1) << 12) | ((((u >> 4) & 1) << 11)
                         | ((((u >> 8) & 3) << 9) | ((((u >> 10) & 1) << 8)
                           | ((((u >> 6) & 1) << 7) | ((((u >> 7) & 1) << 6)
                             | ((((u >> 1) & 7) << 3) | (((u >> 5) & 1) << 2)))))))))
-   (rv-cbword rel) (: u (rel & 511)                     ; CB: imm[8|4:3] high, imm[7:6|2:1|5] low
+   (rv-cbword rel) (: u (rel & 511)                     ; cb: imm[8|4:3] high, imm[7:6|2:1|5] low
                       ((((u >> 8) & 1) << 12) | ((((u >> 3) & 3) << 10)
                         | ((((u >> 6) & 3) << 5) | ((((u >> 1) & 3) << 3)
                           | (((u >> 5) & 1) << 2))))))
-   ;;    the B-form hop -> its CB base word, or (): beq/bne (funct3 0/1 -> c.beqz/c.bnez), rs2 x0,
+   ;;    the B-form hop -> its cb base word, or (): beq/bne (funct3 0/1 -> c.beqz/c.bnez), rs2 x0,
    ;;    rs1 in the window, and a reach of +-256 rather than +-4KB.
    (rv-cbase w rel)
       (: f3 ((w >> 12) & 7) rs1 ((w >> 15) & 31)
@@ -439,7 +439,7 @@
 
    (rv-tp d) (rv-i 0 4 0 (rvn d) 0x13)                                       ; addi d, tp, 0
 
-   ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied.
+   ;; the dispatch: an emitter tablet (shapes in holo.l's ir-arity), rows partial-applied.
    rv-emitters (emsof
         [('li >< rv-li) ('mov >< rv-mov) ('cmp >< rv-cmp) ('test >< rv-test)
           ('imul >< rv-imul)
@@ -478,11 +478,11 @@
           ('trap >< le32 0x100073)])                                         ; ebreak
    _ (foldl (\ _ p (emrow rv-emitters <p (rv-aluop <p))) 0 rv-alu-rows)
 
-   ;; -- RVC, the LOCAL squeeze. a lowered chunk that is exactly one 32-bit word carrying no fixup
+   ;; -- rvc, the local squeeze. a lowered chunk that is exactly one 32-bit word carrying no fixup
    ;;    may collapse to a 2-byte C form when its operands fit. the decision reads only the word --
    ;;    never an address -- so holo's one-pass `lay` measures the short chunk with no relaxation,
    ;;    and every label-relative form carries a fixup, which is exactly the set whose size would
-   ;;    otherwise turn on a distance. ⚠ emitting these makes the output ask for rv64gc.
+   ;;    otherwise turn on a distance. emitting these makes the output ask for rv64gc.
    (rvc-p? r)      ((r >= 8) && (r <= 15))              ; the 3-bit register window x8..x15
    (rvc-p r)       (r - 8)
    (rvc-s6? n)     ((n >= -32) && (n <= 31))
@@ -499,7 +499,7 @@
    (rvc-cisp f3 rd i)      (le16 ((f3 << 13) | ((((i >> 5) & 1) << 12) | ((rd << 7) | ((((i >> 3) & 3) << 5) | ((((i >> 6) & 7) << 2) | 2))))))
    (rvc-ca f2 rd rs2)      (le16 ((35 << 10) | (((rvc-p rd) << 7) | ((f2 << 5) | (((rvc-p rs2) << 2) | 1)))))
    (rvc-cb f2 rd i)        (le16 ((4 << 13) | ((((i >> 5) & 1) << 12) | ((f2 << 10) | (((rvc-p rd) << 7) | (((i & 31) << 2) | 1))))))
-   ;; c.addi16sp: rd IS sp, which is what parts it from c.lui -- imm[9|4|6|8:7|5], scaled by 16
+   ;; c.addi16sp: rd is sp, which is what parts it from c.lui -- imm[9|4|6|8:7|5], scaled by 16
    (rvc-c16sp i)           (le16 ((3 << 13) | ((((i >> 9) & 1) << 12) | ((2 << 7)
                              | ((((i >> 4) & 1) << 6) | ((((i >> 6) & 1) << 5)
                                | ((((i >> 7) & 3) << 3) | ((((i >> 5) & 1) << 2) | 1))))))))
@@ -551,7 +551,7 @@
               ((f3 = 3) && ((rvc-p? rs1) && ((rvc-p? rd) && rvc-u? i 8 248)))
                (rvc-cl 3 rd rs1 i)                                       ; c.ld
               ())
-          (op = 0x23)                                                    ; STORE
+          (op = 0x23)                                                    ; store
            (? ((f3 = 3) && ((rs1 = 2) && rvc-u? s 8 504))
                (rvc-css 7 rs2 s)                                         ; c.sdsp
               ((f3 = 3) && ((rvc-p? rs1) && ((rvc-p? rs2) && rvc-u? s 8 248)))
@@ -563,22 +563,22 @@
               ((f3 = 3) && ((rvc-p? rs1) && ((rvc-p? rd) && rvc-u? i 8 248)))
                (rvc-cl 1 rd rs1 i)                                       ; c.fld
               ())
-          (op = 0x27)                                                    ; STORE-FP
+          (op = 0x27)                                                    ; store-FP
            (? ((f3 = 3) && ((rs1 = 2) && rvc-u? s 8 504))
                (rvc-css 5 rs2 s)                                         ; c.fsdsp
               ((f3 = 3) && ((rvc-p? rs1) && ((rvc-p? rs2) && rvc-u? s 8 248)))
                (rvc-cl 5 rs2 rs1 s)                                      ; c.fsd
               ())
-          (op = 0x67)                                                    ; JALR
+          (op = 0x67)                                                    ; jalr
            (? ((f3 = 0) && ((rd = 0) && (!(rs1 = 0) && (i = 0))))
                (rvc-cr 8 rs1 0) ())                                      ; c.jr -- `ret` rides this
           ()))
 
    ;; the chunk filter, word by word: a chunk is whole instructions, so plain bytes arrive four
-   ;; at a time and a fixup rides as ONE element of its own width. squeezing per WORD rather than
+   ;; at a time and a fixup rides as one element of its own width. squeezing per WORD rather than
    ;; per single-word chunk is what reaches the multi-word lowerings -- push/pop are addi+sd, and
    ;; their sp forms were the largest block of already-encodable words the old filter refused.
-   ;; ⚠ sound because no chunk holds a fixed-offset branch over anything squeezable: rv-br's hop
+   ;; sound because no chunk holds a fixed-offset branch over anything squeezable: rv-br's hop
    ;; is a B-form (no C shape) and clears exactly the jal fixup, which is never squeezed either.
    (rvc-4? bs) (: (go i l) (? (i = 4) 1 !(two? l) 0 !(imm? <l) 0 (go (i + 1) >l))
                   (go 0 bs))
@@ -591,7 +591,7 @@
 
    (rv-lower ins) (: f lower-via
                      (? !(lit? f) (scare 'holo-bake-stale 'lower-via)
-                        (<ins = 'raw) (f rv-emitters ins)       ; raw means THESE bytes -- never squeezed
+                        (<ins = 'raw) (f rv-emitters ins)       ; raw means these bytes -- never squeezed
                         (rvc-squeeze (f rv-emitters ins))))
 
    ;; relocations: j21 is the jal offset bitfield (+-1MB, scares past); pcrel splits target-site
@@ -622,10 +622,10 @@
    rv (tablet 0)
    _ (pin rv 'lower rv-lower)
    _ (pin rv 'patch rv-patch)
-   ;; ⚠ the prefix ahead of the hop (fp predicate, or the s/ns subtract) is plain words, never a
-   ;; fixup, so its element count IS its byte count -- which is what puts the branch at pa + pre.
+   ;; the prefix ahead of the hop (fp predicate, or the s/ns subtract) is plain words, never a
+   ;; fixup, so its element count is its byte count -- which is what puts the branch at pa + pre.
    _ (pin rv 'short (\ ins c rel
-        (? (id? <ins 'jmp)                        ; the lone jal, and pa IS its address
+        (? (id? <ins 'jmp)                        ; the lone jal, and pa is its address
            (? !((tally c) = 1) ()                 ; the chunk must BE that jal
               !(fix? <c) ()
               !(id? (fix-k <c) 'j21) ()
@@ -635,13 +635,13 @@
            (: pre ((tally c) - 5)
               (? ((pre < 0) || !(rvb-fits? (rel - pre))) ()
                  (rv-shorten c (at ins 2) (rel - pre)))))))
-   ;; the ('align n) filler unit: C.NOP 0001 LE. TWO bytes, not the wide nop's four -- pad-to
-   ;; cycles ONE unit and lays a partial one at the end, and a compressed instruction puts the
+   ;; the ('align n) filler unit: C.NOP 0001 LE. two bytes, not the wide nop's four -- pad-to
+   ;; cycles one unit and lays a partial one at the end, and a compressed instruction puts the
    ;; next address at 2 mod 4, where a torn wide nop leaves 0013: low bits 11, so a decoder
    ;; reads it as a 32-bit opcode and swallows the instruction after the pad. thumb2 pads with
    ;; its 16-bit nop for the same reason. c.nop tiles every even count exactly.
    _ (pin rv 'nop '(1 0))
-   ;; the TEST DOOR: test/holo/fuzz/rvc.l checks the squeeze by EQUIVALENCE, so it needs the
+   ;; the test door: test/holo/fuzz/rvc.l checks the squeeze by equivalence, so it needs the
    ;; three pieces the assembler reaches through other slots or not at all -- everything else
    ;; here stays closure-private. a gate reads `parts`; the assembler and the linker never do.
    _ (pin rv 'parts {'rvc-of rvc-of 'rv-patch rv-patch 'rv-cbase rv-cbase})

@@ -1,8 +1,8 @@
 ; apcap: the numeral ceiling -- a public tunable box, (pin apcap 0 n) retunes.
 ; a compose count above (apcap 0) raises (scare 'apcap k) instead of allocating
-; O(k). the numeric power lane guards the RESULT instead: past the count gate an
+; O(k). the numeric power lane guards the result instead: past the count gate an
 ; exact base beyond +-1 scares only when ~ k*log2|b| bits top the box read as a
-; WORD budget (64 bits a word) -- a gem or |b| <= 1 base runs free at any
+; word budget (64 bits a word) -- a gem or |b| <= 1 base runs free at any
 ; exponent, a deliberate big power fits, the slipped tower still scares.
 (assert (tablet? apcap) (= 1048576 (apcap 0)) (= 1048576 (peep apcap 0 0)))
 

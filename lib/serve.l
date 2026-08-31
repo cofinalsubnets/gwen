@@ -1,6 +1,6 @@
 ; lib/serve.l -- `love serve`: the tree, in a browser, painted on the way out.
 ;
-;   love serve [-p PORT] [DIR]      DIR defaults to the working directory
+;   love serve [-p port] [DIR]      DIR defaults to the working directory
 ;
 ; kiosko already serves a directory and lists what it holds. what this adds is one
 ; hook, and three answers through it:

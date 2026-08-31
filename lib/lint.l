@@ -161,13 +161,13 @@
                      (c = 34) (w (i + 1) 'code stk line (col + 1) sl sc 0 ti tc warns)
                      (c = 10) (w (i + 1) 'str stk (line + 1) 1 sl sc 0 ti tc warns)
                      (w (i + 1) 'str stk line (col + 1) sl sc 0 ti tc warns))
-                 (id? st 'cmt)                                    ; ; comment to EOL
+                 (id? st 'cmt)                                    ; ; comment to eol
                   (? (c = 10) (w (i + 1) 'code stk (line + 1) 1 sl sc 0 ti tc warns)
                      (w (i + 1) 'cmt stk line (col + 1) sl sc 0 ti tc warns))
                  (c = 59)                                                      ; ; -- start comment
                   (w (i + 1) 'cmt (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
                      (? it (lend line tc ti i warns) warns))
-                 (c = 35 && i + 1 < n && src (i + 1) = 33)                     ; #! shebang, to EOL
+                 (c = 35 && i + 1 < n && src (i + 1) = 33)                     ; #! shebang, to eol
                   (w (i + 2) 'cmt stk line (col + 2) sl sc 0 ti tc
                      (? it (lend line tc ti i warns) warns))
                  (c = 34)                                                      ; " -- start string
@@ -205,7 +205,7 @@
                  (c < 33)                                                      ; space, tab, the rest
                   (w (i + 1) 'code (lat src stk it ti i) line (col + 1) sl sc 0 ti tc
                      (? it (lend line tc ti i warns) warns))
-                 ; an ordinary character: a token START only if we were not in one
+                 ; an ordinary character: a token start only if we were not in one
                  (w (i + 1) 'code (? it stk (lelem stk i)) line (col + 1) sl sc
                     1 (? it ti i) (? it tc col) warns))))
        (w 0 'code () 1 1 1 1 0 0 1 ()))

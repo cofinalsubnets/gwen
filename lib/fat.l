@@ -1,6 +1,6 @@
 ; lib/fat.l -- FAT32, read and write
 ;
-; a DEVICE is a chain (rd wr nsec): (rd lba n) -> a string of n*512 bytes | (),
+; a device is a chain (rd wr nsec): (rd lba n) -> a string of n*512 bytes | (),
 ; (wr lba s) -> the sectors written | () (s whole sectors), nsec the total.
 ; anything that answers those is a disk -- the kernel's virtio nifs
 ; ((fat-disk ()) builds that dev), a cask in memory (the host laws), a file.
@@ -74,7 +74,7 @@
                       (fat@ f c ? (go (c + 1) (left - 1))
                        (fat! f c 0x0FFFFFFF, pin f 11 (c + 1), c))))
        (go (f 11) n))
-   ; k fresh clusters CHAINED -- () (and nothing kept) when the disk fills mid-take
+   ; k fresh clusters chained -- () (and nothing kept) when the disk fills mid-take
    (chain-take f k) (k ?
                      (: c (fat-take f)
                       (? !(charm? c) ()
@@ -108,7 +108,7 @@
    (name=? a b) (: n #a
                    (n = tally b &&
                     ((: (go i) (i < n ? (up1 (a i) = up1 (b i) ? (go (i + 1)) 0) 1)) 0)))
-   ; split at the LAST dot: (base . ext), ext "" when dotless
+   ; split at the last dot: (base . ext), ext "" when dotless
    (splitext s) (: n #s
                    (go i d) (? (i < n) (go (i + 1) (s i = 46 ? i d))
                                (d < 0) (s . "")
@@ -147,7 +147,7 @@
                 (any (g \ t = peep g 4 ()) gs ? (go (n + 1)) t)))
        (go 1))
 
-   ; --- directory entries. a GROUP is one slot's story -- its LFN run + short
+   ; --- directory entries. a group is one slot's story -- its LFN run + short
    ;     entry, raw -- as a tablet: 0 name (() for the label and the dots: out of
    ;     lookups, but their raw survives a rewrite), 1 attr, 2 cluster, 3 size,
    ;     4 raw11, 5 raw ---
@@ -230,7 +230,7 @@
        cs (comps path)
        (two? cs ? (go (f 6) cs) [(f 6) "" ()]))
 
-   ; --- timestamps: (clock 0) ms -> the DOS pair (date . time) ---
+   ; --- timestamps: (clock 0) ms -> the dos pair (date . time) ---
    (dos-now u)
     (: ms (clock 0) days (ms // 86400000) secs (ms // 1000 % 86400)
        z (days + 719468) era (z // 146097) doe (z % 146097)
@@ -270,7 +270,7 @@
        (: sh (mk-short n11 0 at cl sz)
         (group nm at cl sz n11 (mk-lfn nm (cksum n11) + sh))))))
 
-   ; --- mkfs: reserved 32, two FATs, one-sector clusters ---
+   ; --- mkfs: reserved 32, two fats, one-sector clusters ---
    (fat-mkfs dev)
     (: wr <>dev nsec <>>dev
        fatsz ((: (go fz) (: cl (nsec - (32 + 2 * fz))
@@ -278,7 +278,7 @@
                             (need <= fz ? fz (go need))))
               1)
        nclus (nsec - (32 + 2 * fatsz))
-       (? (nclus < 65525) ()                          ; smaller would BE fat16: refuse
+       (? (nclus < 65525) ()                          ; smaller would be fat16: refuse
           (: b (cask 512)
              _ (pin b 0 0xEB, pin b 1 0x58, pin b 2 0x90, bcopy b 3 "love fat")
              _ (w16 b 11 512, pin b 13 1, w16 b 14 32, pin b 16 2)
@@ -293,7 +293,7 @@
                 w32 i 488 (nclus - 1), w32 i 492 3, w32 i 508 0xAA550000)
              inf (string i)
              _ (wr 0 bpb, wr 1 inf, wr 6 bpb, wr 7 inf)
-             ; zero both FATs + the root cluster, 64 sectors a stroke
+             ; zero both fats + the root cluster, 64 sectors a stroke
              z64 (zeros 32768)
              (go lba left) (left ?
                             (: k (left < 64 ? left 64)
@@ -306,7 +306,7 @@
              ft (string fb)
              (wr 32 ft, wr (32 + fatsz) ft, 1))))
 
-   ; --- mount: the BPB read back, refused unless it is the FAT32 this writes ---
+   ; --- mount: the bpb read back, refused unless it is the FAT32 this writes ---
    (fat-mount dev)
     (: rd <dev s (rd 0 1)
        (? !(string? s) ()

@@ -1,8 +1,8 @@
 ; the gate for crew/holo/ -- the neutral assembler and every backend, the text front-end, and the
-; ELF linker. each golden is the exact hex the assembler emits, and EVERY one was checked against
+; ELF linker. each golden is the exact hex the assembler emits, and every one was checked against
 ; the real toolchain (objdump / llvm-mc, the mnemonic in the trailing comment): this file is the
 ; frozen record of that round-trip, so a drifted golden is a broken encoder or a disagreeing
-; disassembler. the sources are cat'd in rather than `use`d because the host bakes its NATIVE
+; disassembler. the sources are cat'd in rather than `use`d because the host bakes its native
 ; backend only -- the other four reach these goldens no other way (test/holo.l is the in-corpus
 ; smoke over the baked module).
 ; run: cat crew/holo/{holo,x64,arm64,thumb2,riscv,thumb1,text,elf}.l test/holo/golden.l
@@ -57,18 +57,18 @@
       ("ld.disp8"    "488b4708"              ((ld r0 r6 8)))
       ("ld.rbp0"     "488b4500"              ((ld r0 r4 0)))      ; rbp base forces a 0 disp byte
       ("ld.rbp.d8"   "488b4564"              ((ld r0 r4 100)))
-      ;; the sized family: movsx/movsxd loads, truncating stores, in-register extends, CL shifts
-      ("ld1.rbp"     "480fbe45f8"            ((ld1 r0 r4 -8)))      ; movsx  rax, BYTE [rbp-8]
-      ("ld2.sp"      "480fbf5c2410"          ((ld2 r3 sp 16)))      ; movsx  rbx, WORD [rsp+16]
+      ;; the sized family: movsx/movsxd loads, truncating stores, in-register extends, cl shifts
+      ("ld1.rbp"     "480fbe45f8"            ((ld1 r0 r4 -8)))      ; movsx  rax, byte [rbp-8]
+      ("ld2.sp"      "480fbf5c2410"          ((ld2 r3 sp 16)))      ; movsx  rbx, word [rsp+16]
       ("ld4.rbp"     "4c63459c"              ((ld4 r7 r4 -100)))    ; movsxd r8, DWORD [rbp-100]
-      ("st1.rbp"     "408845f8"              ((st1 r4 -8 r0)))      ; mov BYTE [rbp-8], al
-      ("st2.sp"      "6640895c2410"          ((st2 sp 16 r3)))      ; mov WORD [rsp+16], bx
+      ("st1.rbp"     "408845f8"              ((st1 r4 -8 r0)))      ; mov byte [rbp-8], al
+      ("st2.sp"      "6640895c2410"          ((st2 sp 16 r3)))      ; mov word [rsp+16], bx
       ("st4.rbp"     "4489459c"              ((st4 r4 -100 r7)))    ; mov DWORD [rbp-100], r8d
       ("sx1"         "480fbec0"              ((sx1 r0)))            ; movsx rax, al
       ("sx2.hi"      "4d0fbfc0"              ((sx2 r7)))            ; movsx r8, r8w
       ("sx4"         "4863db"                ((sx4 r3)))            ; movsxd rbx, ebx
-      ("ldu1.rbp"    "480fb645f8"            ((ldu1 r0 r4 -8)))     ; movzx rax, BYTE [rbp-8]  (unsigned char)
-      ("ldu2.sp"     "480fb75c2410"          ((ldu2 r3 sp 16)))     ; movzx rbx, WORD [rsp+16] (unsigned short)
+      ("ldu1.rbp"    "480fb645f8"            ((ldu1 r0 r4 -8)))     ; movzx rax, byte [rbp-8]  (unsigned char)
+      ("ldu2.sp"     "480fb75c2410"          ((ldu2 r3 sp 16)))     ; movzx rbx, word [rsp+16] (unsigned short)
       ("ldu4.rbp"    "448b459c"              ((ldu4 r7 r4 -100)))   ; mov r8d, DWORD [rbp-100] (unsigned int, zero-extends)
       ("zx1"         "480fb6c0"              ((zx1 r0)))            ; movzx rax, al
       ("zx2.hi"      "4d0fb7c0"              ((zx2 r7)))            ; movzx r8, r8w
@@ -96,27 +96,27 @@
                                               (vmread r3 r1) (vmwrite r1 r3)
                                               (sgdt r0 0) (sidt r0 0)))
       ("sys.int"     "cd00cd20"              ((int 0) (int 32)))
-      ;; the control registers: the CR number rides ModRM.reg, so REX.R reaches cr8 and REX.B
-      ;; reaches r8 -- and neither carries REX.W, a CR move being 64-bit already
+      ;; the control registers: the cr number rides Modrm.reg, so REX.R reaches cr8 and REX.B
+      ;; reaches r8 -- and neither carries REX.W, a cr move being 64-bit already
       ("sys.ldcr"    "0f20c00f20e3"          ((ldcr r0 0) (ldcr r3 4)))      ; mov rax,cr0 ; mov rbx,cr4
       ("sys.ldcr.hi" "410f20d8440f20c0"      ((ldcr r7 3) (ldcr r0 8)))      ; mov r8,cr3 ; mov rax,cr8
       ("sys.stcr"    "0f22c00f22db"          ((stcr 0 r0) (stcr 3 r3)))      ; mov cr0,rax ; mov cr3,rbx
       ("sys.stcr.hi" "410f22e0440f22c0"      ((stcr 4 r7) (stcr 8 r0)))      ; mov cr4,r8 ; mov cr8,rax
-      ;; the descriptor tables and INVLPG: one opcode, 0F 01, told apart by the ModRM digit.
+      ;; the descriptor tables and invlpg: one opcode, 0F 01, told apart by the Modrm digit.
       ("sys.lgdt"    "0f01170f015710"        ((lgdt r6 0) (lgdt r6 16)))     ; lgdt [rdi] ; lgdt [rdi+16]
       ("sys.lidt"    "0f015e08"              ((lidt r5 8)))                  ; lidt [rsi+8]
       ("sys.invlpg"  "0f013f410f017808"      ((invlpg r6 0) (invlpg r7 8)))  ; invlpg [rdi] ; invlpg [r8+8]
       ("sys.ltr"     "0f00d8410f00d8"        ((ltr r0) (ltr r7)))            ; ltr ax ; ltr r8w
-      ;; the SEGMENT registers, ldcr's twin: 8C /r with the sreg number in ModRM.reg.
+      ;; the segment registers, ldcr's twin: 8C /r with the sreg number in Modrm.reg.
       ;; REX.W widens the destination to the whole register, zero-extended -- no movzx.
       ("sys.ldseg"   "488cc8498cc9"          ((ldseg r0 1) (ldseg r8 1)))    ; mov rax,cs ; mov r9,cs
       ;; push takes an immediate as well as a register -- 6A ib / 68 id, both
-      ;; SIGN-extended into the 64-bit slot. the exception stubs are the caller.
+      ;; sign-extended into the 64-bit slot. the exception stubs are the caller.
       ("push.imm"    "6a006a1f682c010000"    ((push 0) (push 31) (push 300)))
       ("push.reg"    "504150"                ((push r0) (push r7)))
-      ;; lia: the label's ABSOLUTE (linked) address, movabs B8+rd io -- never resolvable in a .o,
+      ;; lia: the label's absolute (linked) address, movabs b8+rd io -- never resolvable in a .o,
       ;; the eight zeros being the abs64 placeholder a relocation overwrites. `la` answers where
-      ;; the label RUNS; the two part company exactly where a kernel is linked high and runs low.
+      ;; the label runs; the two part company exactly where a kernel is linked high and runs low.
       ("lia"         "48b8000000000000000049b90000000000000000"
                                              ((label k) (lia r0 k) (lia r8 k)))
       ;; tp: the thread pointer -- mov d, fs:[0]
@@ -135,7 +135,7 @@
       ;; la: rip-relative lea onto a data label laid with (label)+(raw ..)
       ("la.data"     "488d05070000004c8d050000000041424300"
                       ((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))   ; lea rax/r8, [rip -> x]
-      ;; abs64: an 8-byte ABSOLUTE address of a label baked into data (a static pointer). at org 0,
+      ;; abs64: an 8-byte absolute address of a label baked into data (a static pointer). at org 0,
       ;; tgt sits at offset 8 (just past the fixup), so the word reads 8, then ret.
       ("abs64.data"  "0800000000000000c3"
                       ((raw ((fix 8 abs64 tgt 0))) (label tgt) (ret)))
@@ -147,13 +147,13 @@
       ;; stack
       ("push.pop"    "5059"                  ((push r0) (pop r1)))
       ("push.ext"    "41504158"              ((push r7) (pop r7)))
-      ;; shifts & rotates: D1 /ext for a count of 1, C1 /ext ib otherwise
+      ;; shifts & rotates: d1 /ext for a count of 1, c1 /ext ib otherwise
       ("sar.1"       "48d1f8"                ((sar r0 1)))       ; the fixnum untag (rax)
       ("shr.1.ext"   "49d1e9"                ((shr r8 1)))       ; r8 -> x86 r9 (REX.B): shr r9,1
       ("shl.imm"     "48c1e004"              ((shl r0 4)))
       ("rol.32"      "48c1c020"              ((rol r0 32)))      ; the hash rotate (rol rax,32)
       ("sar.imm.ext" "49c1fd05"              ((sar r12 5)))      ; r12 -> x86 r13: sar r13,5
-      ;; test: 0x85 /r reg,reg ; 0xF7 /0 id reg,imm32
+      ;; test: 0x85 /r reg,reg ; 0xf7 /0 id reg,imm32
       ("test.rr"     "4885c0"                ((test r0 r0)))     ; test rax,rax (divide-by-zero check)
       ("test.imm"    "48f7c001000000"        ((test r0 1)))      ; test rax,1   (the fixnum low-bit guard)
       ;; SIB memory: [base + index*scale + disp]. r7->x86 r8, r10->x86 r11 (the map-probe's slot regs)
@@ -182,7 +182,7 @@
       ("jcc.all"
         "0f8c240000000f851e0000000f8f180000000f8d120000000f8e0c0000000f87060000000f8200000000c3"
         ((br lt a) (br ne a) (br gt a) (br ge a) (br le a) (br above a) (br below a) (label a) (ret)))
-      ;; the P0 glaze ops -- indirect jump, flag-setting add/sub (+ the vs/vc conds), overflow-checked
+      ;; the p0 glaze ops -- indirect jump, flag-setting add/sub (+ the vs/vc conds), overflow-checked
       ;; multiply, condition->0/1. each objdump-verified (-M intel).
       ("jmpr.rax"    "ffe0"                  ((jmpr r0)))               ; jmp rax  (Continue/deopt tail)
       ("jmpr.r8"     "41ffe0"                ((jmpr r7)))               ; jmp r8
@@ -200,7 +200,7 @@
                        ((div r0 r0 r7)))
       ("rem"         "524150489948f73c244889d04883c4085a"             ; ... mov rax,rdx (remainder) ...
                        ((rem r0 r0 r7 r4)))
-      ("divq"        "48f7f6"                 ((divq r5)))           ; div rsi (rn r5 = rsi): F7 /6
+      ("divq"        "48f7f6"                 ((divq r5)))           ; div rsi (rn r5 = rsi): f7 /6
       ("dv128"       "4889c1488b0424488b54240848890c244889c14889d031d248f73424489148f734244889ca" ((dv128 sp)))
       ("rm128"       "4889c1488b0424488b54240848890c244889c14889d031d248f73424489148f734244889d031d2" ((rm128 sp)))
       ;; the 128-bit pair kit (hi rdx : lo rax, left operand at [rsp] lo / [rsp+8] hi)
@@ -208,7 +208,7 @@
       ("s128"        "482904244819542408488b0424488b542408" ((s128 sp)))   ; sub/sbb into the cell, reload
       ("mw128"       "48f72424"               ((mw128 sp)))           ; mul QWORD [rsp]
       ("m128"        "480faf1424488b4c2408480fafc84801d148f724244801ca" ((m128 sp)))
-      ;; the register twins: LEFT rides two registers (lo hi), RIGHT keeps rdx:rax
+      ;; the register twins: left rides two registers (lo hi), right keeps rdx:rax
       ("a128r"       "4c01c04c11ca"           ((a128r r7 r8)))         ; add rax,r8; adc rdx,r9
       ("s128r"       "4929c04919d14c89c04c89ca" ((s128r r7 r8)))       ; sub r8,rax; sbb r9,rdx; pair back
       ("mw128r"      "49f7e0"                 ((mw128r r7)))           ; mul r8
@@ -234,7 +234,7 @@
       ("syscall.prog"
         "b801000000bf01000000be00100000ba0d0000000f05b83c000000bf000000000f05"
         ((li r0 1) (li r6 1) (li r5 4096) (li r2 13) (sys) (li r0 60) (li r6 0) (sys)))
-      ;; SSE2 / double lane (the float glaze). reg-reg binops, gp<->xmm moves, and the xmm<->[mem]
+      ;; sse2 / double lane (the float glaze). reg-reg binops, gp<->xmm moves, and the xmm<->[mem]
       ;; spill/box ops + ucomisd that the glaze's float-result lane uses. objdump-verified (-M intel).
       ("addsd"       "f20f58c1"               ((addsd f0 f1)))          ; addsd xmm0,xmm1
       ("mulsd"       "f20f59c1"               ((mulsd f0 f1)))          ; mulsd xmm0,xmm1
@@ -278,7 +278,7 @@
                      rx-be 0 (tablet 0) (tablet 0))
            (peep >p 'done ())))
 
-   ;; -- the encoder REFUSES a three-way alias it cannot honestly encode (d <- a OP d, d != a,
+   ;; -- the encoder refuses a three-way alias it cannot honestly encode (d <- a OP d, d != a,
    ;; non-commutative), raising 'alias-dst rather than emitting subtly wrong bytes. the help traps
    ;; that scare and delegates everything else back to welp. --
    caught (tablet 0) _ (pin caught 0 0)
@@ -286,7 +286,7 @@
    _ (holo-bytes 'amd64 '((sub r0 r3 r0)))
    _ (chk-eq "alias.refused" 1 (peep caught 0 0))
 
-   ;; -- the same principle one target over: aarch64's register-form ALU is the SHIFTED-register
+   ;; -- the same principle one target over: aarch64's register-form ALU is the shifted-register
    ;; one, where encoding 31 is XZR in every slot -- so `(sub sp sp r0)` has honest-looking bytes
    ;; (`neg xzr, x0`) that leave sp alone. it raises instead; moving sp is `lea`'s job. --
    spcaught (tablet 0) _ (pin spcaught 0 0)
@@ -300,7 +300,7 @@
    _ (chk-eq "text.full"
         (holo-hex 'amd64 '((add r0 r0 r1) (label loop) (dec r0) (br ne loop) (ret)))
         (holo-hex 'amd64 (asm-text "add r0, r0, r1   ; with a comment\nlabel loop\n  dec r0\n  br ne, loop\n\n  ret\n")))
-   ;; the SYSTEM lane rides the text front-end with no grammar change -- an operation name and a
+   ;; the system lane rides the text front-end with no grammar change -- an operation name and a
    ;; system register are ordinary symbols, underscores and all. this is the seam mooncc's inline
    ;; asm parses through, so the kernel's templates land here.
    _ (chk-eq "text.sys.x64" (holo-hex 'amd64 '((cli) (ldcr r0 2) (lidt r6 0) (iretq)))
@@ -320,29 +320,29 @@
    _ (chk-eq "elf.arm64-machine" 183 (at (peep (elf64 'arm64 (\ a elfprog) ()) 'bytes 0) 18))
 
    ;; ..and the ELF32 twin: a 52-byte header + a 32-byte phdr. the two facts a width knob
-   ;; would have gotten wrong are pinned here -- p_flags sits SEVENTH in an Elf32_Phdr (at 76,
+   ;; would have gotten wrong are pinned here -- p_flags sits seventh in an Elf32_Phdr (at 76,
    ;; where 56 holds p_offset and an Elf64_Phdr would hold the flags), and e_entry carries the
-   ;; THUMB BIT. test_elf32 puts the same image in front of a real loader.
+   ;; thumb bit. test_elf32 puts the same image in front of a real loader.
    t32prog '((li r0 42) (li r7 1) (sys))
    e32     (elf32 'thumb2 (\ a t32prog) ())
    e32img  (peep e32 'bytes 0)
-   _ (chk-eq "elf32.class"      1  (at e32img 4))          ; ELFCLASS32
+   _ (chk-eq "elf32.class"      1  (at e32img 4))          ; elfclass32
    _ (chk-eq "elf32.machine"    40 (at e32img 18))         ; EM_ARM
    _ (chk-eq "elf32.thumb-bit"  1  (at e32img 24 & 1))     ; e_entry bit 0: enter in Thumb state
-   _ (chk-eq "elf32.eabi5"      5  (at e32img 39))         ; e_flags top byte: EABI version 5
+   _ (chk-eq "elf32.eabi5"      5  (at e32img 39))         ; e_flags top byte: eabi version 5
    _ (chk-eq "elf32.ehsize"     52 (at e32img 40))
    _ (chk-eq "elf32.phentsize"  32 (at e32img 42))
    _ (chk-eq "elf32.p-offset"   0  (at e32img 56))         ; the 64-bit order would put p_flags here
    _ (chk-eq "elf32.p-flags"    7  (at e32img 76))         ; ..and it sits here instead
    _ (chk-eq "elf32.size" (84 + tally (holo-bytes 'thumb2 t32prog)) (tally e32img))
 
-   ;; -- `refix`, the LINKER's door onto the same encoders (link.l's ldarm goes through it and
-   ;; knows no instruction format). ARM is REL: the field it hands back carries both the addend
+   ;; -- `refix`, the linker's door onto the same encoders (link.l's ldarm goes through it and
+   ;; knows no instruction format). arm is rel: the field it hands back carries both the addend
    ;; and the aux the encoding hides. the four kinds a thumb2 object mints, and one law each. --
    t2be (peep backends 'thumb2 ())
    (rfx k bs t s) (hexs (refix-with t2be k bs t s 4))
    ;; the four placeholders obj.l leaves in a .o for an unresolved target: the branches hold
-   ;; their base encoding with the -4 PIPELINE addend baked in (gas writes fff7feff for `bl
+   ;; their base encoding with the -4 pipeline addend baked in (gas writes fff7feff for `bl
    ;; sym` too), the movw/movt pair holds Rd and a zero imm16.
    base-bl '(255 247 254 255)  base-b '(255 247 254 191)
    base-mw '(64 242 0 2)       base-mt '(192 242 0 2)             ; movw/movt r2, #0
@@ -350,21 +350,21 @@
    ;; is one scatter, and this is it seen through the linker's door.
    _ (chk-eq "refix.bl" (hexs (patch-with t2be 'bl 4096 256 4 0)) (rfx 'bl base-bl 4096 256))
    _ (chk-eq "refix.b"  (hexs (patch-with t2be 'b  4096 256 4 0)) (rfx 'b  base-b  4096 256))
-   ;; ⚠ the THUMB BIT rides in the target and every branch field shifts by at least one, so an
+   ;; the thumb bit rides in the target and every branch field shifts by at least one, so an
    ;; odd address encodes identically to its even twin -- which is why nothing masks it out.
    _ (chk-eq "refix.thumb-bit" (rfx 'bl base-bl 4096 256) (rfx 'bl base-bl 4097 256))
-   ;; movw16/movt16 read their Rd back OUT of hw2 -- an R_ARM_THM_MOVW_ABS_NC never carried it.
+   ;; movw16/movt16 read their Rd back out of hw2 -- an R_ARM_THM_MOVW_ABS_NC never carried it.
    _ (chk-eq "refix.movw" (hexs (patch-with t2be 'movw16 2271560481 0 4 2)) (rfx 'movw16 base-mw 2271560481 0))
    _ (chk-eq "refix.movt" (hexs (patch-with t2be 'movt16 2271560481 0 4 2)) (rfx 'movt16 base-mt 2271560481 0))
-   ;; ..and a field carrying an addend this backend never bakes REFUSES, rather than quietly
+   ;; ..and a field carrying an addend this backend never bakes refuses, rather than quietly
    ;; linking somewhere plausible: the base encoding is rebuilt and compared, so no inverse
    ;; scatter has to exist for the check to be honest.
    rfcaught (tablet 0) _ (pin rfcaught 0 0)
    _ (hear (\ a b (? (a = 'thumb-refix-addend) (: _ (pin rfcaught 0 1) ()) (welp a b))))
-   _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same BL two bytes further on
+   _ (rfx 'bl '(255 247 255 255) 4096 256)                       ; ..the same bl two bytes further on
    _ (chk-eq "refix.addend.refused" 1 (peep rfcaught 0 0))
 
-   ;; -- the aarch64 backend (crew/holo/arm64.l): the SAME neutral IR, a second target. fixed 32-bit
+   ;; -- the aarch64 backend (crew/holo/arm64.l): the same neutral IR, a second target. fixed 32-bit
    ;; little-endian words; every golden checked vs llvm-mc / llvm-objdump. --
    a64tests '(
       ("a64.li"     "800780d2"          ((li r0 60)))
@@ -397,8 +397,8 @@
       ("a64.brk"    "000020d4"          ((trap)))
       ("a64.loop"   "1f0001eb60000054000400d1fdffff17c0035fd6"
                      ((label top) (cmp r0 r1) (br eq done) (dec r0) (jmp top) (label done) (ret)))
-      ;; the P0 glaze ops -- each llvm-mc-verified (--triple=aarch64). adds/subs are the S-variant
-      ;; (set NZCV); set is CSET; mulo is the SMULH+CMP-vs-ASR#63 overflow idiom (no flag-setting mul).
+      ;; the p0 glaze ops -- each llvm-mc-verified (--triple=aarch64). adds/subs are the S-variant
+      ;; (set NZCV); set is cset; mulo is the smulh+cmp-vs-asr#63 overflow idiom (no flag-setting mul).
       ("a64.jmpr"   "00001fd6"          ((jmpr r0)))                  ; br x0
       ("a64.callr"  "00003fd6"          ((callr r0)))                 ; blr x0  (through a fn pointer)
       ("a64.abs64"  "0800000000000000c0035fd6"                        ; an 8-byte absolute label address, then ret
@@ -409,7 +409,7 @@
       ("a64.subs"   "600007eb"          ((subs r0 r3 r7)))            ; subs x0,x3,x7
       ("a64.mulo.prog" "047c479b007c079b9ffc80eb4100005402000014a0001fd6c0035fd6"   ; smulh x4,x0,x7; mul x0,x0,x7; cmp x4,x0,asr#63; b.ne ovf; b done; br x5; ret
                       ((mulo r0 r0 r7 r4 ovf) (jmp done) (label ovf) (jmpr r5) (label done) (ret)))
-      ;; P1: shifts/test/div/rem/indexed -- the integer + map lanes on aarch64. llvm-mc-verified.
+      ;; p1: shifts/test/div/rem/indexed -- the integer + map lanes on aarch64. llvm-mc-verified.
       ("a64.sar"    "00fc4193"          ((sar r0 1)))                 ; asr x0,x0,#1   (untag)
       ("a64.shr"    "e7fc41d3"          ((shr r7 1)))                 ; lsr x7,x7,#1
       ("a64.shl"    "00f07dd3"          ((shl r0 3)))                 ; lsl x0,x0,#3
@@ -432,11 +432,11 @@
       ("a64.pop.lr"  "fe0741f8"         ((pop lr)))                  ; ldr x30, [sp],#16
       ("a64.grpfn"  "fe0f1ff8040000940000038bfe0741f8c0035fd6e00303aac0035fd6"   ; the nested-call shape: save lr; bl sib; work; restore lr; ret; sib: ...
                       ((push lr) (call sib) (add r0 r0 r3) (pop lr) (ret) (label sib) (mov r0 r3) (ret)))
-      ;; the OVF-anchor idiom -- mov to/from sp MUST be `lea` (add #0), not the ORR-based `mov` (which
+      ;; the OVF-anchor idiom -- mov to/from sp must be `lea` (add #0), not the ORR-based `mov` (which
       ;; reads/writes XZR for reg 31, never sp). set anchor = sp ; deopt abandons frames with sp = anchor.
       ("a64.anchor"  "f7030091"          ((lea r23 sp 0)))            ; mov x23, sp
       ("a64.abandon" "ff020091"          ((lea sp r23 0)))            ; mov sp, x23
-      ;; a WHOLE glaze leaf for (\ x (x + 1)) -- the integer leaf ABI end to end: g/Ip/Hp/Sp kept in
+      ;; a whole glaze leaf for (\ x (x + 1)) -- the integer leaf ABI end to end: g/Ip/Hp/Sp kept in
       ;; x0..x3, acc=x4, temp=x5. fetch+fixnum-guard Sp[0]; untag; +1 with overflow->deopt; putfix;
       ;; store Sp[0]; Continue (Ip+=16; br [Ip]); deopt tail-applies interp (value[1] at [Ip+8]).
       ("a64.glaze.leaf"
@@ -444,7 +444,7 @@
         ((ld r4 r3 0) (test r4 1) (br eq deopt) (sar r4 1) (adds r4 r4 1) (br vs deopt)
           (adds r4 r4 r4) (br vs deopt) (or r4 r4 1) (st r3 0 r4) (add r1 r1 16) (ld r5 r1 0) (jmpr r5)
           (label deopt) (ld r5 r1 8) (mov r1 r5) (ld r5 r1 0) (jmpr r5)))
-      ;; scalar-double FP (the float glaze lane): f0..f15 -> d0..d15. SSE-named IR, two-address, mapped to
+      ;; scalar-double fp (the float glaze lane): f0..f15 -> d0..d15. SSE-named IR, two-address, mapped to
       ;; the arm64 scalar-double form. each golden checked vs llvm-objdump (mnemonics in the trailing comment).
       ("a64.cvttsd2si" "0400789e"        ((cvttsd2si r4 f0)))           ; fcvtzs x4, d0 (toward zero)
       ("a64.cvtsi2sd" "8000629e"          ((cvtsi2sd f0 r4)))           ; scvtf d0, x4
@@ -484,7 +484,7 @@
       ("a64.shlv"     "0020c19a"          ((shlv r0 r1)))               ; lsl x0, x0, x1
       ("a64.shrv"     "e724c19a"          ((shrv r7 r1)))               ; lsr x7, x7, x1
       ("a64.sarv"     "6328c19a"          ((sarv r3 r1)))               ; asr x3, x3, x1
-      ;; the cc-rung lanes (mooncc -t arm64): lean; the 24-bit add/sub split; the FAR memory
+      ;; the cc-rung lanes (mooncc -t arm64): lean; the 24-bit add/sub split; the far memory
       ;; lane (movz x16 + add/sub off the base); fp LDUR/STUR + far (frame slots run negative);
       ;; f16+ registers; cmp's cmn flip; p/np as vs/vc (FCMP parks unordered in V). llvm-mc-verified.
       ("a64.lean"     "808000d1"          ((lean r0 r4 -32)))           ; sub x0, x4, #32 (lea's alias)
@@ -499,7 +499,7 @@
       ("a64.la"       "000000900040009107000090e740009141424300"
                        ((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))   ; adrp+add pair: x at +16, page delta 0, lo12 16
       ;; the system lane -- the kernel's own vocabulary, every golden from llvm-mc
-      ;; --show-encoding. MRS/MSR and the SYS family share one encoding; these goldens
+      ;; --show-encoding. MRS/MSR and the sys family share one encoding; these goldens
       ;; walk both op0 banks (el1 at op1=0, el0 at op1=3) and both L directions.
       ("a64.mrs"      "091038d5007438d523003bd5"
                        ((mrs r9 sctlr_el1) (mrs r0 par_el1) (mrs r3 ctr_el0)))
@@ -507,36 +507,36 @@
       ("a64.msr"      "031018d5222018d500c018d5"
                        ((msr sctlr_el1 r3) (msr ttbr1_el1 r2) (msr vbar_el1 r0)))
       ("a64.msr.el0"  "2ee21bd5"          ((msr cntp_ctl_el0 r14)))     ; msr cntp_ctl_el0, x14
-      ;; MSR (immediate): a PSTATE FIELD, the 4-bit immediate in CRm -- interrupts off, IRQ
+      ;; MSR (immediate): a pstate field, the 4-bit immediate in crm -- interrupts off, irq
       ;; back on, and the stack-pointer select.
       ("a64.msri"     "df4f03d5ff4203d5bf4100d5"
                        ((msri daifset 15) (msri daifclr 2) (msri spsel 1)))
       ("a64.barrier"  "9f3b03d59f3f03d5bf3b03d5df3f03d5"
                        ((dsb ish) (dsb sy) (dmb ish) (isb)))
-      ;; the SYS operations. the whole-system forms take no register -- that operand is `zr`,
+      ;; the sys operations. the whole-system forms take no register -- that operand is `zr`,
       ;; which is Rt = 31 (XZR), exactly what the assembler puts there.
       ("a64.tlbi"     "1f8308d51f8708d5208308d5"
                        ((tlbi vmalle1is zr) (tlbi vmalle1 zr) (tlbi vae1is r0)))
       ("a64.cache"    "1f7508d520750bd5217b0bd5227e0bd5237608d524740bd5"
                        ((ic iallu zr) (ic ivau r0) (dc cvau r1) (dc civac r2) (dc ivac r3) (dc zva r4)))
       ("a64.at"       "217808d5007808d5"  ((at s1e1w r1) (at s1e1r r0)))
-      ;; exception generation. `dbrk` is A64's HLT -- the DEBUGGER halt (hlt #0xf000 is the
+      ;; exception generation. `dbrk` is a64's hlt -- the debugger halt (hlt #0xf000 is the
       ;; semihosting call), a different instruction from x86's `hlt`, which stops the core.
       ("a64.exc"      "000020d4409a20d400005ed4020000d4030000d400000000"
                        ((brk 0) (brk 1234) (dbrk 61440) (hvc 0) (smc 0) (udf 0)))
       ("a64.wait"     "7f2003d55f2003d5e0039fd6"  ((wfi) (wfe) (eret)))
-      ;; the SP move, which kernel code makes by name. `mov` cannot say it -- ORR reads encoding
-      ;; 31 as XZR -- so it is `lea .. 0`, add #0, and `mov` SCARES on sp rather than answer XZR.
+      ;; the sp move, which kernel code makes by name. `mov` cannot say it -- ORR reads encoding
+      ;; 31 as XZR -- so it is `lea .. 0`, add #0, and `mov` scares on sp rather than answer XZR.
       ("a64.sp.read"  "e9030091"          ((lea r9 sp 0)))              ; mov x9, sp
       ("a64.sp.write" "3f010091"          ((lea sp r9 0)))              ; mov sp, x9
-      ;; lia: the ABSOLUTE (linked) address, which no aarch64 immediate can hold -- so an inline
+      ;; lia: the absolute (linked) address, which no aarch64 immediate can hold -- so an inline
       ;; literal, exactly what `ldr xd, =sym` assembles to:
       ;;   ldr xd, .+8 ; b .+12 ; .quad <the abs64 placeholder a reloc overwrites>
       ;; both offsets are constants of the shape, so it needs no label of its own.
       ("a64.lia"      "4900005803000014000000000000000040000058030000140000000000000000"
                                           ((label k) (lia r9 k) (lia r0 k)))
-      ;; x16/x17/x18 are sayable now -- the kernel's IRQ path saves x0..x18 because
-      ;; the interrupted code may hold a live value in any of them. ⚠ x16 stays the
+      ;; x16/x17/x18 are sayable now -- the kernel's irq path saves x0..x18 because
+      ;; the interrupted code may hold a live value in any of them. x16 stays the
       ;; borrowed scratch of the indexed/far accesses; these plain stores are in range.
       ("a64.ip.regs"  "f00300f9f10700f9f20b00f9"
                                           ((st sp 0 r16) (st sp 8 r17) (st sp 16 r18)))
@@ -549,7 +549,7 @@
       ("a64.c128.eq"  "f04740a9100200ca310202ca100211aa1f0200f1e0179f9a" ((c128 eq sp)))
       ("a64.c128.below" "f04740a91f0200eb3f0202fae0279f9a" ((c128 below sp)))   ; cmp x16,x0; sbcs xzr,x17,x2; cset x0,lo
       ("a64.c128.gt"  "f04740a91f0010eb5f0011fae0a79f9a" ((c128 gt sp)))        ; the reversed subtraction, read as lt
-      ;; the divide pair: UDIV/MSUB on the high half, then 64 restoring steps for the low
+      ;; the divide pair: udiv/msub on the high half, then 64 restoring steps for the low
       ("a64.dv128"    "f04740a9220ac09a51c4009be20300f9010880d23f0241f231fed09310fa7fd3220240fa220200cb5120919a1036909a210400f101ffff54e00310aae20340f9" ((dv128 sp)))
       ("a64.rm128"    "f04740a9220ac09a51c4009be20300f9010880d23f0241f231fed09310fa7fd3220240fa220200cb5120919a1036909a210400f101ffff54e00311aae2031faa" ((rm128 sp)))
       ("a64.a128r"    "000007ab4200089a"  ((a128r r7 r8)))            ; adds x0,x0,x7; adc x2,x2,x8
@@ -569,14 +569,14 @@
       ("a64.shr128.5" "4014c09342fc45d3"  ((shr128 5)))               ; extr x0,x2,x0,#5; lsr x2,x2,#5
       ("a64.shr128.64" "40fc40d3e2031faa" ((shr128 64)))
       ("a64.sar128.100" "40fc649342fc7f93" ((sar128 100)))            ; asr x0,x2,#36; the sign floods x2
-      ;; the v-forms: both bands compute (a variable shift reads its count MOD 64) and CSEL picks
+      ;; the v-forms: both bands compute (a variable shift reads its count MOD 64) and csel picks
       ("a64.shl128v"  "f00301cb1024d09a5120c19a310210aa3f0000f15100919a300001d11020d09a3f0001f10222919a0020c19ae023809a" ((shl128v)))
       ("a64.shr128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15024d09a3f0001f10022919a4224c19ae223829a" ((shr128v)))
       ("a64.sar128v"  "f00301cb5020d09a1124c19a310210aa3f0000f11100919a300001d15028d09a3f0001f10022919a51fc7f934228c19a2222829a" ((sar128v))))
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'arm64 (at t 2))) 0 a64tests)
 
-   ;; -- the thumb2 backend: the SAME neutral IR, a THIRD target -- ARMv7E-M (Cortex-M7, the Teensy
-   ;; 4.1 / Playdate device CPU). MIXED 16/32-bit little-endian, a 32-bit word laid hi-halfword
+   ;; -- the thumb2 backend: the same neutral IR, a third target -- armv7e-m (Cortex-M7, the Teensy
+   ;; 4.1 / Playdate device CPU). mixed 16/32-bit little-endian, a 32-bit word laid hi-halfword
    ;; first. goldens from `llvm-mc --disassemble --triple=thumbv7em-none-eabi`; the branch-offset
    ;; scrambling (S/J1/J2/I1/I2) was cross-checked over spans across the imm11 boundary. --
    t2tests '(
@@ -584,8 +584,8 @@
       ("t2.movt"    "45f27861c1f23421"  ((li r1 305419896)))          ; 0x12345678: movw + movt
       ("t2.li.neg"  "4ff6ff72cff6ff72"  ((li r2 -1)))                 ; movw #0xffff ; movt #0xffff
       ("t2.mov"     "4fea0300"          ((mov r0 r3)))                ; mov.w r0, r3
-      ;; ..but MOV.W is ORR with Rn=15 and cannot name sp or pc, so those take the 16-bit
-      ;; hi-register T1 instead. UNPREDICTABLE is not a fault: the core may well do what you
+      ;; ..but mov.W is ORR with Rn=15 and cannot name sp or pc, so those take the 16-bit
+      ;; hi-register t1 instead. unpredictable is not a fault: the core may well do what you
       ;; meant, which is how a wrong encoding here rides a green board for months.
       ("t2.movfromsp" "6846"            ((mov r0 sp)))                ; mov r0, sp
       ("t2.movtosp"   "8d46"            ((mov sp r1)))                ; mov sp, r1
@@ -606,14 +606,14 @@
       ("t2.ld1"     "91f90300"          ((ld1 r0 r1 3)))              ; ldrsb.w r0, [r1, #3]
       ("t2.st1"     "81f80300"          ((st1 r1 3 r0)))              ; strb.w r0, [r1, #3]
       ("t2.lea"     "01f20800"          ((lea r0 r1 8)))              ; addw r0, r1, #8
-      ("t2.lea.mov" "dd46"              ((lea sp fp 0)))              ; mov sp, r11 -- lea #0 to sp rides the sp-legal 16-bit MOV
+      ("t2.lea.mov" "dd46"              ((lea sp fp 0)))              ; mov sp, r11 -- lea #0 to sp rides the sp-legal 16-bit mov
       ("t2.push"    "4df8044d"          ((push r4)))                  ; str r4, [sp, #-4]!
       ("t2.pop"     "5df8044b"          ((pop r4)))                   ; ldr r4, [sp], #4
       ("t2.sx1"     "4ffa80f0"          ((sx1 r0)))                   ; sxtb.w r0, r0
       ("t2.sx2"     "0ffa83f3"          ((sx2 r3)))                   ; sxth.w r3, r3
       ("t2.zx1"     "5ffa80f0"          ((zx1 r0)))                   ; uxtb.w r0, r0
       ("t2.zx2"     "1ffa87f7"          ((zx2 r7)))                   ; uxth.w r7, r7
-      ("t2.sx4"     ""                  ((sx4 r0)))                   ; NO-OP: an int is already the full 32-bit word
+      ("t2.sx4"     ""                  ((sx4 r0)))                   ; no-op: an int is already the full 32-bit word
       ("t2.neg"     "c0f10000"          ((neg r0)))                   ; rsb.w r0, r0, #0
       ("t2.not"     "6fea0000"          ((not r0)))                   ; mvn.w r0, r0
       ("t2.inc"     "00f20100"          ((inc r0)))                   ; addw r0, r0, #1
@@ -631,8 +631,8 @@
       ("t2.sys"     "00df"              ((sys)))                      ; svc #0
       ("t2.nop"     "00bf"              ((nop)))                      ; nop
       ("t2.set"     "40f2000008bf40f20100" ((set eq r0)))             ; movw r0,#0 ; it eq ; movweq r0,#1
-      ;; branches: T4 (jmp), T3 conditional (br), T1 (call). the pc-relative offset is a bitfield
-      ;; scrambled across S/J1/J2 -- the fixup lays the whole 32-bit word in `patch`.
+      ;; branches: t4 (jmp), t3 conditional (br), t1 (call). the pc-relative offset is a bitfield
+      ;; scrambled across S/j1/j2 -- the fixup lays the whole 32-bit word in `patch`.
       ("t2.jmp.fwd" "00f001b800bf" ((jmp l) (nop) (label l)))         ; b.w  -> +2 (past the nop)
       ("t2.jmp.bwd" "00bffff7fdbf" ((label l) (nop) (jmp l)))         ; b.w  -> -6 (back to l)
       ("t2.br.fwd"  "00f0018000bf" ((br eq l) (nop) (label l)))       ; beq.w -> +2
@@ -640,7 +640,7 @@
       ;; a whole trivial leaf end to end: r0 = r0 + r1 ; return.
       ("t2.leaf"    "00eb01007047" ((add r0 r0 r1) (ret)))            ; add.w r0,r0,r1 ; bx lr
       ;; a counted loop (the small-loop battery): the forward beq reaches `done`, the backward bne
-      ;; reaches `top`, both fixed 32-bit T3 landing byte-exact on their labels.
+      ;; reaches `top`, both fixed 32-bit t3 landing byte-exact on their labels.
       ("t2.loop"    "01eb0000b0eb020f00f0068001f20101b1eb020f7ff4f6af7047"
                      ((add r0 r1 r0) (label top) (cmp r0 r2) (br eq done)
                        (add r1 r1 1) (cmp r1 r2) (br ne top) (label done) (ret)))
@@ -649,7 +649,7 @@
       ("t2.la"      "40f21000c0f2000040f21007c0f2000741424300"
                      ((la r0 x) (la r7 x) (label x) (raw (65 66 67 0))))
       ;; the 64-bit pair lanes (moon rung 3): the carry ALU family, the widening multiply
-      ;; family, clz, and a variable shift whose count is NOT r1 (T32 takes any count reg).
+      ;; family, clz, and a variable shift whose count is not r1 (T32 takes any count reg).
       ("t2.adc"     "43eb0101"          ((adc r1 r3 r1)))             ; adc.w r1, r3, r1
       ("t2.adcs"    "53eb0303"          ((adcs r3 r3 r3)))            ; adcs.w r3, r3, r3
       ("t2.sbc"     "63eb0101"          ((sbc r1 r3 r1)))             ; sbc.w r1, r3, r1
@@ -659,21 +659,21 @@
       ("t2.mla"     "02fb0133"          ((mla r3 r2 r1 r3)))          ; mla r3, r2, r1, r3
       ("t2.clz"     "b1fa81f0"          ((clz r0 r1)))                ; clz r0, r1
       ("t2.shlv.r2" "01fa02f1"          ((shlv r1 r2)))               ; lsl.w r1, r1, r2
-      ;; indexed addressing: ADD.W shifted (leax), LDR/LDRB register-offset (ldx/ldxb at disp 0),
+      ;; indexed addressing: add.W shifted (leax), LDR/LDRB register-offset (ldx/ldxb at disp 0),
       ;; and the disp!=0 synthesis off the dest.
       ("t2.leax"    "01eb8200"          ((leax r0 r1 r2 4 0)))        ; add.w r0, r1, r2, lsl #2
       ("t2.leax.d"  "04ebcc0909f20409"  ((leax r9 r4 r12 8 4)))       ; add.w r9,r4,r12,lsl#3 ; addw r9,r9,#4
       ("t2.ldx"     "51f82200"          ((ldx r0 r1 r2 4 0)))         ; ldr.w r0, [r1, r2, lsl #2]
       ("t2.ldxb"    "11f80250"          ((ldxb r5 r1 r2 1 0)))        ; ldrb.w r5, [r1, r2]
       ("t2.ldx.d"   "00eb0300d0f80400"  ((ldx r0 r0 r3 1 4)))         ; disp!=0: add.w r0,r0,r3 ; ldr.w r0,[r0,#4]
-      ;; the scalar-double VFP lane (moon rung 4): f0..f15 -> d0..d15, S[2n] the single views,
-      ;; movqxr/movqrx move a gp PAIR (named reg = lo, +1 = hi). llvm-mc (eabihf, +vfp4d16).
+      ;; the scalar-double vfp lane (moon rung 4): f0..f15 -> d0..d15, S[2n] the single views,
+      ;; movqxr/movqrx move a gp pair (named reg = lo, +1 = hi). llvm-mc (eabihf, +vfp4d16).
       ("t2.addsd"   "30ee010b"          ((addsd f0 f1)))              ; vadd.f64 d0, d0, d1
       ("t2.subsd"   "32ee432b"          ((subsd f2 f3)))              ; vsub.f64 d2, d2, d3
       ("t2.mulsd"   "20ee010b"          ((mulsd f0 f1)))              ; vmul.f64 d0, d0, d1
       ("t2.divsd"   "80ee010b"          ((divsd f0 f1)))              ; vdiv.f64 d0, d0, d1
       ("t2.movsd"   "b0ee443b"          ((movsd f3 f4)))              ; vmov.f64 d3, d4
-      ("t2.ucomisd" "b4ee410bf1ee10fa"  ((ucomisd f0 f1)))            ; vcmp.f64 ; vmrs APSR_nzcv
+      ("t2.ucomisd" "b4ee410bf1ee10fa"  ((ucomisd f0 f1)))            ; vcmp.f64 ; vmrs apsr_nzcv
       ("t2.cvtsi2sd" "02ee100ab8eec22b" ((cvtsi2sd f2 r0)))           ; vmov s4, r0 ; vcvt.f64.s32 d2, s4
       ("t2.cvtui2sd" "02ee100ab8ee422b" ((cvtui2sd f2 r0)))           ; vmov s4, r0 ; vcvt.f64.u32 d2, s4
       ("t2.cvttsd2si" "bdeec1fb1fee100a" ((cvttsd2si r0 f1)))         ; vcvt.s32.f64 s30, d1 ; vmov r0, s30
@@ -707,11 +707,11 @@
                      ((uremll))))
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb2 (at t 2))) 0 t2tests)
 
-   ;; -- the thumb1 backend: the SAME neutral IR, a FOURTH target -- ARMv6-M (Cortex-M0/M0+, the
-   ;; RP2040 CPU). 16-bit Thumb-1: two-address, low-registers, no MOVW/MOVT (so `li` byte-builds
-   ;; the constant), no wide ALU, no IT (so `set` branches over), no hardware divide. goldens from
+   ;; -- the thumb1 backend: the same neutral IR, a fourth target -- armv6-M (Cortex-M0/M0+, the
+   ;; rp2040 CPU). 16-bit Thumb-1: two-address, low-registers, no MOVW/MOVT (so `li` byte-builds
+   ;; the constant), no wide ALU, no it (so `set` branches over), no hardware divide. goldens from
    ;; `llvm-mc --triple=thumbv6m-none-eabi`; the halfword-scaled pc-relative offset was
-   ;; cross-checked forward AND backward. --
+   ;; cross-checked forward and backward. --
    t1tests '(
       ("t1.li"      "0520"              ((li r0 5)))                  ; movs r0, #5
       ("t1.li.neg1" "0020c043"          ((li r0 -1)))                 ; movs r0,#0 ; mvns r0,r0
@@ -742,7 +742,7 @@
       ("t1.sx2"     "1bb2"              ((sx2 r3)))                   ; sxth r3, r3
       ("t1.zx1"     "c0b2"              ((zx1 r0)))                   ; uxtb r0, r0
       ("t1.zx2"     "bfb2"              ((zx2 r7)))                   ; uxth r7, r7
-      ("t1.sx4"     ""                  ((sx4 r0)))                   ; NO-OP: an int is already the full word
+      ("t1.sx4"     ""                  ((sx4 r0)))                   ; no-op: an int is already the full word
       ("t1.neg"     "4042"              ((neg r0)))                   ; rsbs r0, r0, #0
       ("t1.not"     "c043"              ((not r0)))                   ; mvns r0, r0
       ("t1.inc"     "401c"              ((inc r0)))                   ; adds r0, r0, #1
@@ -754,7 +754,7 @@
       ("t1.shrv"    "c840"              ((shrv r0 r1)))               ; lsrs r0, r0, r1
       ("t1.sarv"    "0841"              ((sarv r0 r1)))               ; asrs r0, r0, r1
       ("t1.shrv.r2" "d040"              ((shrv r0 r2)))               ; lsrs r0, r0, r2 (any low count reg)
-      ;; the carry family (the pair kit): ADCS commutes on d==b; SBCS d==b borrows a saved scratch
+      ;; the carry family (the pair kit): adcs commutes on d==b; sbcs d==b borrows a saved scratch
       ;; (push/pop/hi-MOV never touch the carry). the f4 logicals commute on d==b the same way.
       ("t1.adc"     "5941"              ((adc r1 r3 r1)))             ; adcs r1, r3 (d==b commutes)
       ("t1.sbc"     "1a468a41"          ((sbc r2 r3 r1)))             ; mov r2,r3 ; sbcs r2,r1
@@ -788,8 +788,8 @@
       ("t1.sys"     "00df"              ((sys)))                      ; svc #0
       ("t1.nop"     "00bf"              ((nop)))                      ; nop
       ("t1.trap"    "00be"              ((trap)))                     ; bkpt #0
-      ;; branches: every LABEL branch is WIDE (BL, +-16MB; lr is dead mid-frame) -- the short
-      ;; B/Bcc can't cross a big function. br = the inverted-Bcc hop over the BL.
+      ;; branches: every label branch is wide (BL, +-16MB; lr is dead mid-frame) -- the short
+      ;; B/Bcc can't cross a big function. br = the inverted-Bcc hop over the bl.
       ("t1.jmp.fwd" "00f001f800bf"      ((jmp l) (nop) (label l)))    ; bl .+2 -> past the nop
       ("t1.jmp.bwd" "00bffff7fdff"      ((label l) (nop) (jmp l)))    ; bl .-6 -> back to l
       ("t1.br.fwd"  "01d100f001f800bf"  ((br eq l) (nop) (label l)))  ; bne .+4 (hop) ; bl l
@@ -809,15 +809,15 @@
                  ((rem r1 r1 r0 r3))))                                ; |a|,|b| ; core ; sign=sa ; refix
    _ (foldl (\ _ t (chk2 (at t 0) (at t 1) 'thumb1 (at t 2))) 0 t1tests)
 
-   ;; -- the riscv backend: the SAME neutral IR, a FIFTH target -- RV64IMFD (the pine64 ox64's
-   ;; C906, qemu -M virt). fixed 32-bit little-endian, three-address, and ⚠ NO FLAGS REGISTER:
-   ;; cmp/test/ucomisd emit nothing (or materialize an immediate into x30) and REMEMBER their
+   ;; -- the riscv backend: the same neutral IR, a fifth target -- rv64imfd (the pine64 ox64's
+   ;; c906, qemu -M virt). fixed 32-bit little-endian, three-address, and no flags register:
+   ;; cmp/test/ucomisd emit nothing (or materialize an immediate into x30) and remember their
    ;; operands, which br/set fuse into beq/blt/slt/feq -- so the flag goldens pair the compare with
-   ;; its consumer. label branches are WIDE (thumb1's shape); call/la are the auipc pair.
-   ;; ⚠ these are the COMPRESSED forms: the squeeze walks a lowered chunk word by word and takes
-   ;; every RVC shape it finds, so a row's byte count is no longer four times its instruction
+   ;; its consumer. label branches are wide (thumb1's shape); call/la are the auipc pair.
+   ;; these are the compressed forms: the squeeze walks a lowered chunk word by word and takes
+   ;; every rvc shape it finds, so a row's byte count is no longer four times its instruction
    ;; count, and decoding needs +c. the trailing comments name what a disassembler prints, which
-   ;; is the ALIAS (`mv a0, a3`) -- the same word either width spells.
+   ;; is the alias (`mv a0, a3`) -- the same word either width spells.
    ;; goldens from `llvm-mc --disassemble --triple=riscv64 --mattr=+m,+f,+d,+c`, every one read
    ;; back through riscv64-linux-gnu-objdump as well: a torn instruction desynchronizes a stream
    ;; rather than failing, and one disassembler agreeing with itself cannot tell you that. --
@@ -884,7 +884,7 @@
       ("rv.udiv"     "b3d6f602"          ((udiv r3 r3 r5)))            ; divu a3, a3, a5
       ("rv.urem"     "b3f6f602"          ((urem r3 r3 r5 r2)))         ; remu a3, a3, a5
       ;; the flag memory in anger: cmp emits nothing (or an imm into x30) and br/set fuse it.
-      ;; every label branch is the INVERTED fused branch hopping a jal (j21 fixup, +-1MB).
+      ;; every label branch is the inverted fused branch hopping a jal (j21 fixup, +-1MB).
       ("rv.br.eq"    "6314b5006f00800013000000" ((cmp r0 r1) (br eq l) (nop) (label l)))    ; bne a0,a1,+8 ; j l ; nop
       ("rv.br.bwd"   "130000006304b5006ff09fff" ((label l) (nop) (cmp r0 r1) (br ne l)))    ; beq hop ; j -8
       ("rv.br.lt"    "6354b5006f004000"  ((cmp r0 r1) (br lt l) (label l)))      ; bge a0,a1,+8 ; j l
@@ -920,11 +920,11 @@
       ("rv.ret"      "8280"              ((ret)))                      ; ret (jalr x0, 0(ra))
       ("rv.sys"      "73000000"          ((sys)))                      ; ecall
       ("rv.trap"     "73001000"          ((trap)))                     ; ebreak
-      ;; the pad after a COMPRESSED ret: 2 bytes laid, 6 to the boundary -- so the filler unit
+      ;; the pad after a compressed ret: 2 bytes laid, 6 to the boundary -- so the filler unit
       ;; has to be c.nop. a torn wide nop leaves 0013, whose low bits say 32-bit, and a decoder
       ;; eats the ret standing behind it.
       ("rv.align"    "82800100010001008280"     ((ret) (align 8) (label x) (ret)))    ; ret ; 3x c.nop ; ret
-      ;; scalar-double FP (D): f0..f7 -> fa0..fa7, f8..f15 -> ft0..ft7. SSE-named IR two-address;
+      ;; scalar-double fp (D): f0..f7 -> fa0..fa7, f8..f15 -> ft0..ft7. SSE-named IR two-address;
       ;; ucomisd joins the flag memory (feq/flt/fle compute the predicate at the br/set)
       ("rv.movsd"    "5385b522"          ((movsd f0 f1)))              ; fmv.d fa0, fa1
       ("rv.addsd"    "5375b502"          ((addsd f0 f1)))              ; fadd.d fa0, fa0, fa1

@@ -1,10 +1,10 @@
 #!/usr/bin/env -S love -l
 ; ain -- a netcat clone in ~50 lines of love (love's cat).
 ;
-;   ain HOST PORT   TCP client: connect to HOST:PORT
-;   ain -l PORT     TCP server: listen on PORT, accept one client
+;   ain host port   TCP client: connect to host:port
+;   ain -l port     TCP server: listen on port, accept one client
 ;
-; Either way it becomes a BIDIRECTIONAL PUMP -- stdin -> socket and socket ->
+; Either way it becomes a bidirectional pump -- stdin -> socket and socket ->
 ; stdout, both live at once. Two tasks, each parked in a port read on a different
 ; fd, interleave with no select loop: the cooperative scheduler poll()s the fd a
 ; parked task blocks on (ai_wait_fds) and wakes the ready one (get yields when
@@ -13,15 +13,15 @@
 ;
 ; Run it straight (prel is ALREADY in the egg -- do NOT `-l love/prel.l`; the egg mops
 ; book/tray/etc after it hatches, so re-feeding prel.l raises `missing book`):
-;   out/host/love tools/ain.l HOST PORT
-;   out/host/love tools/ain.l -l PORT
+;   out/host/love tools/ain.l host port
+;   out/host/love tools/ain.l -l port
 ; or as the `nc` applet of the multi-call `kore` (crew/kore/kore.l -- the header's old
 ; "until the egg bakes ain into a multi-call binary" note, landed). The socket nifs
 ; (connect/listen/accept/seal) live in src/sock.c; prel stays socket-free so the
 ; kernel/wasm frontends are unaffected.
 
-; The whole tool is ONE define: a body-less top-level `:` leaks `ain-main` (args ->
-; conversation) and nothing else; the SEAT form at the bottom fires it only when the
+; The whole tool is one define: a body-less top-level `:` leaks `ain-main` (args ->
+; conversation) and nothing else; the seat form at the bottom fires it only when the
 ; file itself was invoked (positional or -l), so a multi-call cat stays quiet.
 ; dns is a module in the tree and in the dist artifact alike, so this splices it
 ; for ain's own compile and leaves the session's book alone.
@@ -44,15 +44,15 @@
                          (: _ (put dst ch) _ (flush dst) (pump src dst))))
 
     ; the conversation over a connected socket `s`. The two directions are
-    ; INDEPENDENT half-duplex channels: a read-side EOF does NOT mean the write
+    ; independent half-duplex channels: a read-side EOF does not mean the write
     ; side is dead, so we must drain our outbound stdin fully before closing.
-    ;   - stdin -> socket runs in THIS task: it always sends every stdin byte
+    ;   - stdin -> socket runs in this task: it always sends every stdin byte
     ;     before teardown, then half-closes the write side (seal s 1) so the
     ;     peer sees EOF rather than a hung half-open socket.
     ;   - socket -> stdout runs in the spawned task `down`; it ends when the peer
     ;     closes (socket EOF). The two pumps interleave through the cooperative
     ;     scheduler (each parked in a port read on its own fd).
-    ; Teardown joins through one path: send all of stdin, half-close, then WAIT
+    ; Teardown joins through one path: send all of stdin, half-close, then wait
     ; for the inbound pump to drain to the peer's EOF before the final close.
     (talk s) (: down (twirl (\ _ (pump s out)) 0)   ; socket -> stdout, in a task
                 _ (pump in s)                        ; stdin -> socket (drains fully here)
@@ -73,15 +73,15 @@
     (client host port) (: s (dial host port)
                           (? s (talk s) (die (+ "cannot connect to " (+ host (+ ":" (string port)))))))
 
-    ; dispatch on the args: -l PORT = server, HOST PORT = client, else usage.
+    ; dispatch on the args: -l port = server, host port = client, else usage.
     (? (= (cap as) "-l") (? (two? (cup as)) (serve (atoi (caup as)))
                             (die "usage: ain -l PORT"))
        (two? (cup as)) (client (cap as) (atoi (caup as)))
        (die "usage: ain HOST PORT  |  ain -l PORT"))))
 
-; the SEAT: fire ain-main iff this very file sits in the program seat of the real
+; the seat: fire ain-main iff this very file sits in the program seat of the real
 ; command line -- the positional program, or a `-l` preload (the installed shebang) --
-; taking the args AFTER the seat. `cmdline` is the full C argv, never rebound, so the
+; taking the args after the seat. `cmdline` is the full C argv, never rebound, so the
 ; test reads the same in both load orders; a multi-call cat (kore) never matches and the
 ; dispatcher there calls ain-main itself. body-having: nothing leaks.
 (: s ((from 'verbs 'fire) ["ain" "ain.l"])

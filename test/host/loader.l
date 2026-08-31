@@ -18,14 +18,14 @@
         _ (say p "(: (zz-probe-sub x) (* x 10))")
         (close p)))
 
-; THE NAME LANE TOUCHES NO FILESYSTEM. lib/zz-loadprobe.l is right there and the
+; the NAME lane touches no filesystem. lib/zz-loadprobe.l is right there and the
 ; symbol still misses: the loader has no path to invent, so the splice raises by
 ; name and nothing registers.
 (: a (trap (\ _ (use 'zz-loadprobe)) () (\ a b 'caught))
  (assert (id? a 'caught) (nil? (from 'zz-loadprobe))))
 
 ; the path lane: one layer named for the basename, registered, spliced -- bare names
-; resolve in forms compiled AFTER the use (the capture law: a use must precede its readers)
+; resolve in forms compiled after the use (the capture law: a use must precede its readers)
 (use "lib/zz-loadprobe.l")
 (assert (3 = zz-probe-hi 2)
         (41 = (from 'zz-loadprobe 'zz-probe-pin))
@@ -38,15 +38,15 @@
         (lit? (from 'sub))
         (nil? (from 'zz-loadprobe/sub)))
 
-; a re-use hits the REGISTRY, never the file again -- by name or by the path that
+; a re-use hits the registry, never the file again -- by name or by the path that
 ; named it: rewrite the file, use both ways, the module keeps its first reading
 (: p (open "lib/zz-loadprobe.l" "w") _ (say p "(: zz-probe-pin 999)") (close p))
 (use 'zz-loadprobe)
 (use "lib/zz-loadprobe.l")
 (assert (41 = (from 'zz-loadprobe 'zz-probe-pin)))
 
-; a SELF-REGISTERING file -- its text is a (module 'nm ..) wrap (cook.l's shape) --
-; keeps ITS registration: the loader's empty wrapper layer must not pin over the
+; a self-registering file -- its text is a (module 'nm ..) wrap (cook.l's shape) --
+; keeps its registration: the loader's empty wrapper layer must not pin over the
 ; module the file made, and the name it registers need not be the basename. where
 ; the two differ the wrapper was never written to, so the basename does not register
 ; at all -- an empty tablet standing under it would answer a later use with nothing.
@@ -68,10 +68,10 @@
    _ (unlink "lib/zz-pathprobe.l") _ (unlink "lib/zz-elsewhere.l")
    _ (rmdir "lib/zz-loadprobe") 0)
 
-; the SEAT rungs are RETIRED (the modules arc, rung 3) and so is the cwd walk:
+; the seat rungs are retired (the modules arc, rung 3) and so is the cwd walk:
 ; the loader reads no directory of its own, so a fixture beside the binary is as
 ; invisible as one in lib/. this binary is out/host/love, so its old rungs were
-; out/lib/ and out/lib/love/ -- fixture there, and the use must MISS.
+; out/lib/ and out/lib/love/ -- fixture there, and the use must miss.
 (: _ (mkdir "out/lib/love" 493)
    _ (: p (open "out/lib/zz-seatprobe.l" "w")
         _ (say p "(: zz-seat-pin 51)")

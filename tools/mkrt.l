@@ -2,7 +2,7 @@
 ; deflated archive per hosted ISA, so a bare `love cc` links without compiling
 ; 197 members first (moon.l's rtcarried; src/src.c answers runtime-gz).
 ;
-;   love wake out/host/mooncc0.image tools/mkrt.l OUT.o [ARCH]
+;   love wake out/host/mooncc0.image tools/mkrt.l out.o [arch]
 ;
 ; the object holds, per name in {id, x64, arm64, riscv64}, mksrc.l's pair
 ; shape 8-aligned:
@@ -11,12 +11,12 @@
 ;   ai_rtgz_<nm>       the bytes, right behind it (a .a under DEFLATE; `id`
 ;                      is moon.l's rtcid of the tree slice, plain text)
 ;
-; src/src.c declares every symbol WEAK, so a love carrying no runtime (love0)
-; answers nothing and the compile-from-source lane stands. ⚠ determinism is
+; src/src.c declares every symbol weak, so a love carrying no runtime (love0)
+; answers nothing and the compile-from-source lane stands. determinism is
 ; load-bearing: arbytes and rtcid are all pure of the machine, so the
 ; seed's fixpoint carries this object unchanged.
-; ⚠ this RIDES THE MOONCC IMAGE (wake), not the mksys cat: the archives ARE
-; mooncc compiles, so the whole compiler must be aboard; ARCH names the object
+; this rides the mooncc image (wake), not the mksys cat: the archives are
+; mooncc compiles, so the whole compiler must be aboard; arch names the object
 ; format (the LINK's arch), and a cross backend joins from its tree text the
 ; way mksrc.l joins one.
 
@@ -28,7 +28,7 @@
           0))
    (rt-be arch)
     (? (lit? (peep (from 'holo 'backends) arch ())) 0
-       ; the backend file IS the canonical arch word now -- one spelling, no map
+       ; the backend file is the canonical arch word now -- one spelling, no map
        (: f ("crew/holo/" + string arch + ".l")
           q (open f "r")
           (? q (: _ (rt-rdev (flow q)) (close q))
@@ -55,7 +55,7 @@
              (0 < p) (rt-kids rtarch >ts (p >< acc))
              acc)))
 
-   ; one member: label len, label bytes, zero-padded so the NEXT len lands
+   ; one member: label len, label bytes, zero-padded so the next len lands
    ; 8-aligned (a riscv core may trap an unaligned word; the pad is free)
    (rt-forms nm s)
     (: n (tally s)
@@ -66,7 +66,7 @@
         ['raw (rt-bytes s (n - 1) (rt-zeros pad ()))]])
 
    (mkrt arch dst)
-    ; every ARCHIVE arch joins, not just the object's: the image bakes the
+    ; every archive arch joins, not just the object's: the image bakes the
     ; native backend only, and each ISA's members ride its own obj writer
     (: _ (rt-be 'amd64) _ (rt-be 'arm64) _ (rt-be 'rv64) _ (rt-be arch)
        rtcid (from 'moon 'rtcid)
@@ -74,12 +74,12 @@
        objelf (from 'holo 'objelf)
        cid (rtcid "crew/moon/")
        _ (? (string? cid) 0 (rt-die "no crew/moon/ slice to hash -- run from the tree root"))
-       ; THROUGH rtarch, so the runtime cache serves a repeat build (~instant)
+       ; through rtarch, so the runtime cache serves a repeat build (~instant)
        ; and only a real slice or compiler change recompiles the members --
        ; without this every seed and rebake paid three full runtime compiles.
        cd ((from 'moon 'mcdir) ())
        _ (rt-fan rtarch cd '(amd64 arm64 rv64))
-       ; DEFLATED: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
+       ; deflated: ~1.5 MB of archive across the three ISAs becomes ~210 kB,
        ; and rtcarried pays one inflate for the ISA it wants.
        (one tgt) (: a (rtarch "crew/moon/" tgt 'linux ())
                     _ (? (string? a) 0 (rt-die (show tgt + ": no archive (a member refused?)")))
@@ -97,7 +97,7 @@
             "ai_rtgz_arm64" "ai_rtgz_arm64_len"
             "ai_rtgz_rv64" "ai_rtgz_rv64_len")
        ob (objelf arch () () () xs () () () () () forms)
-       _ ((from 'holo 'write-bytes) dst ob)     ; ob is a BYTE LIST, not a string
+       _ ((from 'holo 'write-bytes) dst ob)     ; ob is a byte list, not a string
        (say out ("MKRT\t" + dst + "\n")))
 
    (mkrt-main av)

@@ -9,8 +9,8 @@
 (module 'kore
 (:
    ; --- the digest door ------------------------------------------------------
-   ; ⚠ the probe is asked at FIRST CALL and kept, never at load: this file is baked
-   ; into the artifact by a love that HAS the nifs, so a load-time answer would be the
+   ; the probe is asked at first call and kept, never at load: this file is baked
+   ; into the artifact by a love that has the nifs, so a load-time answer would be the
    ; baking love's and not the running one's. lib/gz.l's gz-nif, the same reasoning --
    ; and the same reason each probe is a lambda: an unbound global scares when it is
    ; referenced, not when the function around it is compiled.
@@ -24,18 +24,18 @@
           (: w (trap (\ _ (: _ (f 0) 1)) () (\ a b 0)) _ (pin sum-door k w) w)))
    (sum-have who nm k probe) (? (sum-nif k probe) 0 (udie 2 (who + ": this image carries no " + nm)))
 
-   ; ⚠ THE TRIPLES LIVE INSIDE LAMBDAS for the reason the probes do: an unbound global
-   ; scares when it is REFERENCED, and this file is baked by a love that HAS the nifs
+   ; the triples live inside lambdas for the reason the probes do: an unbound global
+   ; scares when it is referenced, and this file is baked by a love that has the nifs
    ; into an image that may not. [state-width init feed done].
    (sum-shad _) [105 sha256-init sha256-feed sha256-done]
    (sum-md5d _) [89  md5-init    md5-feed    md5-done]
    (sum-ckd _)  [12  cksum-init  cksum-feed  cksum-done]
 
-   ; one operand digested as a STREAM -> [digest bytes] | 'dir | (). "-" is stdin, as
-   ; it is everywhere in kore. ⚠ sha256sum of a 100 MB file used to hold all 100 MB to
+   ; one operand digested as a stream -> [digest bytes] | 'dir | (). "-" is stdin, as
+   ; it is everywhere in kore. sha256sum of a 100 MB file used to hold all 100 MB to
    ; digest it; the state is a cask of tens of bytes and the file goes past a gulp at
    ; a time. The byte count rides out because cksum's line says it.
-   ; ⚠ 'dir is its own answer because a directory OPENS and reads EMPTY -- digested, it
+   ; 'dir is its own answer because a directory opens and reads empty -- digested, it
    ; would be the digest of nothing, a plausible wrong number rather than a miss.
    (sum-run mk f)
     (? (udirp f) 'dir
@@ -51,7 +51,7 @@
                 _ (? <>p (close <p) 0)
                 v (<>>>d b)
                 (? (v = ()) () [v n])))))
-   ; the -c list is read WHOLE, and should be: it is a list of digests, never the thing
+   ; the -c list is read whole, and should be: it is a list of digests, never the thing
    ; digested. one line a file, and nobody writes a gigabyte of them.
    (sum-list f)
     (? (f = "-") [1 ((slurp in) + "")]
@@ -62,7 +62,7 @@
        (put err 10))
 
    ; --- the two output faces -------------------------------------------------
-   ; cksum says the byte count too, and says NO name for stdin (GNU's face exactly)
+   ; cksum says the byte count too, and says no name for stdin (GNU's face exactly)
    (sum-ckline v n f) ((show v) + " " + (show n) + (? (tally f) (" " + f) "") + "\n")
    (sum-hexline v n f) (v + "  " + f + "\n")
 
@@ -80,7 +80,7 @@
 
    ; --- the -c lane ----------------------------------------------------------
    ; a line is n hex digits, two characters (two spaces, or " *" where the writer
-   ; called it binary), then the name. ⚠ THE SHAPE IS ASKED IN FULL -- the digits
+   ; called it binary), then the name. the shape is asked in full -- the digits
    ; counted and read -- because a looser split takes any line with a space in it for
    ; a checksum line, and a file of prose then reads as a list of failures instead of
    ; the "no checksum lines here" it is. an upper-case list is a list.
@@ -104,7 +104,7 @@
           ()))
    ; the lists read back. the state is [bad unread seen sour]: lines that did not match,
    ; files named in a line that could not be read, lines that were checksum lines at
-   ; all, and LISTS that were no good. ⚠ sour is its own count because it costs the
+   ; all, and lists that were no good. sour is its own count because it costs the
    ; status and says nothing: the two warnings below are each a claim about lines, and
    ; a list nobody could read has none to make a claim about.
    (sum-check who mk n as)

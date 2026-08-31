@@ -1,5 +1,5 @@
 ; the VM instrument panel -- read and write. (clock t) is ms since t; (nclock t) is its
-; fine INTERVAL twin: monotonic ns minus t (ms-degraded where a frontend has no ns source,
+; fine interval twin: monotonic ns minus t (ms-degraded where a frontend has no ns source,
 ; so monotone everywhere). (gauge 0) reads the VM stats as a rank-1 Z array in words.
 ; (please x) is a collection on demand -- () asks for a minor, a positive charm for a major --
 ; answering the collection count, so two asks order strictly. the worst pause of each kind
@@ -9,11 +9,11 @@
 (: c1 (please ()) c2 (please 1)                  ; the sequence law orders the two asks
  (assert (c1 < c2)))
 
-; (tune v) is gauge's WRITE twin -- the four live GC knobs as a rank-1 Z array, in words:
+; (tune v) is gauge's write twin -- the four live GC knobs as a rank-1 Z array, in words:
 ; [0] budget (total footprint cap, 2*minor + 2*major; 0 = unbounded -- appel's rule gives the
 ; nursery what is left after the major pool) [1] minor0 (the nursery floor) [2] major0 (the
 ; major pool's grow/shrink step) [3] ratio (the copy-overhead setpoint). (tune ()) reads; a
-; 4-array WRITES and answers what it REPLACED, so a probe restores with one call. a knob lands
+; 4-array writes and answers what it replaced, so a probe restores with one call. a knob lands
 ; at the next collection. a wrong shape is a silent no-op answering the current knobs (pin's
 ; misuse convention), so a refused write is readable as "nothing moved".
 (: k0 (tune ())                                  ; whatever this seat booted with

@@ -1,12 +1,12 @@
 
-; post -- the third egg stage. prel and ev are sat TWICE (ev compiles itself);
-; post is sat ONCE, on the hatchling, after that and before the mop. it is the
+; post -- the third egg stage. prel and ev are sat twice (ev compiles itself);
+; post is sat once, on the hatchling, after that and before the mop. it is the
 ; one seat that sees both the finished compiler and the runtime-internal noms
 ; (peek seek atype, and lamsrc/nifnom below) the mop is about to take off the book -- a
 ; reference compiled here folds to a value and survives, the way ev's own
 ; `feels` does. so: love that needs to read the heap raw belongs here.
 ;
-; what lives here is THE PRINTER. it is the reader's mirror image: p0 is a floor
+; what lives here is the printer. it is the reader's mirror image: p0 is a floor
 ; in C and p1 the real thing in love, and the printer splits the same way -- the
 ; floor is love.c's facex (the scare face, which runs when the VM has stopped and
 ; there is nobody left to call), the grammar is all below. `print` `dot` `show`
@@ -14,13 +14,13 @@
 ; for us, because a nif folded into prel's own compile could never be replaced.
 
 (: px (:
-  ; ⚠ EVERY EAGER BINDING SITS IN THIS OUTER `:`. where boxfix engages (any forward
-  ; or self reference -- the printer below is one), a sibling bound to an UNFOLDABLE
-  ; CALL is boxed too and its cell never filled, so every read of it raises `missing`:
+  ; every eager binding sits in this outer `:`. where boxfix engages (any forward
+  ; or self reference -- the printer below is one), a sibling bound to an unfoldable
+  ; call is boxed too and its cell never filled, so every read of it raises `missing`:
   ;   (: f (: (a o) (f o) c (tablet 0) (\ o c)))   -> ;; missing c
   cur (peek 0 (+)) ret0 (peek 1 cap) unc (peek 0 (+ 1))
-  ; ⚠ THE FLOAT WIDTH IS THE SEAT'S, never this file's: love.c gives a 32-bit seat
-  ; (wasm, mps2, teensy41, playdate, rp2040) binary32 for ai_flo_t. so ASK the
+  ; the float width is the seat's, never this file's: love.c gives a 32-bit seat
+  ; (wasm, mps2, teensy41, playdate, rp2040) binary32 for ai_flo_t. so ask the
   ; arithmetic instead of spelling binary64's numbers -- a hard-coded 2^53 sends
   ; norm's doubling loop past every float32 there is and it never returns.
   p53 (: (go m) (? (m = (1.0 + m)) m (go (m * 2.0))) (go 1.0))   ; where +1 is lost = 2^mantissa
@@ -37,7 +37,7 @@
 
   ; --- text ---
   (hexd d) (? (d < 10) (48 + d) (87 + d))
-  ; ⚠ post compiles before any layer is spliced, so `@` has to be in the book already --
+  ; post compiles before any layer is spliced, so `@` has to be in the book already --
   ; it is, from the half of this file above. an unaccompanied `@` folds to a plain
   ; application and a run of charms church-towers into an apcap naming no seat.
   (esc o c)
@@ -55,7 +55,7 @@
   ; --- gems: the shortest roundtrip, exact steele & white. C had to carry digit
   ; arrays and its own x2/x5 carry walks; here 4m and the midpoints 4m±2 are
   ; bignums at one shared scale and `//` does the rest.
-  ; v = m*2^e exactly, m an integer, normalized into [p52,p53) -- but NEVER past the
+  ; v = m*2^e exactly, m an integer, normalized into [p52,p53) -- but never past the
   ; denormal floor, where the true spacing stops halving and one more step would hand
   ; the search an interval far too narrow.
   (norm m e) (? (p53 <= m) (norm (m / 2.0) (1 + e))
@@ -66,7 +66,7 @@
   (fits c lo hi evn) ((lo < c ? 1 (evn && c = lo)) &&
                       (c < hi ? 1 (evn && c = hi)))
   ; the fewest digits whose rounded form sits inside: pk is the place being cut,
-  ; walking DOWN by ten a step, and at each one try the truncation and the bump,
+  ; walking down by ten a step, and at each one try the truncation and the bump,
   ; the nearer first (a display nicety). at pk = 1 it terminates, dv itself being
   ; inside by construction.
   (pick dv lo hi evn pk) (? (pk < 1) dv
@@ -101,15 +101,15 @@
           (? (dxp < sig) (say o (snip ss dxp sig)) (put o 48)))   ; integral: force "X.0", never a fixnum face
        (: _ (say o "0.") _ (zeros o (0 - dxp)) (say o ss))))
   (pgem o v) (? !(v <= v) (say o "ieee-nan")
-     ; the sign is the BIT, not v < 0: -0.0 < 0 is FALSE, and a comparison there
+     ; the sign is the bit, not v < 0: -0.0 < 0 is false, and a comparison there
      ; printed "0.0" -- the one value the roundtrip law lost.
      (: _ (? (v < 0 || (v = 0 && (1.0 / v) < 0)) (put o 45) 0) a (abs v)
         (? (a = inf) (say o "ieee-inf") (a = 0) (say o "0.0") (pgem2 o a))))
-  ; a twin prints INFIX, parenthesized: (re ~ im) is self-delimiting, so it reads
+  ; a twin prints infix, parenthesized: (re ~ im) is self-delimiting, so it reads
   ; straight back wherever the printer put it.
   (ptwin o x) (: _ (put o 40) _ (pgem o (re x)) _ (say o " ~ ") _ (pgem o (im x)) (put o 41))
 
-  ; --- chains. a one-operand `\` is quote, and a `(mono (run datum))` is a GLUED
+  ; --- chains. a one-operand `\` is quote, and a `(mono (run datum))` is a glued
   ; monadic -- print run+datum back the way opfix fused them.
   ; an improper tail prints as the ` . ` pair it is -- the dyadic `.` reads it straight back.
   (plist o x sn) (: (go l) (: _ (px o <l sn)
@@ -125,7 +125,7 @@
 
   ; --- trays. rank 1 is @(…); past that (array '(shape) elem…), since @ has no
   ; shape spelling. an object tray quotes what would otherwise re-evaluate.
-  ; a tray is read by COORDINATE, so walk the flat index back into one, row-major
+  ; a tray is read by coordinate, so walk the flat index back into one, row-major
   (coord sh i) (? !(two? >sh) (i >< ())
                   (: r (foldl (*) 1 >sh) q (i // r) (q >< coord >sh (i - (q * r)))))
   (ptray o v sn) (: ty (atype v) sh (shape v) n (foldl (*) 1 sh)
@@ -139,7 +139,7 @@
           _ (ge 0) (put o 41))))
 
   ; --- maps print {k v …}, the empty one {}; both read straight back. a map is
-  ; mutable and can hold itself, so the path is carried and matched by IDENTITY.
+  ; mutable and can hold itself, so the path is carried and matched by identity.
   (onpath? x l) (? !(two? l) 0 (id? x <l) 1 (onpath? x >l))
   (pmap o m sn) (? (onpath? m sn) (say o "<cycle>")
     (: ks (keys m) s2 (m >< sn)
@@ -149,8 +149,8 @@
        (? !(two? ks) (say o "{}") (: _ (put o 123) _ (go ks 1) (put o 125)))))
 
   ; --- coins show as (name 'payload): the arity-1 ctor love/coin.l hands out, applied
-  ; to what it was given, so the form EVALS BACK to an equal coin when the name is a
-  ; bound ctor. ⚠ the payload is QUOTED where it would otherwise re-evaluate -- a chain
+  ; to what it was given, so the form evals back to an equal coin when the name is a
+  ; bound ctor. the payload is quoted where it would otherwise re-evaluate -- a chain
   ; reads as an application and a nom as a variable. without that (q (1 2)) read back as
   ; q applied to 2, which is not the number and was never a coin.
   (pcoin o x sn) (: nm (peep (die-of x) 0 ()) p (load x)
@@ -203,13 +203,13 @@
        _ (put o 40) _ (pfn o (fbase v) sn) _ (go 0) (put o 41))
     (: nm (nifnom v)
        (? (string? nm) (say o nm)
-          ; a glued sigil's backing value has no nif name but it has exactly ONE word;
+          ; a glued sigil's backing value has no nif name but it has exactly one word;
           ; say that instead of inlining its whole body wherever `<x` was written.
           (: gn (opnom v)
              (? gn (say o (string gn))
                 (: s (lamsrc v)
                    (? (two? s) (px o (canon s 0 0 (fvs s () {})) sn)
-                      (: _ (put o 92) (pnum o (abs (dig v)))))))))))   ; opaque: a distinguisher, nothing more -- C spelled the ADDRESS here, this is the digest, which at least survives a collection
+                      (: _ (put o 92) (pnum o (abs (dig v)))))))))))   ; opaque: a distinguisher, nothing more -- C spelled the address here, this is the digest, which at least survives a collection
 
   (px o x sn) (? (charm? x) (pnum o x)
                 (coin? x) (pcoin o x sn)
@@ -227,7 +227,7 @@
                 o)
   px)))
 
-; the surface. `dot` takes a string or cask VERBATIM and everything else in external
+; the surface. `dot` takes a string or cask verbatim and everything else in external
 ; form; it answers its operand, so it drops into any sequence.
 (: (print o x) (: _ (px o x ()) x)
    (show x) (: o (jug 0) _ (px o x ()) (slurp o))

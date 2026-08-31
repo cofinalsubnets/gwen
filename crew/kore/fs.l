@@ -18,11 +18,11 @@
    ; a file destination: into a directory the source's basename lands beside
    (udest src dst) (? (udirp dst) (dst + "/" + ubase src "") dst)
    ; copy bytes + permission bits (cp's heart; mv's cross-device leg)
-   ; the bytes, by whichever door this love has. ⚠ KORE RUNS IN TWO WORLDS AND THEY DO NOT
-   ; CARRY THE SAME NIFS: src/kernel.mk bakes this whole cat verbatim (korecat) and the
+   ; the bytes, by whichever door this love has. kore runs in two worlds and they do not
+   ; carry the same nifs: src/kernel.mk bakes this whole cat verbatim (korecat) and the
    ; kernel compiles no host/*.c, so `copyfile` is hosted-only and the slurp stays as the
-   ; freestanding leg. ⚠ ASKED AT THE CALL, never bound at the top: the kernel's image is
-   ; baked by a HOST love, so a load-time answer would freeze this world's nif set into
+   ; freestanding leg. asked at the call, never bound at the top: the kernel's image is
+   ; baked by a host love, so a load-time answer would freeze this world's nif set into
    ; that one's.
    (ucopy-bytes src dst)
     (? (member? 'copyfile (names ()))
@@ -31,7 +31,7 @@
           (? (two? r) (: q (open dst "w")
                          (? q (: _ (say q <>r) _ (close q) 1) 0))
              0)))
-   ; ⚠ the stat leads so the two failures stay tellable apart: one errno covers either end,
+   ; the stat leads so the two failures stay tellable apart: one errno covers either end,
    ; and `cp: cannot open X` vs `cannot create Y` is the whole diagnostic. it is the same
    ; stat the mode comes from, so it costs nothing it did not already spend.
    (ucopy who src dst)
@@ -63,10 +63,10 @@
        (go (? (two? fs) fs '(".")) 1))
 
    ; -- cp and mv: a directory destination pulls the basename in beside --
-   ; ⚠ -f is TAKEN AND IGNORED, and that is not a silent lie: -f means "do not prompt",
-   ; and nothing here ever prompts, so forced IS the behaviour. -p is the other kind --
+   ; -f is taken and ignored, and that is not a silent lie: -f means "do not prompt",
+   ; and nothing here ever prompts, so forced is the behaviour. -p is the other kind --
    ; it changes what lands, so it is honoured. (ucopy already carries the mode; the
-   ; mtime is the half that was missing.) A recipe saying `mv -f` fails without this.
+   ; mtime is the half that was missing.) a recipe saying `mv -f` fails without this.
    (cpf-split as)                              ; -> (p? rest) off a leading -f/-p cluster
     (: (fl a p) (? !(two? a) [p a]
                     (member? <a '("-f" "-p" "-fp" "-pf"))
@@ -87,7 +87,7 @@
           (: src <rest dst (udest src <>rest)
              e (rename src dst)
              (? !e 0
-                (e = 18) (: _ (ucopy "mv" src dst) _ (unlink src) 0)   ; EXDEV: the long way
+                (e = 18) (: _ (ucopy "mv" src dst) _ (unlink src) 0)   ; exdev: the long way
                 (udie 1 ("mv: cannot move " + src))))))
 
    ; -- rm: unlink, -r walks a tree bottom-up, -f keeps quiet about misses --
@@ -183,8 +183,8 @@
 
    ; -- install: copy with the mode set in the same breath (what the build's
    ; place-a-file steps say). -d makes directories (with parents, like -p);
-   ; -D lays the destination's parents first; -m OCTAL sets the mode (else 755);
-   ; -s (strip) is ACCEPTED AND NOTED -- no stripper rides kore yet, so the copy
+   ; -D lays the destination's parents first; -m octal sets the mode (else 755);
+   ; -s (strip) is accepted and noted -- no stripper rides kore yet, so the copy
    ; keeps its symbol table (a fatter install, never a wrong one) --
    (imkp q)                        ; a tolerant mkdir at every slash (parents only)
     (: n (tally q)
@@ -247,7 +247,7 @@
        (? (string? r) (: _ (say out r) _ (put out 10) _ (flush out) 0) 1))
 
    ; -- realpath: a path with every symlink, every . and every .. taken out of it.
-   ; the walk resolves COMPONENT BY COMPONENT, so a last name that does not exist yet
+   ; the walk resolves component by component, so a last name that does not exist yet
    ; still answers -- GNU's default face. -e wants the whole path to be there, -m
    ; allows any of it to be missing, -s takes the links as they lie --
    (rp-parts p) (filter (\ w (0 < tally w)) (usplit 47 p))
@@ -295,10 +295,10 @@
           (? !e 0 (udie 1 ("unlink: cannot unlink " + <as)))))
 
    ; ---- the reporting tools: stat, du -- and chown, mktemp ---------------------
-   ; ⚠ THESE READ THE STAT TAIL. src/posix.c's stat answers
-   ; (size mtime mode ns uid gid nlink blocks ino), append-only, and the KERNEL's own
+   ; these read the stat tail. src/posix.c's stat answers
+   ; (size mtime mode ns uid gid nlink blocks ino), append-only, and the kernel's own
    ; stat (src/kmain.c) answers the first four alone -- an image tree has no ownership
-   ; to tell about. so the tail is asked by TALLY and a world that does not carry it
+   ; to tell about. so the tail is asked by tally and a world that does not carry it
    ; says so rather than reading a 0 someone might believe.
    (ust-at st k) (? (tally st <= k) () (st k))
    ; /etc/passwd and /etc/group, read as the files they are (no NSS, no getpwnam)
@@ -318,7 +318,7 @@
                               (go >ls))))
              (go (lines <>r)))))
    ; every group a user belongs to: the primary first, then the /etc/group rows naming
-   ; them, ASCENDING -- which is the order the kernel keeps its credential list in, and
+   ; them, ascending -- which is the order the kernel keeps its credential list in, and
    ; so the order `id` prints
    (ugroups nm gid)
     (: r (uread "/etc/group")
@@ -331,9 +331,9 @@
        rest (? (two? r) (sort (go (lines <>r) ())) ())
        (gid >< rest))
 
-   ; -- stat: the file's own facts, by -c FORMAT. %n %N %s %b %B %f %a %A %F %u %U %g %G
+   ; -- stat: the file's own facts, by -c format. %n %N %s %b %B %f %a %A %F %u %U %g %G
    ; %h %i %Y %y, the \n \t \\ escapes, and %% . -L follows a symbolic link; the bare
-   ; face does not. ⚠ THERE IS NO DEFAULT BLOCK. GNU's is four lines of access, change
+   ; face does not. there is no default block. GNU's is four lines of access, change
    ; and birth times and a device number, and this stat carries none of them -- printing
    ; a block with the modify time standing in three times over would be a fabrication,
    ; so the tool asks for -c instead of inventing one.
@@ -361,7 +361,7 @@
        ((((show <ymd) + "-" + (p2 <>ymd) + "-" + (p2 <>>ymd)) + " ")
         + (((p2 (// secs 3600)) + ":" + (p2 (// (% secs 3600) 60)) + ":" + (p2 (% secs 60)))
            + ("." + (uzpad 9 (show frac)) + " +0000"))))
-   ; ⚠ -c DOES NOT READ ESCAPES -- `stat -c 'a\tb'` prints the backslash and the t, and
+   ; -c does not read escapes -- `stat -c 'a\tb'` prints the backslash and the t, and
    ; adds a newline of its own; --printf reads them and adds none. GNU's split, and the
    ; only way a format can carry a literal backslash at all.
    (ust-expand fmt p st esc?)
@@ -425,14 +425,14 @@
        (go fs 1))
 
    ; -- du: what a tree costs on the disk. the count is st_blocks (512 each), which is
-   ; ALLOCATION and not size -- a sparse file costs less than it measures and a tiny one
+   ; allocation and not size -- a sparse file costs less than it measures and a tiny one
    ; costs a whole block -- and the report is in 1K units, rounded up, unless -b asks for
    ; apparent bytes or -h for the three-figure human face. -a counts files too, -s only
-   ; the totals, -c a grand total, -d N stops descending. ⚠ a hard link is counted ONCE
+   ; the totals, -c a grand total, -d N stops descending. a hard link is counted once
    ; per run, keyed by inode alone: this stat carries no device, so a walk crossing two
    ; filesystems could collide two inodes -- rare, and named here rather than hidden.
-   ; ⚠ THE WALK SORTS EACH DIRECTORY, like find's, so the same tree reports twice alike.
-   (uhuman n)                          ; GNU's -h: three significant figures, rounded UP
+   ; the walk sorts each directory, like find's, so the same tree reports twice alike.
+   (uhuman n)                          ; GNU's -h: three significant figures, rounded up
     (: units '("K" "M" "G" "T" "P")
        (pick k) (? ((4 < k) || (n < ((* 10 (k + 1)) 2))) k (pick (k + 1)))
        k (? (n < 1024) 0 (pick 1))
@@ -456,7 +456,7 @@
                                          (c = 99) (: _ (pin t 'c 1) (cl (k + 1)))
                                          (c = 98) (: _ (pin t 'b 1) (cl (k + 1)))
                                          (c = 104) (: _ (pin t 'h 1) (cl (k + 1)))
-                                         (c = 107) (cl (k + 1))       ; -k IS the default
+                                         (c = 107) (cl (k + 1))       ; -k is the default
                                          (c = 100) (: _ (pin t 'd (uatoi (snip w (k + 1) (tally w))))
                                                       (fl >a t fs))
                                          (udie 2 ("du: unknown option -" + string c)))))
@@ -469,7 +469,7 @@
        seen (tablet 0)
        (fmt n) (? h? (uhuman n) (? b? (show n) (show (// (n + 1023) 1024))))
        (emit n q) (: _ (say out (fmt n)) _ (put out 9) _ (say out q) (put out 10))
-       ; ⚠ -b's apparent size counts a FILE's st_size and a directory's not at all --
+       ; -b's apparent size counts a file's st_size and a directory's not at all --
        ; GNU's rule, and not a guess: an empty directory whose st_size is 40 reports 0.
        (own st dir?)
         (: nlk (ust-at st 6) ino (ust-at st 8)
@@ -500,7 +500,7 @@
        _ (flush out)
        (? (peep t 'bad 0) 1 0))
 
-   ; -- chown: OWNER[:GROUP] onto every named path, -R down the tree. a name is looked
+   ; -- chown: owner[:group] onto every named path, -R down the tree. a name is looked
    ; up in /etc/passwd / /etc/group, a numeral is taken as itself, and an empty side is
    ; -1, which the kernel reads as "leave this one alone" --
    (uowner spec)                       ; "u:g" / "u" / ":g" -> (uid gid), -1 for absent
@@ -527,7 +527,7 @@
        (go a ok) (? (two? a) (go >a (one <a ok)) (? ok 0 1))
        (go >rest 1))
 
-   ; -- mktemp: a name nobody else has, MADE and not merely proposed. the trailing run
+   ; -- mktemp: a name nobody else has, made and not merely proposed. the trailing run
    ; of X's in the template becomes random alphanumerics and the name is claimed with an
    ; exclusive create (openfd's mode 3) or an exclusive mkdir under -d, so the answer is
    ; a fact by the time it is printed. -u drops the file again (the unsafe face, and

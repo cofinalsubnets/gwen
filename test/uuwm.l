@@ -1,8 +1,8 @@
-; test/uuwm.l -- GENERATED from crew/lux/core.l by tools/uuwmgen.l. Do not
+; test/uuwm.l -- generated from crew/lux/core.l by tools/uuwmgen.l. Do not
 ; edit; refresh with `make uuwm`. The window-manager moves, compiled from
-; the SOURCE the lux runs (kind-directed by crew/lux/sigs.l) -- so the laws
+; the source the lux runs (kind-directed by crew/lux/sigs.l) -- so the laws
 ; in test/uuwmlaw.l are proved of the implementation itself; an invariant-
-; breaking core.l edit fails a PROOF at `make test`. Substrate: test/uu.l.
+; breaking core.l edit fails a proof at `make test`. Substrate: test/uu.l.
 (assert
  (defn zrow
    (pi z stk nlist)

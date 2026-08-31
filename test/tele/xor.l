@@ -1,16 +1,16 @@
-; the end-to-end gate for tele: a 2-layer MLP learns XOR, written in love over the pure
-; constellation algebra (no host nif), so the same code runs on EVERY frontend -- the host,
+; the end-to-end gate for tele: a 2-layer mlp learns XOR, written in love over the pure
+; constellation algebra (no host nif), so the same code runs on every frontend -- the host,
 ; wasm, and inle (the freestanding kernel): a neural net on bare metal. test/tele/grad.l
-; grad-checks each op alone; this one asks whether they COMPOSE into a net that learns.
+; grad-checks each op alone; this one asks whether they compose into a net that learns.
 ;
 ;   run:  cat test/00-init.l test/tele/xor.l test/zz-fin.l | out/host/love -l crew/tele/tele.l
 ;
-; corpus-shaped but NOT in the corpus: tele is no module (no lib/tele.l, nothing registered),
+; corpus-shaped but not in the corpus: tele is no module (no lib/tele.l, nothing registered),
 ; so it arrives on -l and this file cannot ride the test/*.l glob. 00-init.l brings `assert`,
 ; zz-fin.l the "N tests pass" line -- the one thing an assert cannot say for itself, since a
 ; reader that stops early leaves every assert below it unrun and exits 0.
 ;
-; the net: 2 -> H (tanh) -> 1 (sigmoid), trained full-batch by SGD on MSE. XOR is the
+; the net: 2 -> H (tanh) -> 1 (sigmoid), trained full-batch by sgd on mse. XOR is the
 ; classic not-linearly-separable problem -- a single linear layer cannot solve it, the
 ; hidden tanh layer can. seeded, so it converges the same way every run: both the rounding
 ; and the loss ceiling below are deterministic, not a tolerance.
@@ -24,7 +24,7 @@
    model (seq [(linear 2 H) tanh (linear H 1) sig])
    opt   (sgd (params model) lr)
 
-   ;; NB: these take a dummy arg -- a nullary call (f) does NOT fire in love, it just
+   ;; nb: these take a dummy arg -- a nullary call (f) does not fire in love, it just
    ;; returns f (the empty-form law); a real argument is what invokes it.
    (trainstep _) (: _ (tl-reset 0) _ (zero opt)
                   loss (mse (call model X) Y) _ (back loss) _ (step opt) (tl-val loss))
@@ -49,8 +49,8 @@
    _ (puts $ "11 -> " + show (cell 3) + "\n")
    _ (puts $ "final loss " + show final + " (ceiling " + show ceil + ")\n")
 
-   ;; ⚠ bound to _: a bare assert in a binding slot is define-sugar and never runs.
-   ;; both halves -- the four rows round right AND the loss actually fell, since rounding
+   ;; bound to _: a bare assert in a binding slot is define-sugar and never runs.
+   ;; both halves -- the four rows round right and the loss actually fell, since rounding
    ;; alone passes a net that merely leans the right way.
    _ (assert (yes 0 0) (yes 1 1) (yes 2 1) (yes 3 0) (final < ceil))
    0)

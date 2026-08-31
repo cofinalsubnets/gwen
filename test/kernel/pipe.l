@@ -24,7 +24,7 @@
    r (catch p) _ (close rp)
  (assert (= r "wake")))
 
-; dup is a row alias: the end comes at the LAST writer's close, not the first
+; dup is a row alias: the end comes at the last writer's close, not the first
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
    w2 (dup wfd)
    wp (fdopen wfd)
@@ -37,7 +37,7 @@
    r (catch p) _ (close rp)
  (assert (charm? w2) (< 2 w2) (= r "one, two")))
 
-; dup2 lands the alias IN the named slot, closing what sat there
+; dup2 lands the alias in the named slot, closing what sat there
 (: pa (pipe 0) pb (pipe 0)
    e (dup2 (cup pa) (cup pb))                   ; b's write slot now feeds a
    wp (fdopen (cup pb)) _ (say wp "crossed") _ (close wp)
@@ -57,7 +57,7 @@
  (assert (= 127 (wait p))))
 
 ; the seat: a stage's out rides the pipe while the parent keeps the console --
-; the parent closes ITS end and still reads the child whole
+; the parent closes its end and still reads the child whole
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
    p (spawnmap (list "kore" "echo" "seated") (list (link 1 wfd)) (list rfd wfd) (- 0 1) 0)
    _ (fdclose wfd)

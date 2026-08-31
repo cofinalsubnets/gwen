@@ -11,12 +11,12 @@
    B100 (bpow2 100)
    F25 (bfact 25)
    F24 (bfact 24)
-   ; two DENSE, EXACTLY-equal-length (KL-limb) operands: KA*KBb takes the resumable
+   ; two dense, exactly-equal-length (KL-limb) operands: ka*KBb takes the resumable
    ; subquadratic Karatsuba lane (equal length, KL^2 > the one-shot chunk). Cross-check
-   ; it against an INDEPENDENT schoolbook path -- split KA = Kahi*2^h + Kalo (each ~KL/2
-   ; limbs), so Kahi*KBb and Kalo*KBb are UNEQUAL length and stay on schoolbook.
+   ; it against an independent schoolbook path -- split ka = Kahi*2^h + Kalo (each ~KL/2
+   ; limbs), so Kahi*KBb and Kalo*KBb are unequal length and stay on schoolbook.
    KL 150  KE (* 64 KL)  KHE (* 64 (// KL 2))
-   KA (- (KE 2) 1)  KBb (- (KE 2) 7)  KHB (KHE 2)   ; (KE 2) = 2^KE via exact power (no deep recursion)
+   KA (- (KE 2) 1)  KBb (- (KE 2) 7)  KHB (KHE 2)   ; (KE 2) = 2^ke via exact power (no deep recursion)
    KP (* KA KBb)
    Kref (+ (* (% KA KHB) KBb) (* (* (// KA KHB) KBb) KHB)))
 
@@ -120,15 +120,15 @@
  (= 21 (gcd 462 1071))                    ; order-independent
  (= 4 (gcd -12 8))                        ; result normalized non-negative
  (= 4 (gcd 12 -8))
- (= F24 (gcd F25 F24))                    ; F24 divides F25, so gcd is F24
+ (= F24 (gcd F25 F24))                    ; f24 divides f25, so gcd is f24
  (= 1 (gcd B100 (+ B100 1)))              ; consecutive ints are coprime
  (= 976371285 (modpow 2 100 1000000007)) ; 2^100 mod (1e9+7)
  (= 1 (modpow 7 0 100))
  (= (% B100 1000000007) (modpow 2 100 1000000007))
 
  ; --- int array vs bignum scalar: ordered by the bignum's true magnitude/sign,
- ;     NOT its low bits. 2^100's low word is 0, so a low-bits comparison would
- ;     wrongly treat B100 as 0 -- these assertions pin the magnitude-exact path. ---
+ ;     not its low bits. 2^100's low word is 0, so a low-bits comparison would
+ ;     wrongly treat b100 as 0 -- these assertions pin the magnitude-exact path. ---
  (aall (< (star-tray '(3) '(1 2 3)) B100))          ; every int < 2^100
  (aall (<= (star-tray '(3) '(1 2 3)) B100))
  (nil? (aall (> (star-tray '(3) '(1 2 3)) B100)))   ; nothing exceeds 2^100

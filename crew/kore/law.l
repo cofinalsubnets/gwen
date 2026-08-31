@@ -1,5 +1,5 @@
 ; crew/kore/law.l -- the kore laws, held by assertion: the myers/patience projections
-; (the script spells both sides), MINIMALITY against an O(nm) LCS oracle, the u-floor and
+; (the script spells both sides), minimality against an O(nm) lcs oracle, the u-floor and
 ; field/fs floors to their GNU faces, the regex floor (hand BRE laws + a seeded fuzz
 ; against an independent Brzozowski-derivative oracle), and a seeded fuzz over the diffs.
 ; reads the leaked globals from the crew/kore/ toolboxes (the `make test_kore` cat).
@@ -23,7 +23,7 @@
       (= (dcost (myers '(x a b c) '(a b c y))) 2)))         ; one del + one add around the shared run
 
 ; --- the oracle + the seeded fuzz: dcost must equal n + m - 2*lcs on random lists, and
-; the projections must spell the inputs back -- minimal AND valid, every draw ---
+; the projections must spell the inputs back -- minimal and valid, every draw ---
 (: (lcslen a b)
     (: ax (dindex a) bx (dindex b) n (tally a) m (tally b)
        t (tablet 0)
@@ -56,7 +56,7 @@
    A '(a b c a b b a) B '(c b a b a c)
    s (patience A B)                                             ; no unique-both line here ...
    mv (patience '(h1 b1 b2 h2 c1 c2) '(h2 c1 c2 h1 b1 b2))      ; a moved block, all lines unique
-   x (patience '(u1 u2) '(u2 u1))                               ; crossing anchors: LIS keeps one
+   x (patience '(u1 u2) '(u2 u1))                               ; crossing anchors: lis keeps one
    st (patience '("a" "b" "c") '("b" "c" "d"))                  ; string lines census structurally
    tr (patience '((1 2) (3 4)) '((3 4) (5 6)))                  ; ... and whole trees do too
    eq (patience '(1 2 3) '(1 2 3))
@@ -102,9 +102,9 @@
 ; --- the unified surface: worked hunks, exact to the byte -- context merges through a
 ; narrow gap, splits at a wide one, and the empty side wears the -0,0 face ---
 (: at "a\nb\nc\nd\ne\nf\ng\nh\ni\n"
-   d1 (udiff "old" "new" at "a\nb\nC\nd\ne\nf\ng\nH\ni\n")       ; two changes, gap 4 <= 2*3: ONE hunk
+   d1 (udiff "old" "new" at "a\nb\nC\nd\ne\nf\ng\nH\ni\n")       ; two changes, gap 4 <= 2*3: one hunk
    x1 "--- old\n+++ new\n@@ -1,9 +1,9 @@\n a\n b\n-c\n+C\n d\n e\n f\n g\n-h\n+H\n i\n"
-   s2 (uhunks (patience (lines at) (lines "a\nb\nC\nd\ne\nf\nG\nh\ni\n")) 1)   ; gap 3 > 2*1: TWO hunks
+   s2 (uhunks (patience (lines at) (lines "a\nb\nC\nd\ne\nf\nG\nh\ni\n")) 1)   ; gap 3 > 2*1: two hunks
    x2 "@@ -2,3 +2,3 @@\n b\n-c\n+C\n d\n@@ -6,3 +6,3 @@\n f\n-g\n+G\n h\n"
    (assert
       (= d1 x1) (= s2 x2)
@@ -121,8 +121,8 @@
       (= (uhead 2 "a\nb\nc\n") "a\nb\n") (= (uhead 9 "a\nb\n") "a\nb\n")
       !(uhead 0 "a\n")
       (= (utail 2 "a\nb\nc\n") "b\nc\n") (= (utail 9 "a\nb\n") "a\nb\n")
-      ; ⚠ A MISSING FINAL NEWLINE IS DATA, and both clips answer to it: a clip that
-      ; reaches the source's last line ends as the source did, one that CUT before it
+      ; a missing final newline is data, and both clips answer to it: a clip that
+      ; reaches the source's last line ends as the source did, one that cut before it
       ; ends on a line the text terminated itself.
       (nl-end? "a\n") !(nl-end? "a") !(nl-end? "")
       (= (chomp "a\n") "a") (= (chomp "a") "a") (= (chomp "") "")
@@ -140,7 +140,7 @@
       !(uwords "  \n") !(uwords "")))
 
 ; --- the field-tool floor: usplit keeps every piece (cut's face, where lines drops
-; the empty tail), uspec/upick read cut's LIST, uset expands tr's ranges + escapes,
+; the empty tail), uspec/upick read cut's list, uset expands tr's ranges + escapes,
 ; urev walks a text backwards ---
 (: (assert
       (= (usplit 58 "a:b:c") '("a" "b" "c"))
@@ -158,7 +158,7 @@
       (= (urev "abc") "cba") !(urev "")))
 
 ; --- the column floor (crew/kore/core.l): fold, expand and unexpand all count
-; COLUMNS, which is the one thing they share and the one thing a byte count
+; columns, which is the one thing they share and the one thing a byte count
 ; disagrees with -- so ucol is lawed first and the three faces over it after ---
 (: (assert
       (= (ucol 0 9 8) 8) (= (ucol 1 9 8) 8) (= (ucol 8 9 8) 16)     ; a tab lands on the stop
@@ -181,7 +181,7 @@
 
 ; --- tac, the encodings and factor (crew/kore/core.l) ---
 (: (assert
-      ; ⚠ the newline rides the line it FOLLOWED, so a last line arriving without one
+      ; the newline rides the line it followed, so a last line arriving without one
       ; comes back first without one -- which is the whole of tac's shape
       (= (utac "a\nb\nc\n") '("c\n" "b\n" "a\n"))
       (= (utac "x\ny") '("y" "x\n"))
@@ -194,7 +194,7 @@
       (= (ubdec ub64set 6 "YQ==") '(1 "a")) (= (ubdec ub32set 5 "NBSWY3DP") '(1 "hello"))
       (= (ubdec ub64set 6 "aGVs\nbG8=") '(1 "hello"))               ; a newline is ignored
       !(ubdec ub64set 6 "aG!s")                                      ; anything else is not
-      (= (ubwrap 4 "abcdefg") "abcd\nefg\n") (= (ubwrap 0 "ab") "ab")   ; ⚠ -w 0 closes nothing
+      (= (ubwrap 4 "abcdefg") "abcd\nefg\n") (= (ubwrap 0 "ab") "ab")   ; -w 0 closes nothing
       !(ubwrap 4 "") !(ubwrap 0 "")
       (= (ufactor 97) '(97)) (= (ufactor 100) '(2 2 5 5))
       (= (ufactor 1234567) '(127 9721)) (= (ufactor 2) '(2))
@@ -207,13 +207,13 @@
       (= (rp-parts "/a//b/") '("a" "b")) (= (rp-parts "a") '("a")) !(rp-parts "///")))
 
 ; --- the calendar floor (crew/kore/core.l): civil-from-days and its inverse. exact by
-; construction (no month table, no float), and the ROUND TRIP is what holds it: stat's
+; construction (no month table, no float), and the round trip is what holds it: stat's
 ; %y and date both read them, and a leap-year slip would only show on one day a year ---
 (: (rt z) (: c (ucivil z) (= (udays <c <>c <>>c) z))
    (assert
       (= (ucivil 0) '(1970 1 1)) (= (ucivil 1) '(1970 1 2)) (= (ucivil -1) '(1969 12 31))
       (= (ucivil 19675) '(2023 11 14)) (= (ucivil 20682) '(2026 8 17))
-      (= (ucivil 11016) '(2000 2 29))                   ; a century divisible by 400 IS leap
+      (= (ucivil 11016) '(2000 2 29))                   ; a century divisible by 400 is leap
       (= (ucivil 11017) '(2000 3 1))
       (= (ucivil -25508) '(1900 3 1))                   ; ..and 1900 is not
       (= (udays 1970 1 1) 0) (= (udays 2000 2 29) 11016) (= (udays 1900 3 1) -25508)
@@ -223,7 +223,7 @@
 ; size words, join's field split, and od's three readings ---
 (: (assert
       (= (udels ":|") '(":" "|"))
-      (= (udels "\\t") '("\t")) (= (udels "\\0") '(""))   ; POSIX's \0 IS the empty one
+      (= (udels "\\t") '("\t")) (= (udels "\\0") '(""))   ; POSIX's \0 is the empty one
       (= (udels "") '(""))
       (= (usfx 0 2 0) "aa") (= (usfx 1 2 0) "ab") (= (usfx 26 2 0) "ba")
       (= (usfx 675 2 0) "zz") (= (usfx 0 3 0) "aaa")
@@ -256,7 +256,7 @@
       (= (uhuman 102400) "100K") (= (uhuman 1500160) "1.5M") (= (uhuman 3000000000) "2.8G")))
 
 ; --- the expr floor (crew/kore/expr.l): every value is a TEXT, a text that reads as a
-; whole number is a number where one is wanted, and the division TRUNCATES ---
+; whole number is a number where one is wanted, and the division truncates ---
 (: (e as) (<(ex-parse 0 as))
    (assert
       (= (ex-num "42") '(1 42)) (= (ex-num "-7") '(1 -7)) !(ex-num "12a") !(ex-num "")
@@ -296,7 +296,7 @@
       (= (tally secs) 1) (= <sec "a/x") (= <>sec "b/x")
       (= h '(1 1 ((32 "one" 1) (45 "two" 1) (43 "TWO" 1) (32 "three" 1))))
       (= (pt-old h) '("one" "two" "three")) (= (pt-new h) '(("one" 1) ("TWO" 1) ("three" 1)))
-      ; the `\` line marks the entry BEFORE it, and it arrives after the counts are spent
+      ; the `\` line marks the entry before it, and it arrives after the counts are spent
       (= (<(pt-body (lines "-c\n\\ No newline at end of file\n+C\n\\ No newline at end of file\n")
                     1 1 ()))
          '((45 "c" 0) (43 "C" 0)))
@@ -312,7 +312,7 @@
 ; align/word/tail boundaries, every start including one past the end, and charms
 ; present and absent.
 ;
-; ⚠ THIS IS THE ARM64 GATE. the kernel is assembled per target from one IR and the
+; this is the arm64 gate. the kernel is assembled per target from one IR and the
 ; ABI register roles differ (r1 is Sp on amd64 and Ip on arm64), so a port that
 ; reads right and disassembles right can still be wrong. a bad one fails here
 ; loudly rather than corrupting a line split somewhere quiet.
@@ -371,7 +371,7 @@
       (bad "a\\1") (bad "a\\{2") (bad "a\\{3,2\\}")            ; backref, unclosed, inverted
       ; --- alternation, intervals and the POSIX classes ---
       (ok "a\\|b" "b") (ok "a\\|b" "a") (no "a\\|b" "c")       ; BRE's GNU \|
-      (ok "ab\\|cd" "zcdz") (no "ab\\|cd" "acbd")              ; the branches are WHOLE
+      (ok "ab\\|cd" "zcdz") (no "ab\\|cd" "acbd")              ; the branches are whole
       (ok "\\(a\\|b\\)c" "bc") (no "\\(a\\|b\\)c" "cc")        ; grouped, and it still groups
       (ok "a\\|b\\|c" "c") (no "a\\|b\\|c" "d")                ; three-way, kept flat
       (ok "a\\|" "") (ok "\\|a" "z")                           ; an empty branch fits the empty text
@@ -388,14 +388,14 @@
       (= (refind <>(rebre "b*") "abbc" 1) '(1 1 3 ()))         ; greedy at its own start
       !(refind <>(rebre "zz") "abbc" 0)
       ; the group spans (\1's food): numbered in \( order, newest pin first,
-      ; so a repeated group reads as its LAST iteration -- GNU's \1
+      ; so a repeated group reads as its last iteration -- GNU's \1
       (= (refind <>(rebre "\\(b*\\)c") "abbc" 0) '(1 1 4 ((1 1 3))))
       (= (refind <>(rebre "\\(a\\(b\\)\\)") "ab" 0) '(1 0 2 ((1 0 2) (2 1 2))))
       (= (refind <>(rebre "\\(ab\\)*x") "ababx" 0) '(1 0 5 ((1 2 4) (1 0 2))))
       (= <>>(rebre "\\(a\\)\\(b\\)") 2)                        ; rebre counts its groups
       (= <>>(rebre "ab") 0)))
 
-; --- the ERE door: THE SAME NODES, the backslashes moved. these laws are the
+; --- the ERE door: the same nodes, the backslashes moved. these laws are the
 ; claim that one parser serves two dialects -- each pair here has a BRE twin
 ; above wearing different ink, and the two must agree on the tree ---
 (: (eok p s) (: r (reere p) (two? r && rehas <>r s))
@@ -406,21 +406,21 @@
       (eok "ab?c" "ac") (eok "a+" "aa") (eno "a+" "b")
       (eok "a{2}" "aa") (eno "a{2}" "ab") (eok "(a|b)+z" "abz")
       (eok "[[:digit:]]{2}" "a12") (eno "[[:digit:]]{2}" "a1b")
-      (eok "*r" "r") (eok "+q" "q") (eok "{2}" "anything")     ; ERE DROPS a loose repeat
+      (eok "*r" "r") (eok "+q" "q") (eok "{2}" "anything")     ; ERE drops a loose repeat
       (eok "a{" "a{") (eok "a)" "a)")                          ; ..and takes these as ink
       (ebad "a{3,2}") (ebad "(a") (ebad "a\\1")
-      ; THE TWO DIALECTS AGREE ON THE TREE, which is the whole reason for one parser
+      ; the two dialects agree on the tree, which is the whole reason for one parser
       (= (reere "(a|b)+c") (rebre "\\(a\\|b\\)\\+c"))
       (= (reere "a{2,3}[[:alpha:]]") (rebre "a\\{2,3\\}[[:alpha:]]"))
       (= (reere "^(ab|c)*$") (rebre "^\\(ab\\|c\\)*$"))))
 
 ; --- the regex fuzz: an independent Brzozowski-derivative oracle (alternative
-; SETS of node lists, no backtracking anywhere) against the engine's greedy
+; sets of node lists, no backtracking anywhere) against the engine's greedy
 ; backtracker, over seeded random patterns and subjects. anchors sit out (a
 ; derivative has no position); the hand laws above hold them instead ---
 (: (dnul nd) (: t <nd
                 (? (= t 'grp) (dnulq <>>nd)
-                   (= t 'alt) (any dnulq <>nd)      ; nullable if ANY branch is
+                   (= t 'alt) (any dnulq <>nd)      ; nullable if any branch is
                    (= t 'rep) ((< <>>nd 1) || dnul <>nd)
                    ()))
    (dnulq ns) (? (two? ns) (dnul <ns && dnulq >ns) 1)
@@ -432,7 +432,7 @@
                    (= t 'any) '(())
                    (= t 'cls) (? (dhit nd c) '(()) ())
                    (= t 'grp) (dl <>>nd c)
-                   ; the derivative of an alternation is the UNION of its branches'
+                   ; the derivative of an alternation is the union of its branches'
                    ; -- the one place the set-of-alternatives oracle costs nothing,
                    ; where the backtracker had to order them
                    (= t 'alt) (catmap (\ b (dl b c)) <>nd)
@@ -440,7 +440,7 @@
                       (? (hi && (< hi 1)) ()
                          (: lo2 (? (< 0 lo) (- lo 1) 0) hi2 (? hi (- hi 1) ())
                             (map (\ u (u + [['rep a lo2 hi2]])) (dn a c)))))))
-   ; a node LIST's derivative: the head's, and past a nullable head the tail's
+   ; a node list's derivative: the head's, and past a nullable head the tail's
    (dl ns c) (? !(two? ns) ()
                 (: d1 (map (\ u (u + >ns)) (dn <ns c))
                    (? (dnul <ns) (d1 + (dl >ns c)) d1)))
@@ -459,7 +459,7 @@
        (from i) (? (walk [ns] i) 1 (< i n) (from (+ i 1)) ())
        (from 0))
    ; the draws: 1..4 tokens make a pattern, 0..6 charms of abc a subject
-   ; ⚠ EVERY TOKEN HERE MUST PARSE and the oracle must know its node -- an entry
+   ; every token here must parse and the oracle must know its node -- an entry
    ; the draw cannot build is dead weight, and one the oracle cannot take is a
    ; false alarm. alternation and the intervals joined when the engine grew them
    toks '("a" "b" "c" "." "a*" ".*" "[ab]" "[^a]" "[a-c]" "b\\+" "c\\?" "\\(ab\\)*"
@@ -507,7 +507,7 @@
       !(sp "s/a") !(sp ",")                                      ; unterminated s; a legless ,
       !(sp "2,3q") !(sp "x") !(sp "s/a/b/x")                     ; q takes one address; unknown verb/flag
       !(sp "s/a\\{/b/")                                          ; the regex dialect refuses through
-      ; ⚠ THE DIALECT REACHES THE SCRIPT, in an address and in an s alike -- the
+      ; the dialect reaches the script, in an address and in an s alike -- the
       ; -E flag would be a lie if sparse only passed it to one of the two
       (two? (sp "s/\\(a\\|b\\)/x/")) (two? (sparse "s/(a|b)/x/" 1))
       (two? (sparse "/a|b/d" 1))
@@ -515,11 +515,11 @@
       (= (sp "/\\(a\\|b\\)c/p") (sparse "/(a|b)c/p" 1))))
 
 ; --- the /proc floor (crew/kore/proc.l): the stat-line split, the two clocks, the
-; terminal name and the uptime phrase. the FACES over them cannot be lawed and are not
+; terminal name and the uptime phrase. the faces over them cannot be lawed and are not
 ; smoked byte-for-byte either -- every number they read is a clock and the process
 ; table moves between two runs -- so this is where the family is actually held ---
 (: (assert
-      ; ⚠ THE COMM IS TAKEN BETWEEN THE FIRST ( AND THE LAST ), because a program may
+      ; the comm is taken between the first ( AND THE LAST ), because a program may
       ; be named with either in it -- split on spaces and every field after it shifts
       (= (ustatf "42 (bash) S 7 42 42 1024 99") '(42 "bash" "S" "7" "42" "42" "1024" "99"))
       (= (ustatf "9 ((sd-pam)) S 1") '(9 "(sd-pam)" "S" "1"))
@@ -527,7 +527,7 @@
       !(ustatf "9 no parens here")
       (= (uclk 0) "00:00:00") (= (uclk 3661) "01:01:01") (= (uclk 359999) "99:59:59")
       (= (uclk 360000) "100:00:00")                     ; the hours are never clipped
-      (= (uhms 100) "00:00:01") (= (uhms 131) "00:00:01")   ; USER_HZ is 100, and it truncates
+      (= (uhms 100) "00:00:01") (= (uhms 131) "00:00:01")   ; user_hz is 100, and it truncates
       ; the terminal number is Linux's own dev_t: major in bits 8..19, minor split
       (= (utty 0) "?") (= (utty 34816) "pts/0") (= (utty 34819) "pts/3")
       (= (utty 1025) "tty1") (= (utty 1088) "ttyS0") (= (utty 2304) "?")
@@ -554,7 +554,7 @@
       (= (fi-paths '("-type" "f") ()) [() '("-type" "f")])
       (= (fi-paths '("a") ()) ['("a") ()])
       (= (fi-paths '("a" "!" "-type" "d") ()) ['("a") '("!" "-type" "d")])
-      ; the depths come OUT of the word list wherever they sat
+      ; the depths come out of the word list wherever they sat
       (= (fi-depths '("-maxdepth" "2" "-print") 99 0 ()) ['("-print") 2 0])
       (= (fi-depths '("-print" "-mindepth" "1") 99 0 ()) ['("-print") 99 1])
       ; -a is implicit, and binds tighter than -o
@@ -567,7 +567,7 @@
       !(fi-or '("-name"))                                ; a primary with no argument
       !(fi-or '("(" "-print"))                           ; a bracket that never closes
       !(fi-or '("-exec" "echo"))                         ; an -exec with no ;
-      ; only -print and -exec ACT; anything else earns the added -print
+      ; only -print and -exec act; anything else earns the added -print
       (fi-acts? ['print]) (fi-acts? ['and ['name "a"] ['print]])
       !(fi-acts? ['and ['name "a"] ['type "f"]]) !(fi-acts? ['prune])))
 
@@ -576,7 +576,7 @@
 (: (assert
       ; %f %e %g by hand -- `show` spells a double round-trip exact, awk owes %.6g
       (= (aw-fixed 3.14159 2) "3.14") (= (aw-fixed -1.005 2) "-1.00")
-      (= (aw-fixed 2.5 0) "3")                 ; ⚠ half away from zero; C says "2"
+      (= (aw-fixed 2.5 0) "3")                 ; half away from zero; C says "2"
       (= (aw-expo 1234.5 3) "1.235e+03") (= (aw-expo 0.000123 2) "1.23e-04")
       (= (aw-gen (/ 1 3) 6) "0.333333") (= (aw-gen 100000 6) "100000")
       (= (aw-gen 1000000 6) "1e+06") (= (aw-gen 0.0001 6) "0.0001")
@@ -584,17 +584,17 @@
       (= (aw-numstr 42 "%.6g") "42") (= (aw-numstr 3.5 "%.6g") "3.5")
       (= (aw-sprintf "%d|%5.2f|%-4s|%x" (list 42 3.14159 "ab" 255) "%.6g") "42| 3.14|ab  |ff")
       (= (aw-sprintf "%05d|%+d|%c" (list 42 7 65) "%.6g") "00042|+7|A")
-      ; the strnum question is asked of the WHOLE text, blanks aside
+      ; the strnum question is asked of the whole text, blanks aside
       (aw-looks-num? " 12.5 ") (aw-looks-num? "-3") (aw-looks-num? "1e3")
       !(aw-looks-num? "12a") !(aw-looks-num? "") !(aw-looks-num? "e3") !(aw-looks-num? "1e")
       (= (aw-s2n "  12.5xyz") 12.5) (= (aw-s2n "1e3") 1000) (= (aw-s2n "abc") 0)
-      ; substr clamps its start and does NOT dock the length for it -- gnu's reading
+      ; substr clamps its start and does not dock the length for it -- gnu's reading
       (= (aw-substr "hello" 2 3 1) "ell") (= (aw-substr "hello" 0 3 1) "hel")
       (= (aw-substr "hello" 4 0 0) "lo") (= (aw-substr "hello" 2 -1 1) "")
       (= (aw-index "hello" "ll") 3) (= (aw-index "hello" "z") 0)
       (= (aw-repl "[&]" "b") "[b]") (= (aw-repl "\\&" "b") "&")
       (aw-slt "ab" "b") !(aw-slt "b" "ab") !(aw-slt "a" "a") (aw-slt "a" "ab")
-      ; ⚠ the lexer's one context: / after a VALUE divides, / anywhere else opens a regex
+      ; the lexer's one context: / after a VALUE divides, / anywhere else opens a regex
       (= (aw-lex "a/b") '((name "a") (op "/") (name "b") (eof "")))
       (= (aw-lex "/a/") '((ere "a") (eof "")))
       (= (aw-lex "f(") '((fname "f") (op "(") (eof "")))       ; a glued ( makes a call
@@ -604,7 +604,7 @@
          '((begin ((expr (assign "=" (var "x") (num 1)))))))
       (= (aw-program (aw-lex "/a/,/b/{}") (tablet 0) ()) '((range (ere "a") (ere "b") ())))))
 
-; --- the pager (crew/kore/less.l): every key below drives the PURE engine, one
+; --- the pager (crew/kore/less.l): every key below drives the pure engine, one
 ; byte at a time, and reads the tablet back -- no tty, no port, no file ---
 (: (pg-bytes s) (: n (tally s) (go i acc) (? (i < 0) acc (go (i - 1) (s i >< acc))) (go (n - 1) ()))
    (pg-mk ls w h fl)
@@ -628,7 +628,7 @@
       (= (pgwrap 20 (string 1)) '("^A"))
       (= (pgwrap 2 "\xce\xbb\xce\xbb\xce\xbb") '("\xce\xbb\xce\xbb" "\xce\xbb"))
       (= (pgclip 3 "abcdef") "abc") (= (pgclip 9 "abcdef") "abcdef")
-      ; the status clips the other way -- its TAIL is what carries the news
+      ; the status clips the other way -- its tail is what carries the news
       (= (pgclipl 6 "t  1-2/3  66%") "<  66%")
       (= (pgclipl 20 "t  1-2/3  66%") "t  1-2/3  66%")
       ; a row carries the source line it came off and whether it heads it
@@ -637,14 +637,14 @@
       (= (pg-top ten 20 5 "" " ") 4)            ; a screenful, and the end holds it
       (= (pg-top ten 20 5 "" "  ") 6)
       (= (pg-top ten 20 5 "" " b") 0)
-      (= (pg-top ten 20 5 "" "3j") 3)           ; a count is LINES, whatever the key
+      (= (pg-top ten 20 5 "" "3j") 3)           ; a count is lines, whatever the key
       (= (pg-top ten 20 5 "" "3j2k") 1)
       (= (pg-top ten 20 5 "" "5 ") 5)
       (= (pg-top ten 20 5 "" "G") 6) (= (pg-top ten 20 5 "" "Gg") 0)
       (= (pg-top ten 20 5 "" "3g") 2) (= (pg-top ten 20 5 "" "7g") 6)
       (= (pg-top ten 20 5 "" "d") 2) (= (pg-top ten 20 5 "" "du") 0)
       (= (pg-top ten 20 5 "" "50p") 5)
-      ; the search starts PAST the top line, and n / N walk it either way
+      ; the search starts past the top line, and n / N walk it either way
       (= (pg-top ten 20 5 "" "/l7\n") 6)
       (= (pg-top ten 20 5 "" "G?l2\n") 1)
       (= (pg-top ten 20 5 "" "/l[0-9]\n") 1)
@@ -682,7 +682,7 @@
       (= (pgpaint (string 27) <(pgnds (pg-mk ten 20 5 "") "l.") "hello")
          "he\e[7mll\e[27mo")))
 
-; the : commands name the next file and leave the READ to the face, and they
+; the : commands name the next file and leave the read to the face, and they
 ; refuse to walk off either end of the operand list
 (: t (tablet 0)
    st (pgnew t 20 5)
@@ -705,16 +705,16 @@
    (stm s) <(bc-stmt (bc-lex s))
    (refuses? th) (trap (\ _ (: _ (th 0) 0)) () (\ a b 1))
    (assert
-      ; THE SCALE RULES, one line each -- the table at the head of bc.l
+      ; the scale rules, one line each -- the table at the head of bc.l
       (= (bn-add [15 1] [15 1]) [30 1])                      ; + and - keep the wider
       (= (bn-add [1 0] [5 3]) [1005 3])
       (= (bn-sub [1 0] [5 3]) [995 3])
       (= (bn-mul 0 [2 0] [325 2]) [650 2])                   ; * min(sa+sb, max(sc,sa,sb))
-      (= (bn-mul 0 [15 1] [15 1]) [22 1])                    ; ... and it TRUNCATES
+      (= (bn-mul 0 [15 1] [15 1]) [22 1])                    ; ... and it truncates
       (= (bn-mul 5 [15 1] [15 1]) [225 2])
       (= (bn-div 5 [1 0] [3 0]) [33333 5])                   ; / keeps scale
       (= (bn-div 5 [-1 0] [3 0]) [-33333 5])                 ; ... toward zero, both ways
-      (= (bn-mod 0 [17 0] [5 0]) [2 0])                      ; % wears the DIVIDEND's sign
+      (= (bn-mod 0 [17 0] [5 0]) [2 0])                      ; % wears the dividend's sign
       (= (bn-mod 0 [-17 0] [5 0]) [-2 0])
       (= (bn-mod 0 [17 0] [-5 0]) [2 0])
       (= (bn-mod 3 [10 0] [3 0]) [1 3])                      ; ... max(scale + sb, sa)
@@ -724,13 +724,13 @@
       (= (bn-pow 0 [0 0] [0 0]) [1 0])                       ; 0^0 is 1, as bc says
       (= (bn-sqrt 5 [2 0]) [141421 5])                       ; sqrt max(scale, sa)
       (= (bn-sqrt 5 [225 2]) [150000 5])
-      ; 0 and 1 answer THEMSELVES, scale and all -- GNU's two short circuits
+      ; 0 and 1 answer themselves, scale and all -- GNU's two short circuits
       (= (bn-sqrt 5 [0 0]) [0 0]) (= (bn-sqrt 5 [1 0]) [1 0])
       ; the significant digits, where a whole zero still owns one
       (= (bn-len [0 0]) 1) (= (bn-len [0 3]) 3) (= (bn-len [5 1]) 1)
       (= (bn-len [5 2]) 2) (= (bn-len [123456 3]) 6) (= (bn-len [-123 0]) 3)
       (= (bn-len [100 0]) 3)
-      ; the fraction's digit count is the LEAST k with base^k >= 10^s, asked in whole
+      ; the fraction's digit count is the least k with base^k >= 10^s, asked in whole
       ; numbers so that no float rounding can shift it
       (= (bc-fdigits 10 5) 5) (= (bc-fdigits 2 2) 7) (= (bc-fdigits 8 1) 2)
       (= (bc-fdigits 16 20) 17) (= (bc-fdigits 100 2) 1) (= (bc-fdigits 100 20) 10)
@@ -743,7 +743,7 @@
       (= (sho 100 [0 0]) "0") (= (sho 1000 [1234567 0]) " 001 234 567")
       (= (sho 20 [33 2]) ".06 12")                  ; a fraction's first group sits bare
       (= (sho 17 [17 0]) " 01 00")
-      ; the reader: a LONE figure is its own value whatever the base, and every other
+      ; the reader: a lone figure is its own value whatever the base, and every other
       ; numeral clamps a figure at or above the base to base-1
       (= (bc-numeral "255" 10) [255 0]) (= (bc-numeral "1.100" 10) [1100 3])
       (= (bc-numeral ".5" 10) [5 1]) (= (bc-numeral "FF" 16) [255 0])
@@ -755,7 +755,7 @@
       (= (bc-lex ".5") '((num ".5") (eof "")))
       (= (bc-lex "x1_") '((name "x1_") (eof "")))
       (= (bc-lex "/* c */ 1 # z") '((num "1") (eof "")))
-      ; and the shapes the runner is owed. the unary minus binds TIGHTER than ^
+      ; and the shapes the runner is owed. the unary minus binds tighter than ^
       (= (nod "-2^2") '(pow (neg (num "2")) (num "2")))
       (= (nod "2^-2") '(pow (num "2") (neg (num "2"))))
       (= (nod "2^3^2") '(pow (num "2") (pow (num "3") (num "2"))))
@@ -807,6 +807,6 @@
    r (fz 300 (wheel 23))
    (assert (= r 'ok)))
 
-(test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
+(test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "crew/kore/law: myers + patience + lines/unlines + unified hunks + the u-floor + the regex floor + the find, awk, pager and bc floors -- projections + minimality (lcs oracle) + anchors + seeded fuzz (lcs + brzozowski oracles) ok
 ")

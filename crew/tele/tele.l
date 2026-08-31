@@ -1,13 +1,13 @@
 ; tele -- a PyTorch-style reverse-mode autograd library, written in love, over the
-; CONSTELLATION algebra (love's numeric tower: a `star` scalar, a `galaxy` numeric
+; constellation algebra (love's numeric tower: a `star` scalar, a `galaxy` numeric
 ; array). love already ships the tensor -- it calls it a constellation, with
 ; broadcasting +/*, reductions (net), and contractions (inner). tele adds the one
 ; missing ingredient: the gradient. Stage 1 -- the autograd core.
 ;
-; the mechanism is one idea, native to love's currying: reverse-mode AD is the
-; category of LENSES. a differentiable op is not a -> b, it is a pair
+; the mechanism is one idea, native to love's currying: reverse-mode ad is the
+; category of lenses. a differentiable op is not a -> b, it is a pair
 ;     forward : a -> (b , (b-bar -> a-bar))
-; the value AND the linear backward map from the output cotangent to the input
+; the value and the linear backward map from the output cotangent to the input
 ; cotangent. that second component is a closure -- and love is closures all the way
 ; down, so the lens falls out for free. `back` is the adjoint ray-trace: the same
 ; lenses, walked backward, seeded with the cotangent 1.
@@ -15,16 +15,16 @@
 ; pure love -- no host nif, so this runs on every frontend (host, kernel, wasm).
 ; load with `-l crew/tele/tele.l` after the prel; the gradient-check gate is test/tele/grad.l.
 ;
-; a node (a "glass") is a MUTABLE tablet { 'val 'grad 'bwd }. the galaxy VALUES it
-; holds stay immutable; only the node mutates -- grad ACCUMULATES by replacing the
+; a node (a "glass") is a mutable tablet { 'val 'grad 'bwd }. the galaxy values it
+; holds stay immutable; only the node mutates -- grad accumulates by replacing the
 ; node's grad slot with a fresh summed galaxy (a node consumed twice sums its
 ; cotangents -- the multivariate chain rule). the node itself is the identity key
-; for accumulation; no mint needed -- the tablet IS the identity. leaves
-; (glass/const) carry a noop bwd and stay off the tape; only OPS are taped, in
-; creation order -- a define-by-run Wengert list whose reverse IS a valid
+; for accumulation; no mint needed -- the tablet is the identity. leaves
+; (glass/const) carry a noop bwd and stay off the tape; only ops are taped, in
+; creation order -- a define-by-run Wengert list whose reverse is a valid
 ; reverse-topological order (a parent is always built before its child).
 
-(: ;; -- list helpers (local). + adjoins () as an ELEMENT (the zero point is a
+(: ;; -- list helpers (local). + adjoins () as an element (the zero point is a
    ;; measure-zero scalar to +), so for concatenation we need a real append that
    ;; treats () as empty.
    (tl-app a b) (a @ (a . u) (a . tl-app u b) b)
@@ -43,7 +43,7 @@
    (tl-mk v bwd) {'val v 'grad 0 'bwd bwd}
    (tl-op v bwd) (tl-push (tl-mk v bwd))            ; an op node: forward value + adjoint, taped
 
-   ;; (glass v) wraps a constellation as a leaf that REQUIRES grad; (const v) one
+   ;; (glass v) wraps a constellation as a leaf that requires grad; (const v) one
    ;; that does not. mechanically identical (a leaf has a noop bwd, off the tape);
    ;; the difference is intent -- you read (grad g) of a glass, never of a const.
    (glass v) (tl-mk v (s \ 0))
@@ -83,11 +83,11 @@
      (tl-cat (map (j \ map (i \ peep m [i j] 0) ^r) ^c))))
 
    ;; -- the device seam -- tele's heavy array ops (matmul, elementwise, reduce,
-   ;; transpose) route through a SWAPPABLE backend record { gemm ew reduce transp }.
-   ;; the default `tl-cpu` IS love's native constellation algebra, so tele stands
-   ;; alone (test/tele/grad.l loads only this file). load crew/tele/device.l for the SIM +
+   ;; transpose) route through a swappable backend record { gemm ew reduce transp }.
+   ;; the default `tl-cpu` is love's native constellation algebra, so tele stands
+   ;; alone (test/tele/grad.l loads only this file). load crew/tele/device.l for the sim +
    ;; roofline meter -- then (tl-use that-backend) and every mm/add/mul/sub/sum/mean
-   ;; below reroutes with NO change to tele's source.
+   ;; below reroutes with no change to tele's source.
    ;; `ew` takes the elementwise op as its first argument ((+)/(*)/(-)) so one
    ;; kernel slot covers all three lanes.
    tl-cpu  {'name "cpu" 'gemm inner 'ew id
@@ -103,8 +103,8 @@
    ;; -- the lens ops -- each returns its forward value and an adjoint that
    ;; scatters cotangents into its parents (accumulating). `s` is the op node
    ;; itself; (peep s 'grad 0) is the cotangent that has landed on this op.
-   ;; NB: the coerced nodes get FRESH names (na/nb/nx) -- shadowing the parameter
-   ;; (`a (node a)`) would, by the one-scope law, read `a` BEFORE its pin -> the
+   ;; nb: the coerced nodes get fresh names (na/nb/nx) -- shadowing the parameter
+   ;; (`a (node a)`) would, by the one-scope law, read `a` before its pin -> the
    ;; missing condition -> the zero point, silently coercing () instead of a.
    (add a b) (: na (node a) nb (node b)
     (tl-op (tl-ew (+) (tl-val na) (tl-val nb))
@@ -119,8 +119,8 @@
    (mm a b) (: na (node a) nb (node b)              ; matmul (rides the gemm kernel)
     (tl-op (tl-gemm (tl-val na) (tl-val nb))
      (s \ : g (peep s 'grad 0)
-           (tl-accum na (tl-gemm g (tl-tr (tl-val nb))),     ; dA = G @ B^T
-            tl-accum nb (tl-gemm (tl-tr (tl-val na)) g)))))  ; dB = A^T @ G
+           (tl-accum na (tl-gemm g (tl-tr (tl-val nb))),     ; dA = G @ b^t
+            tl-accum nb (tl-gemm (tl-tr (tl-val na)) g)))))  ; dB = a^t @ G
    (sum x) (: nx (node x)                            ; reduce-all to a scalar
     (tl-op (tl-reduce (tl-val nx))
      (s \ tl-accum nx (tl-val nx * 0 + peep s 'grad 0))))  ; broadcast g to x's shape
@@ -140,7 +140,7 @@
     (tl-op (tl-reduce xv / n)
      (s \ tl-accum nx (xv * 0 + peep s 'grad 0 / n))))
 
-   ;; relu IS the color law, differentiated: it passes the positive (blue) and
+   ;; relu is the color law, differentiated: it passes the positive (blue) and
    ;; clamps the rest to the blue floor at 0. the local slope is the mask (x>0) --
    ;; and the kink, where the subgradient switches, is exactly that blue floor.
    (relu x) (: nx (node x) xv (tl-val nx) m (< 0 xv)
@@ -154,14 +154,14 @@
    (tanh x) (: nx (node x) xv (tl-val nx) tv (2 / (1 + tl-exp (-2 * xv)) - 1)
       (tl-op tv (s \ tl-accum nx (peep s 'grad 0 * (1 - tv * tv)))))
 
-   ;; mse = mean((p-t)^2). a COMPOSITE of the ops (no new adjoint): d is reused, so
+   ;; mse = mean((p-t)^2). a composite of the ops (no new adjoint): d is reused, so
    ;; mul d d squares it and the fan-out makes the chain rule give 2d for free.
    (mse p t) (: d (sub p t) (mean (mul d d)))
 
    ;; ---- Stage 3: nn modules + optim ----
-   ;; a MODULE is a tablet { 'fwd 'params } -- a forward fn + its parameter glasses.
+   ;; a module is a tablet { 'fwd 'params } -- a forward fn + its parameter glasses.
    ;; a bare function (an activation) counts as a param-less module. the parameter
-   ;; glasses PERSIST across steps (updated in place); each forward builds a fresh
+   ;; glasses persist across steps (updated in place); each forward builds a fresh
    ;; graph over them (define-by-run), so a held glass trains while the tape resets.
    (tl-mod fwd ps) {'fwd fwd 'params ps}
    (tl-mfwd m)    (tablet? m ? (peep m 'fwd 0) m)        ; module-or-bare-fn -> its forward
@@ -182,7 +182,7 @@
    ;; seq: compose modules/functions left-to-right; params = the concatenation.
    (seq mods) (tl-mod (x \ foldl (flip tl-mfwd) x mods) (tl-cat (map tl-mparams mods)))
 
-   ;; optim: an SGD stepper over a parameter list. step: p <- p - lr*grad (in place,
+   ;; optim: an sgd stepper over a parameter list. step: p <- p - lr*grad (in place,
    ;; swapping the node's immutable val for a fresh one); zero: clear every grad.
    (sgd ps lr) {'params ps 'lr lr}
    (step opt)  (: ps (peep opt 'params 0) lr (peep opt 'lr 0)

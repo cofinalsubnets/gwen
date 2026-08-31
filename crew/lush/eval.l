@@ -179,7 +179,7 @@
    ; policy question behind every in-image lane -- lush's own, and cook's.
    (sh-ours? w) (? (sh-slashed? w) (sh-self? w) (sh-onpath? w))
    ; can this seat run the word at all? PATH answers wherever there is a seat to
-   ; exec -- a hosted love resolves a word to a file. a seat with NONE never execs:
+   ; exec -- a hosted love resolves a word to a file. a seat with none never execs:
    ; the kernel's spawn hands the word to the verb registry, so that is the authority
    ; there, and asking PATH would call every tool it carries missing.
    (sh-verbw? w) (: f (from 'verbs 'word) (? (lit? f) !(nil? (f w)) 0))

@@ -1,7 +1,7 @@
-; crew/vi/config.l -- the THEME: molokayo, as plain data the painter reads.
-; crew/lux/config.l is the shape -- a body-LESS `:`, values not code.
+; crew/vi/config.l -- the theme: molokayo, as plain data the painter reads.
+; crew/lux/config.l is the shape -- a body-less `:`, values not code.
 ;
-; the theme is keyed by VIM HIGHLIGHT GROUP, not by syntax class. crew/vi/hue.l
+; the theme is keyed by vim highlight group, not by syntax class. crew/vi/hue.l
 ; says "a comment is a Comment"; this file says "in molokayo a Comment is 59 /
 ; #75715E". that split is what lets the generated vim syntax file emit plain
 ; `hi def link` lines -- a syntax file that hardcoded colours would fight the
@@ -9,9 +9,9 @@
 ; gets the same molokayo out of the same table. swap the numbers below for
 ; another scheme's and only the editor follows.
 ;
-; every value is lifted VERBATIM from awesome-vim-colorschemes: molokayo.vim is
+; every value is lifted verbatim from awesome-vim-colorschemes: molokayo.vim is
 ; molokai.vim with `molokai_original = 1` plus its own `hi!` lines, and molokayo
-; WINS where it defines a group (Identifier, Special). nothing here is
+; wins where it defines a group (Identifier, Special). nothing here is
 ; approximated by us -- the cterm numbers are molokai's own 256-colour block, so
 ; a terminal that cannot do 24-bit still shows the author's fallback.
 ;
@@ -25,12 +25,12 @@
       (Constant   135 "#AE81FF" (bold))
       (Statement  161 "#F92672" (bold))
       (Function   118 "#A6E22E" ())
-      (Identifier 214 "#ffb700" ())          ; molokayo over molokai's #FD971F/208
-      (Special    81  "#66d0ef" (italic))    ; molokayo over molokai's #66D9EF
+      (Identifier 214 "#ffb700" ())          ; molokayo over molokai's #fd971f/208
+      (Special    81  "#66d0ef" (italic))    ; molokayo over molokai's #66d9ef
       (Operator   161 "#F92672" ())
       (Delimiter  241 "#8F8F8F" ()))
 
-   ; the user's own rows, read as DATA (never evaled) at editor birth and folded
+   ; the user's own rows, read as data (never evaled) at editor birth and folded
    ; over the above -- kore ships as a baked image, so editing this file is not a
    ; knob anyone downstream has. same row shape; a file with no rows in it means
    ; no overrides, which is a perfectly good thing for a theme file to mean.

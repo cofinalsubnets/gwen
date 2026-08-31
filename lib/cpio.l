@@ -14,7 +14,7 @@
 ; the format, in one breath: a 110-byte all-ASCII header per member -- "070701" then
 ; thirteen eight-digit hex fields -- then the name (its NUL counted in namesize), then
 ; the body, each padded up to a 4-byte boundary measured from the start of the archive.
-; a member named "TRAILER!!!" ends it, and the whole is padded to 512 with NULs.
+; a member named "trailer!!!" ends it, and the whole is padded to 512 with NULs.
 ;
 ; the mode field is the whole st_mode, type bits and all -- 0100000 for a file, 0040000
 ; for a directory, 0120000 for a symlink -- where tar keeps the kind in a separate

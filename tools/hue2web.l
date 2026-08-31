@@ -2,13 +2,13 @@
 ; stylesheet, and write one source file out as a painted page.
 ;
 ;   love tools/hue2web.l css        the stylesheet, on stdout
-;   love tools/hue2web.l src FILE   that file as an annotated page, on stdout
+;   love tools/hue2web.l src file   that file as an annotated page, on stdout
 ;
 ; the painting itself is lib/hueweb.l, which `love serve` also uses to paint the
-; same file at REQUEST TIME. one painter, two errands -- a build that wrote pages
+; same file at request time. one painter, two errands -- a build that wrote pages
 ; a server would paint differently is two answers to one question.
 ;
-; ⚠ LOVE_NO_IMAGE must be CLEARED by whoever runs this, and the Makefile does: the
+; LOVE_NO_IMAGE must be cleared by whoever runs this, and the Makefile does: the
 ; word lanes ask the running binary for its vocabulary, and under the egg boot
 ; that answer is the compiler's own internals rather than the language we ship.
 (use "crew/vi/config.l")

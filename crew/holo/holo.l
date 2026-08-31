@@ -1,6 +1,6 @@
-; holo -- a tiny ASSEMBLER over a neutral, low-level IR, written in love. the IR is a flat list of
+; holo -- a tiny assembler over a neutral, low-level IR, written in love. the IR is a flat list of
 ; instruction forms (a RISC-ish three-address surface over abstract registers r0..r14 + sp) and a
-; BACKEND lowers each form to bytes. this file is the arch-NEUTRAL half: the IR shape, the two-pass
+; backend lowers each form to bytes. this file is the arch-neutral half: the IR shape, the two-pass
 ; layout (assign addresses, then resolve label-relative fixups), the backend registry, and the
 ; byte/hex plumbing every target shares. a new backend drops in by pinning a `lower`/`patch` pair
 ; under a target name -- the driver below never changes. the gate is test/holo/golden.l.
@@ -9,46 +9,46 @@
 ;   (label name)            ; a named address (emits no bytes)
 ;   (li d imm)              ; d <- immediate
 ;   (mov d s)              ; d <- s            (register move)
-;   (add d a b) (sub ..)   ; d <- a OP b       b a register OR an immediate; also and/or/xor/imul
+;   (add d a b) (sub ..)   ; d <- a OP b       b a register or an immediate; also and/or/xor/imul
 ;   (neg d) (not d) (inc d) (dec d)            ; in-place unary
 ;   (cmp a b)              ; set flags from a - b
 ;   (ld d base off)        ; d <- [base+off]   (64-bit load)
 ;   (st base off s)        ; [base+off] <- s   (64-bit store)
-;   (ld1/ld2/ld4 d base off)                   ; SIGN-extending sized loads (C's char/short/int)
+;   (ld1/ld2/ld4 d base off)                   ; sign-extending sized loads (C's char/short/int)
 ;   (st1/st2/st4 base off s)                   ; truncating sized stores
 ;   (sx1/sx2/sx4 d)                            ; sign-extend d's low 1/2/4 bytes in place (the C casts)
-;   (shlv/shrv/sarv d c)   ; shift d by the count in c -- c PINNED to r1 (x86's CL), d must differ
+;   (shlv/shrv/sarv d c)   ; shift d by the count in c -- c pinned to r1 (x86's CL), d must differ
 ;   (lea d base off)       ; d <- base+off     (address arithmetic)
 ;   (ldx d base ix sc dp)  ; d <- [base + ix*sc + dp]   (sc in 1/2/4/8)
 ;   (stx base ix sc dp s)  ; [base + ix*sc + dp] <- s
 ;   (leax d base ix sc dp) ; d <- base + ix*sc + dp
 ;   (shl/shr/sar/rol/ror d c)                  ; shift / rotate d in place by immediate count c
 ;   (ror4 d c) (rorv/rorv4 d c)                ; 32-bit rotate right (imm; count via r1) + the 64-bit count form
-;   (test a b)             ; set flags from a AND b
+;   (test a b)             ; set flags from a and b
 ;   (div d a b) (rem d a b t)                  ; signed truncating quotient / remainder; t a scratch (arm64 rem; x86 ignores)
 ;   (push s) (pop d)
 ;   (jmp label) (br cond label)                ; cond: eq ne lt le gt ge below above ae be s ns vs vc
 ;   (jmpr d)                                   ; indirect: jump to the address in register d
-;   (adds d a b) (subs d a b)                  ; like add/sub but SET FLAGS -- pair with (br vs/vc ..)
+;   (adds d a b) (subs d a b)                  ; like add/sub but set flags -- pair with (br vs/vc ..)
 ;   (mulo d a b t lbl)                         ; d <- a*b (low 64); branch to lbl on signed overflow; t a scratch (clobbered)
 ;   (set cond d)                               ; d <- (cond holds) ? 1 : 0, from the last cmp's flags
 ;   (call label) (callr d) (ret) (sys)         ; callr: indirect call through register d; sys = syscall/svc
-;   (la d label)           ; d <- the label's ADDRESS (pc-relative; data via (label)+(raw ..))
+;   (la d label)           ; d <- the label's address (pc-relative; data via (label)+(raw ..))
 ;   (nop) (trap)
-;   -- SSE2 double lane (x86-64 only; the float glaze): xmm registers f0..f15 --
+;   -- sse2 double lane (x86-64 only; the float glaze): xmm registers f0..f15 --
 ;   (addsd/mulsd/subsd/divsd d s) etc.         ; reg-reg packed/scalar double ops (see x64-sse)
 ;   (ucomisd a b)                              ; compare doubles, set flags
 ;   (cvtsi2sd f g) (movqxr f g) (movqrx g f)   ; int->double ; gp<->xmm bit moves
 ;   (stsd base disp f) (ldsd f base disp)      ; movsd [base+disp]<->xmm  (spill / box store)
 ;
-; a register operand is a SYMBOL (r0..), an immediate a NUMBER -- `reg?` tells them apart, so the
+; a register operand is a symbol (r0..), an immediate a number -- `reg?` tells them apart, so the
 ; ALU ops take either in the same slot with no syntax. the abstract register file is what makes the
 ; IR neutral: each backend maps r0..r14/sp onto its own encoding.
 
-; ⚠ THE BACKENDS REOPEN THIS MODULE, each wearing the same (module 'holo head, so a frontend
+; the backends reopen this module, each wearing the same (module 'holo head, so a frontend
 ; cats this file plus the backends it wants into the text its boot evals and gets one layer.
 ; its boot then says (use 'holo) and ai_unsplice_ -- so holo registers without staying
-; AMBIENT: a consumer either (use 'holo) and reads bare, or probes one member through
+; ambient: a consumer either (use 'holo) and reads bare, or probes one member through
 ; (from 'holo 'assemble). a backend the frontend left out joins at runtime the same way every
 ; cat does: (use 'holo), then the backend text.
 
@@ -58,8 +58,8 @@
    (at l k) (? (k = 0) <l (at >l (k - 1)))
 
    ;; -- bytes, little-endian: the leaves a backend emits immediates with. byte/le16/le32 ride the
-   ;; fast &/>> path (their inputs are always < 2^31, where & is exact). ⚠ le64 must NOT: a movabs
-   ;; immediate can be a full 64-bit word >= 2^63 -- a BIGNUM, where `&` drops the high limb -- so
+   ;; fast &/>> path (their inputs are always < 2^31, where & is exact). le64 must not: a movabs
+   ;; immediate can be a full 64-bit word >= 2^63 -- a bignum, where `&` drops the high limb -- so
    ;; it normalizes negatives into [0,2^64) and slices with //%, both bignum-exact. --
    (catall ls) (foldr (+) () ls)                     ; concat a list of byte-lists
    (byte n)  (n & 255)
@@ -74,11 +74,11 @@
    (reg? x)  !(constellation? x)
    (imm? x)  (constellation? x)
 
-   ;; -- a FIXUP: a relocation placeholder a backend drops where a label-relative field goes. it
+   ;; -- a fixup: a relocation placeholder a backend drops where a label-relative field goes. it
    ;; occupies `w` bytes in the layout and the driver fills it in pass two via the backend's
    ;; `patch`, carried inline among the bytes as ('fix w kind label aux) so length and order fall
    ;; out. `aux` is backend scratch -- x86 ignores it; a fixed-width arch stashes the base
-   ;; instruction word there, its branch offset being a bitfield WITHIN the word, not bytes. --
+   ;; instruction word there, its branch offset being a bitfield within the word, not bytes. --
    (fix w kind label aux) ['fix w kind label aux]
    (fix? x)   (? (two? x) (<x = 'fix) 0)
    (fix-w x)  (at x 1)
@@ -86,42 +86,42 @@
    (fix-l x)  (at x 3)
    (fix-a x)  (at x 4)
    (item-len x) (? (fix? x) (fix-w x) 1)              ; a byte is 1; a fixup is its field width
-   ;; -- fold a freshly lowered chunk onto the REVERSED item stream, answering (len . items).
+   ;; -- fold a freshly lowered chunk onto the reversed item stream, answering (len . items).
    ;; measure-then-rev-then-append walks the chunk three times and conses it twice; this walks
    ;; once and conses once. the assembler's hottest loop -- one per instruction per pass. --
    (revonto l items n) (? !(two? l) (n >< items)
                           (revonto >l (<l >< items) (n + item-len <l)))
 
    ;; -- the little table kit every backend leans on: `tabof` builds a tablet from
-   ;; ('k >< v) pairs (the register/cc/opcode tables), `fregs` the f0..fN-1 float
+   ;; ('k >< v) pairs (the register/cc/opcode tables), `fregs` the f0..fn-1 float
    ;; file, and `look` is the guarded read (a miss scares with the caller's tag). --
    (tabof prs) (: t (tablet 0) _ (foldl (\ _ p (pin t <p >p)) 0 prs) t)
    (fregs n)   (: t (tablet 0) _ (foldl (\ _ i (pin t (intern ("f" + show i)) i)) 0 (jot n)) t)
    (look tab k tag) (: e (peep tab k -1) (? (e < 0) (scare tag k) e))
 
    ;; -- the IR's operand counts, one neutral table (the header's forms made executable). a
-   ;; backend keeps an EMITTER tablet, each row partial-applied to everything but its IR operands
+   ;; backend keeps an emitter tablet, each row partial-applied to everything but its IR operands
    ;; (an arity-0 row IS its chunk), and its 'lower is the lower-via shim -- so the op ->
-   ;; operand-shape mapping lives HERE, once, instead of four hand-kept dispatch chains. --
+   ;; operand-shape mapping lives here, once, instead of four hand-kept dispatch chains. --
    ir-arity (tabof
         [('ret >< 0) ('sys >< 0) ('nop >< 0) ('trap >< 0) ('udivll >< 0) ('uremll >< 0)
-           ; x86 PORT I/O, register-contracted like `sys` (dx the port, al/ax/eax the datum; the
-           ; string forms walk rsi/rdi by rcx). zero operands: the contract IS the register file.
+           ; x86 port I/O, register-contracted like `sys` (dx the port, al/ax/eax the datum; the
+           ; string forms walk rsi/rdi by rcx). zero operands: the contract is the register file.
           ('inb >< 0) ('inw >< 0) ('inl >< 0) ('outb >< 0) ('outw >< 0) ('outl >< 0)
           ('cld >< 0)
           ('insb >< 0) ('insw >< 0) ('insl >< 0) ('outsb >< 0) ('outsw >< 0) ('outsl >< 0)
-           ; the SYSTEM lane -- privileged instructions, arch-specific like the port i/o above.
+           ; the system lane -- privileged instructions, arch-specific like the port i/o above.
            ; x86: interrupt flag, halt, the MSR pair, the descriptor tables, the control registers.
-           ; aarch64: the sysreg pair, the PSTATE-field immediate, barriers, the SYS operations (an
+           ; aarch64: the sysreg pair, the pstate-field immediate, barriers, the sys operations (an
            ; operation NAME then a register, `zr` whole-system), the exception generators, the waits.
           ('cli >< 0) ('sti >< 0) ('hlt >< 0) ('ud2 >< 0) ('iretq >< 0) ('swapgs >< 0)
           ('rdmsr >< 0) ('wrmsr >< 0) ('cpuid >< 0) ('rdtsc >< 0)
-           ; the SVM lane: register-contracted too -- the VMCB's physical address rides rax.
+           ; the SVM lane: register-contracted too -- the vmcb's physical address rides rax.
           ('vmrun >< 0) ('vmload >< 0) ('vmsave >< 0) ('stgi >< 0) ('clgi >< 0)
            ; the VMX lane, where nothing is register-contracted: vmxon/vmclear/vmptrld take a
-           ; MEMORY operand holding a physical address (base + displacement, lgdt's shape),
+           ; memory operand holding a physical address (base + displacement, lgdt's shape),
            ; vmread/vmwrite move a field to or from a GPR, vmlaunch/vmxoff are bare. sgdt/sidt
-           ; join them because VMX must WRITE DOWN the descriptor-table bases it will restore.
+           ; join them because VMX must write down the descriptor-table bases it will restore.
           ('vmlaunch >< 0) ('vmxoff >< 0)
           ('vmxon >< 2) ('vmclear >< 2) ('vmptrld >< 2) ('sgdt >< 2) ('sidt >< 2)
           ('vmread >< 2) ('vmwrite >< 2)
@@ -163,14 +163,14 @@
           ('stsd >< 3) ('ldsd >< 3) ('stss >< 3) ('ldss >< 3) ('cmppd >< 3)
           ('rem >< 4) ('urem >< 4) ('umull >< 4) ('smull >< 4) ('mla >< 4)
           ('ldx >< 5) ('stx >< 5) ('leax >< 5) ('ldxb >< 5) ('stxb >< 5) ('mulo >< 5)])
-   ;; an emitter ROW is (arity . emitter): `emsof` builds a backend's tablet from the same
+   ;; an emitter row is (arity . emitter): `emsof` builds a backend's tablet from the same
    ;; ('op >< f) pairs `tabof` takes, stamping each row with its count off ir-arity. so ir-arity
-   ;; is read at BAKE time, once per op, and lowering reads arity and emitter in ONE lookup.
+   ;; is read at bake time, once per op, and lowering reads arity and emitter in one lookup.
    (emsof prs) (: t (tablet 0) _ (foldl (\ _ p (emrow t <p >p)) 0 prs) t)
    (emrow t op f) (pin t op (look ir-arity op 'bad-op >< f))
-   ;; feed the emitter its operands, left to right, straight off the form's own tail. ⚠ `n` counts
+   ;; feed the emitter its operands, left to right, straight off the form's own tail. `n` counts
    ;; the row's declared arity down and must reach zero exactly as the operands run out: a form
-   ;; carrying the wrong count SCARES here rather than answering a PARTIAL APPLICATION, which
+   ;; carrying the wrong count scares here rather than answering a partial application, which
    ;; would lay as zero bytes -- a silent hole in the output.
    (feed f l n op) (? (two? l) (? (n < 1) (scare 'arity-skew op) (feed (f <l) >l (n - 1) op))
                       (n = 0) f
@@ -186,21 +186,21 @@
    (defbackend name be) (pin backends name be)
    (lower-with be ins)         ((peep be 'lower 0) ins)
    (patch-with be k t s w aux) ((peep be 'patch 0) k t s w aux)
-   ;; the LINKER's door onto the same encoders. a REL relocation keeps its addend IN the
+   ;; the linker's door onto the same encoders. a rel relocation keeps its addend in the
    ;; field and the aux the encoding hides (a movw/movt's Rd) there too, so this takes the
-   ;; field's BYTES back and answers the re-encode -- the bit scatter stays in the backend
+   ;; field's bytes back and answers the re-encode -- the bit scatter stays in the backend
    ;; that owns it, in one copy, and link.l never learns an instruction format.
-   ;; ⚠ answered by PRESENCE, never by a zero: an unbound slot would be `(0 k ..)`,
+   ;; answered by presence, never by a zero: an unbound slot would be `(0 k ..)`,
    ;; which is const-1 applied and comes back a plausible number.
    (refix-with be k bs t s w)
     (: f (peep be 'refix ()) (? (lit? f) (f k bs t s w) (scare 'holo-no-refix k)))
 
    ;; -- pass one: walk the program, lower each form, assign addresses, record labels -> (items .
-   ;; labels), the flat byte/fixup stream and a name->address tablet. ⚠ items accumulate REVERSED
+   ;; labels), the flat byte/fixup stream and a name->address tablet. items accumulate reversed
    ;; (one rev at the end) so a whole-program lay stays linear -- appending to the tail re-copies
    ;; the stream per instruction, which cost `mooncc -c love.c` 15 of its 16 minutes.
    ;; ('align n) pads to the next n-boundary with the backend's nop unit, cycled to the exact
-   ;; count -- alignment lives HERE, the only pass that knows the address. the pad is
+   ;; count -- alignment lives here, the only pass that knows the address. the pad is
    ;; between-function filler, never executed, so a torn unit at an odd grain is harmless. --
    (pad-to be addr n)
       (: k ((n - (addr % n)) % n)
@@ -232,23 +232,23 @@
                (x >< resolve >items labels be (addr + 1)))))
 
    ;; -- branch relaxation, fused with layout: lay's shape, but (jmp l) / (br c l) land as the
-   ;; 2-byte short forms where the target provably fits rel8. ONE pessimistic decision pass is
-   ;; sound -- distances measured at the all-long layout only SHRINK as branches shorten, so a fit
-   ;; stays a fit -- ⚠ provided the span crosses no 'align (a boundary holds downstream addresses
-   ;; still while the branch slides) and the target is a label of THIS prog. the align guard rides
-   ;; an EPOCH pinned beside each label: same count of 'align forms seen == no boundary inside the
-   ;; span. each form lowers exactly ONCE (pass one caches its chunk, pass two splices it).
-   ;; the LARGE COLD texts ride this; plain `assemble` stays on lay, so a hot assembling client
+   ;; 2-byte short forms where the target provably fits rel8. one pessimistic decision pass is
+   ;; sound -- distances measured at the all-long layout only shrink as branches shorten, so a fit
+   ;; stays a fit -- provided the span crosses no 'align (a boundary holds downstream addresses
+   ;; still while the branch slides) and the target is a label of this prog. the align guard rides
+   ;; an epoch pinned beside each label: same count of 'align forms seen == no boundary inside the
+   ;; span. each form lowers exactly once (pass one caches its chunk, pass two splices it).
+   ;; the large cold texts ride this; plain `assemble` stays on lay, so a hot assembling client
    ;; pays nothing. a fixed-width arch falls through to lay. a backend opts in by pinning 'short:
    ;;   (\ ins chunk rel -> bytes | ())
-   ;; answering a shorter encoding of this jmp/br -- given the form, its already-lowered LONG
+   ;; answering a shorter encoding of this jmp/br -- given the form, its already-lowered long
    ;; chunk, and the pessimistic distance from the instruction to its target -- or () to keep the
-   ;; long one. the answer is MEASURED, so a short form may be any width (x64's is 2 bytes, riscv
-   ;; drops a whole jal), and handing the backend its own chunk lets it REWRITE rather than
+   ;; long one. the answer is measured, so a short form may be any width (x64's is 2 bytes, riscv
+   ;; drops a whole jal), and handing the backend its own chunk lets it rewrite rather than
    ;; re-lower, which matters where lowering reads state the second pass no longer holds.
    ;; `longs` is a tablet of label names that must stay long-form -- the object writer passes its
    ;; weak-defined set, whose fixups must survive as relocations.
-   ;; ⚠ the locals here are spelled to shadow NO caller-side global: a `scan`/`rw`/`skip` would
+   ;; the locals here are spelled to shadow no caller-side global: a `scan`/`rw`/`skip` would
    ;; collide with moon/kore file-scope names in a cat'd stream. --
    (laylax prog be at0 labels longs)
       (? !(lit? (peep be 'short 0)) (lay prog be at0 () labels)
@@ -270,7 +270,7 @@
             chunks (plumb prog at0 0 ())
             ;; the pessimistic address of a label this span may legally reach, or (). forward
             ;; spans shrink toward it and backward spans toward zero as branches shorten, so a
-            ;; distance the backend accepts here stays acceptable -- which is what keeps ONE
+            ;; distance the backend accepts here stays acceptable -- which is what keeps one
             ;; decision pass sound. the backend judges the distance; this only offers it.
             short-of (peep be 'short 0)
             (tgt-of l era)
@@ -294,17 +294,17 @@
                         (: t (tgt-of (? (<ins = 'jmp) (at ins 1) (at ins 2)) era)
                            sc (? (imm? t) (short-of ins (rev c) (t - pa)) ())
                            (? (two? sc)
-                              (: r (revonto sc items 0)          ; ⚠ BYTES, not elements: one
+                              (: r (revonto sc items 0)          ; bytes, not elements: one
                                  (stitch >p >cs (pa + k) (fa + <r) era >r))   ;  fixup is 4 of them
                               (stitch >p >cs (pa + k) (fa + k) era (c + items))))
-                        (stitch >p >cs (pa + k) (fa + k) era (c + items)))))   ; c is cached REVERSED
+                        (stitch >p >cs (pa + k) (fa + k) era (c + items)))))   ; c is cached reversed
             (stitch prog chunks at0 at0 0 ())))
 
-   ;; -- assemble PROG for TARGET -> a tablet { 'bytes 'labels }; `holo-bytes` is the byte-list
+   ;; -- assemble PROG for target -> a tablet { 'bytes 'labels }; `holo-bytes` is the byte-list
    ;; shortcut, `holo-str` packs them into a machine-code string, `holo-hex` shows them.
-   ;; assemble-at takes `lbls`, a PRE-BOUND label tablet: a client emitting a blob into a larger
-   ;; buffer seeds the EXTERNAL targets it jumps to, so a (jmp deopt) inside the IR resolves to a
-   ;; rel32 reaching code OUTSIDE the blob. the blob's own labels layer on top; an address may be
+   ;; assemble-at takes `lbls`, a pre-bound label tablet: a client emitting a blob into a larger
+   ;; buffer seeds the external targets it jumps to, so a (jmp deopt) inside the IR resolves to a
+   ;; rel32 reaching code outside the blob. the blob's own labels layer on top; an address may be
    ;; negative (a target before the blob). --
    (assemble-at target prog lbls)
       (: be (peep backends target ())
@@ -315,9 +315,9 @@
          _ (pin res 'labels >p)
          res)
    (assemble target prog) (assemble-at target prog (tablet 0))
-   ;; -- assemble-org: like assemble, but lay/resolve start at ORG, so labels carry their ABSOLUTE
+   ;; -- assemble-org: like assemble, but lay/resolve start at org, so labels carry their absolute
    ;; load address. pc-relative fixups are unchanged (the org cancels in target-site); an abs64 fixup
-   ;; writes the address outright. elf64 sets ORG to the load vaddr so a data pointer resolves. --
+   ;; writes the address outright. elf64 sets org to the load vaddr so a data pointer resolves. --
    (assemble-org target prog org)
       (: be (peep backends target ())
          _ (? (tablet? be) 0 (scare 'no-backend target))

@@ -1,23 +1,23 @@
 ; --- test/host/overlay.l: the lux type overlay + the baked uu book, end to end ---
-; NOT in the test/*.l corpus (the overlay + uu ride the HOST binary's post-egg
+; not in the test/*.l corpus (the overlay + uu ride the HOST binary's post-egg
 ; layers; love0/kernel/wasm never load them). Three legs:
-;   1. crew/lux/sigs.l checks CLEAN over the real core.l + layout.l sources
+;   1. crew/lux/sigs.l checks clean over the real core.l + layout.l sources
 ;      (read as DATA, checked pure with (overlay 'ov-check1) -- no install,
 ;      no eval, observe-only squared), and a deliberately wounded def is
 ;      flagged by name.
 ;   2. the gradual laws: an unknown arg rides into a typed seat; a partial
 ;      application reads open, not clashing (the curried language's law).
-;   3. the uu book is baked and COMPUTES: (uu 'defn) type-checks a nat_rect
+;   3. the uu book is baked and computes: (uu 'defn) type-checks a nat_rect
 ;      adder, (uu 'vof) normalizes 2+1=3 -- no concat, a bare binary.
-;   4. the MODEL vs the IMPLEMENTATION: test/uu.l's verified StackSet mirror
-;      (its zins/zrow/zcount) computes the SAME answers as crew/lux/core.l's,
+;   4. the model vs the implementation: test/uu.l's verified StackSet mirror
+;      (its zins/zrow/zcount) computes the same answers as crew/lux/core.l's,
 ;      on the same stacks, through an encode -> vof -> decode round trip.
 ;   5. the seeded fuzz: the whole op vocabulary walked at random through both
 ;      worlds, compared after every step, the proved invariant watched live.
-;   6. the TRANSLATOR (tools/wm2uu.l, stage 3): core.l's ops read as data,
+;   6. the translator (tools/wm2uu.l, stage 3): core.l's ops read as data,
 ;      kind-directed into uu terms, kernel-certified, and fuzzed against the
 ;      implementation they were translated from -- then (stage 4) tied to the
-;      hand-proved model by idpath BRIDGES: compiled-from-source == proved,
+;      hand-proved model by idpath bridges: compiled-from-source == proved,
 ;      certified by conversion, so every model theorem transfers for free.
 ;
 ;   cat test/00-init.l test/host/overlay.l | out/host/love
@@ -26,7 +26,7 @@
 (reads (open "crew/lux/core.l" "r"))
 
 (:    chk1 (overlay 'ov-check)
-   ; ⚠ OPFIX FIRST, THEN UNGLUE: `forms` reads the SURFACE, the domain checker reads
+   ; opfix first, then unglue: `forms` reads the surface, the domain checker reads
    ; the core shapes -- and a glued sigil factors to a VALUE, which no checker matches
    ; by name. the two passes are the one door between them (tools/uuwmgen.l too).
    (fix1 f) (unglue (opfix f))
@@ -35,7 +35,7 @@
  ; leg 1: the shipped sources check clean...
  _ (assert (! (sweep "crew/lux/core.l"))
            (! (sweep "crew/lux/layout.l")))
- ; ...and a KNOWN kind in the wrong seat is caught: zins wants (window zipper),
+ ; ...and a known kind in the wrong seat is caught: zins wants (window zipper),
  ; the wound hands it a tag and a sheaf
  hurt (chk1 lux-dom (link '(oops (sheaf tag) top) lux-sigs)
             '(: (oops s t) (zins (wstagof s t) s)))
@@ -45,7 +45,7 @@
  sg2 (link '(g1 (rect) window) (link '(g2 (window) top) lux-sigs))
  _ (assert (! (chk1 lux-dom sg2 '(: (g1 r) (zfoc (cap r)))))       ; unknown arg: consistent
            (! (chk1 lux-dom sg2 '(: (g2 w) (zins w))))             ; partial app: open, not a clash
-           (two? (chk1 lux-dom sg2 '(: (g1 r) (zfoc r)))))         ; a RECT in the zipper seat: flagged
+           (two? (chk1 lux-dom sg2 '(: (g1 r) (zfoc r)))))         ; a rect in the zipper seat: flagged
 
  ; leg 3: uu, baked -- define, certify, compute
  _ ((uu 'defn) 'boot-add '(pi m nat (pi n nat nat))
@@ -54,13 +54,13 @@
            (= 5 ((uu 'vof) () '(boot-add 2 3)))))
 
 ; the kernel refuses through the help cell -- install the escape (test/uu.l's
-; own tail move; the kernel span rightly bakes NO global help), probe, uninstall
+; own tail move; the kernel span rightly bakes no global help), probe, uninstall
 (hear (\ p e (: h (peep (uu 'HELPC) () 0) (h ? (h p e) 0))))
 (assert (id? 'rejected ((uu 'rejects) (z \ (uu 'defn) 'boot-bad 'nat '(lam x x)))))
 (hear 0)
 
 ; leg 4: load the whole uu corpus (kernel + the StackSet model + its theorems,
-; every defn re-certified right here), then run the MODEL against core.l's
+; every defn re-certified right here), then run the model against core.l's
 ; implementation on concrete stacks -- encode, vof, decode, compare
 (reads (open "test/uu.l" "r"))
 (reads (open "test/uulay.l" "r"))
@@ -88,10 +88,10 @@
     (= (zswapup z0) (decz (vof 0 ['zswapup (encz z0)])))))
 
 ; leg 5: the seeded fuzz -- the whole op vocabulary, random walks through
-; BOTH worlds, the zippers compared after EVERY step, and the PROVED
+; both worlds, the zippers compared after every step, and the proved
 ; invariant watched live: fresh ids keep the row duplicate-free, so the
 ; model's zsane must answer true at every tenth stack. one op per step
-; runs on the MODEL side too (the previous CORE state encodes, the model
+; runs on the model side too (the previous CORE state encodes, the model
 ; moves, the result decodes) -- so a divergence names its op and its step.
 (: (rnd s) (% (+ (* s 1103515245) 12345) 2147483648)
    (encl l) (two? l ? ['ncons (cap l) (encl (cup l))] 'nnil)
@@ -131,8 +131,8 @@
  (puts "overlay leg 5: ok"))
 
 ; leg 6 (stage 3 of the translator ladder): tools/wm2uu.l reads core.l's ops
-; AS DATA, kind-directed by the sig table, and emits uu terms -- which the
-; kernel then defn-CERTIFIES right here (⚠ dependency order: certify in the
+; as data, kind-directed by the sig table, and emits uu terms -- which the
+; kernel then defn-certifies right here (dependency order: certify in the
 ; order gens answers), and which must answer the fuzz exactly as core.l
 ; does. the translated terms live in the model's vocabulary, so stage 4's
 ; idpath bridges can tie gen-* to the proved ops.
@@ -140,13 +140,13 @@
 (:    cforms (map (f \ unglue (opfix f)) (forms (open "crew/lux/core.l" "r")))   ; the surface factored to the core, as above
    gens (wm2uu cforms lux-sigs)
  _ (assert (= 10 #gens))
- _ (map (g \ (uu 'defn) (cap g) (g 1) (g 2)) gens)   ; the FUNCTION: these args are computed
+ _ (map (g \ (uu 'defn) (cap g) (g 1) (g 2)) gens)   ; the function: these args are computed
  _ (puts "overlay leg 6: translated + certified ")
 
  ; stage 4: the idpath bridges. for every op, the theorem
- ;   paths RES (gen-op args..) (op args..)
- ; proved by (idpath (op args..)) -- which CHECKS if and only if the
- ; translator's output is CONVERTIBLE with the hand-proved model. the kernel
+ ;   paths res (gen-op args..) (op args..)
+ ; proved by (idpath (op args..)) -- which checks if and only if the
+ ; translator's output is convertible with the hand-proved model. the kernel
  ; itself certifies compiled-from-source == proved, and every theorem about
  ; the model transfers to the generated terms for free.
  amap '((zrow agree-zrow) (zrev agree-zrev)
@@ -164,7 +164,7 @@
         w2-want)
  (puts "overlay stage 4: 10 idpath bridges -- the compiled ops ARE the proved model"))
 
-; the same seeded walk, the model side now stepping through the TRANSLATED ops
+; the same seeded walk, the model side now stepping through the translated ops
 (: (rnd s) (% (+ (* s 1103515245) 12345) 2147483648)
    (encl l) (two? l ? ['ncons (cap l) (encl (cup l))] 'nnil)
    (encz z) ['zmk (cap z) (encl (caup z)) (encl (caup (cup z)))]
@@ -204,10 +204,10 @@
     (= (znub 7 (zrow z0)) (decl (vof 0 ['gen-znub 7 ['gen-zrow (encz z0)]]))))
  (puts "overlay: ok"))
 
-; leg 7 (the layout rung): test/uulay.l's tiling-ledger model vs the REAL
+; leg 7 (the layout rung): test/uulay.l's tiling-ledger model vs the real
 ; crew/lux/layout.l rt-tile -- for seeded random rows and master counts, the
 ; window column of the actual placements, the model's rtwins, and the row
-; itself must be ONE list (rtwinsrow, watched live against the implementation
+; itself must be one list (rtwinsrow, watched live against the implementation
 ; the model mirrors). geometry stays law.l's business; this leg pins the ledger.
 (reads (open "crew/lux/layout.l" "r"))
 (: (rnd s) (% (+ (* s 1103515245) 12345) 2147483648)

@@ -20,13 +20,13 @@
  (nil? (rank 5))                     ; non-tuple -> nil
  (nil? (tier "x"))
 
- ; --- only a RANK-0 point demotes to its lone scalar star (no rank-0 vec exists,
+ ; --- only a rank-0 point demotes to its lone scalar star (no rank-0 vec exists,
  ; which is what keeps the float/wide/complex boxes lean). a rank-1 length-1 array
- ; STAYS an array: the invariant is RANK, not count, so the surface is continuous
+ ; stays an array: the invariant is rank, not count, so the surface is continuous
  ; across every tally rather than an array / scalar / array staircase ---
  (= 0 (star-tray 0 0))                    ; empty shape, zero-filled -> the fixnum 0
  (gem? (gem-tray 0 0)) (= 0.0 (gem-tray 0 0))      ; -> a boxed 0.0
- (tray? (star-tray '(1) '(5)))            ; rank-1 len-1 -> a ONE-CELL ARRAY, not the fixnum 5
+ (tray? (star-tray '(1) '(5)))            ; rank-1 len-1 -> a one-cell array, not the fixnum 5
  (5 = (peep (star-tray '(1) '(5)) 0 -1))  ; ...its lone cell reads back
  (tray? @(3.5)) !(= 3.5 @(3.5))           ; @(3.5) is a one-cell array, never the scalar 3.5
  (1 = (tally @(3.5))) (1 = (rank @(3.5)))
@@ -119,9 +119,9 @@
  !(aall (< 2 1))
  (aall (< (star-tray '(2) '(1 2)) (star-tray '(2) '(3 4))))  ; array: same expression
 
- ; --- truthiness is the NET (spec.l); here only the shapes an array adds to it ---
+ ; --- truthiness is the net (spec.l); here only the shapes an array adds to it ---
  (nil? (gem-tray '(2 2) 0))                ; a zero float array, at rank 2
- (nil? @(-2 1)) !(nil? @(-2 3))      ; the cells SUM before the gate: -2+1 <= 0 < -2+3
+ (nil? @(-2 1)) !(nil? @(-2 3))      ; the cells sum before the gate: -2+1 <= 0 < -2+3
 
  ; --- elementwise transcendentals over an array ---
  (aall (= (gem-tray '(2) '(2.0 3.0)) ((/ 1 2) (gem-tray '(2) '(4.0 9.0)))))
@@ -148,12 +148,12 @@
  (= "x" (+ (star-tray '(3) 0) "x"))             ; a tray is number-band: against a string it degenerates
  (nil? (star-tray '(3) 0)))                     ; (sanity) zero array is falsy
 
-; --- empty arrays: the first stone of the APL buildout. a shape-(0) array
+; --- empty arrays: the first stone of the apl buildout. a shape-(0) array
 ; prints the (array '(shape)) surface form (@ has no empty spelling and @0
 ; used to collide with the one-element zero array), broadcast keeps a
 ; 0-axis empty (a 1-axis takes the OTHER size including 0 -- max here once
 ; filled one element out of an empty operand), and empty reductions answer
-; their monoid UNITS: the floor appears as the values of empty reductions.
+; their monoid units: the floor appears as the values of empty reductions.
 (: e (star-tray '(0) 0)
  (assert
   ("@()" = (show e)) ('(0) = (shape e)) (1 = (rank e)) (0 = (tally e))   ; empty rank-1 prints @()

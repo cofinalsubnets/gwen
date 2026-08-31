@@ -1,4 +1,4 @@
-; --- test/law.l: CLAUDE.md's laws, QUANTIFIED ---
+; --- test/law.l: claude.md's laws, quantified ---
 ; a law written with a free `x` means "forall x, this is 1".
 (: law-flat (list 0 1 2 5 -1 -5 2.5 -2.5 0.0 () "" "a" "ab" 'sym '(1 2) '(-2 1)
                   (twin 3 4) (twin -1 2) (twin 0 3) @() @(1 2) @(1 2 3) (q 7 2) (q -7 2) cap 'x)
@@ -15,7 +15,7 @@
                      1))
    law-rows
     (list
-      ; --- the glued lane IS the law: each line states the sigil and its word at once, and the
+      ; --- the glued lane is the law: each line states the sigil and its word at once, and the
       ; valence law names the spaced twin alongside.
       ['cap      (x \ <x = cap x)]
       ['cup      (x \ >x = cup x)]
@@ -34,7 +34,7 @@
       ['nil?-total (x \ : b !x (b = 0 || b = 1))]
       ['=-total    (x \ : b (x = x) (b = 1))]
       ['id?-finer  (x \ id? x x ? (x = x) 1)]           ; id? implies =, never the converse
-      ; --- THE MEASURE and the tower it retracts down. every value has a complex measure and
+      ; --- the measure and the tower it retracts down. every value has a complex measure and
       ; each rung is that measure saturated into a smaller set -- idempotent, identity on its
       ; own image, which is what makes the tower retractions rather than conversions.
       ['net-idem  (x \ : n +x (n = +n))]
@@ -44,7 +44,7 @@
       ['bit-idem  (x \ : b ?x (b = ?b))]
       ['ceil-net  (x \ coin? x ? 1 (ceil x = ceil (re +x)))]   ; ceil retracts onto the integers
       ['sat-ceil  (x \ $x = (0 < ceil x ? (ceil x) 0))] ; saturate is ceil, floor raised to 0
-      ; --- the EXACT LANE: int/ceil/saturate on a ratio coin long-divide the (n d)
+      ; --- the exact lane: int/ceil/saturate on a ratio coin long-divide the (n d)
       ; parts, so a part past 2^53 still lands the true integer -- the float net
       ; rounds there, which is why ceil-net's corpus keeps its ratios small.
       ['ratio-rungs (\ _ (: b ((60 2) + 1)
@@ -74,16 +74,16 @@
                                (ch x && (ch y || ch z) && !(txt? y) && !(txt? z)) 1
                                (((x * y) * z) = (x * (y * z))))
                   (all (\ y (all (ok? y) ws)) ws))))]
-      ; --- * on chains is the CARTESIAN PRODUCT, so it associates up to the canonical
+      ; --- * on chains is the cartesian product, so it associates up to the canonical
       ; --- reassociation, not on the nose: ((a b) c) and (a (b c)) are the same triple
-      ; --- nested two ways. reL is that iso, and the ORDER agrees under it too.
+      ; --- nested two ways. reL is that iso, and the order agrees under it too.
       ['mul-reassoc
        (\ x (? !(two? x) 1
                (: cs (list '(1 2) '(3) '(4 5 6) ())
                   (reL p) (: q <p [<q [<>q <>p]])
                   (ok? b c) ((map reL ((x * b) * c)) = (x * (b * c)))
                   (all (\ b (all (ok? b) cs)) cs))))]
-      ; a COUNT floats out of the product: repeating then pairing is pairing then
+      ; a count floats out of the product: repeating then pairing is pairing then
       ; repeating. this is the sharp form of the count seam mul-assoc carves.
       ['mul-count-out
        (\ x (? !(two? x) 1
@@ -116,7 +116,7 @@
       ['sat-green (\ x (: s $x ((0 <= s) && (charm? s))))]  ; ..and the codomain each names
       ['bit-bool  (\ x (: b ?x ((b = 0) || (b = 1))))]
       ['apply-is-id (x \ atom? x ? 1 (<x = (cap $ x)))]
-      ; --- the traps CLAUDE.md states as laws, held to the same standard
+      ; --- the traps claude.md states as laws, held to the same standard
       ['unit-f     (x \ : (g _) x (g = (g)))]             ; (f) == f: a nullary call is the value
       ['curry      (x \ charm? x ? (((x +) 2) = (+ x 2)) 1)]
       ['seq        (x \ : y 1 y (y + 1) (y = 2))]         ; the sequence law: a rebind reads the previous

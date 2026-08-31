@@ -1,18 +1,18 @@
-; tools/uuwmgen.l -- EMIT test/uuwm.l: the window-manager moves, compiled from
+; tools/uuwmgen.l -- emit test/uuwm.l: the window-manager moves, compiled from
 ; crew/lux/core.l by tools/wm2uu.l (kind-directed by crew/lux/sigs.l) and printed
 ; as corpus source under the model's own names. Run on the host binary:
 ;
 ;   love tools/uuwmgen.l > test/uuwm.l        (or: make uuwm)
 ;
-; test/uuwm.l is a COMMITTED artifact -- `make test_uuwm` regenerates and
+; test/uuwm.l is a committed artifact -- `make test_uuwm` regenerates and
 ; diffs, failing loudly if core.l moved without a refresh; test/uuwmlaw.l
-; then proves the theorems OF THESE TERMS at corpus time on every target.
+; then proves the theorems OF these terms at corpus time on every target.
 (: _ (reads (open "crew/lux/sigs.l" "r"))
    _ (reads (open "tools/wm2uu.l" "r"))
-   ; ⚠ OPFIX FIRST. `forms` reads the surface, where `(i - 1)` is three data
-   ; elements; wm2uu matches the CORE shapes. opfix is the one door between them,
+   ; opfix first. `forms` reads the surface, where `(i - 1)` is three data
+   ; elements; wm2uu matches the core shapes. opfix is the one door between them,
    ; so the translator reads what the compiler reads, whatever the surface wears.
-   ; ⚠ NO rev: uu's defn wants a name before its uses, which is the order wm2uu-as answers
+   ; no rev: uu's defn wants a name before its uses, which is the order wm2uu-as answers
    gens (wm2uu-as (map (\ f (unglue (opfix f))) (forms (open "crew/lux/core.l" "r"))) lux-sigs ())
    _ (puts "; test/uuwm.l -- GENERATED from crew/lux/core.l by tools/uuwmgen.l. Do not")
    _ (puts (+ (string 10) "; edit; refresh with `make uuwm`. The window-manager moves, compiled from"))

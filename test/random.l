@@ -1,9 +1,9 @@
-; random (xoshiro256++ / SplitMix64), two layers. FUNCTIONAL: (wheel n) -> a fresh
-; 256-bit state (rank-1 len-4 tuple); (random st n) -> (value . st'), value's TYPE
+; random (xoshiro256++ / SplitMix64), two layers. functional: (wheel n) -> a fresh
+; 256-bit state (rank-1 len-4 tuple); (random st n) -> (value . st'), value's type
 ; by n -- positive int -> int in [0,n), float -> float in [0,n), n <= 0 -> a
 ; full-width int. The state is copied not mutated, so a seed repeats on every target
 ; (the tuple is a Z array on a 64-bit word, a C array on wasm -- the draw canonicalizes
-; to 62 bits). GLOBAL (hidden clock-seeded stream; (rng-set (wheel n)) pins it): (rand n)
+; to 62 bits). global (hidden clock-seeded stream; (rng-set (wheel n)) pins it): (rand n)
 ; -> int in [0,n) (n<=0 full-width); (randf n) -> float in [0,n) (n<=0 -> [0,1)).
 
 (: (rdraw s) (cap (random (wheel s) 0))                  ; 1st full-width functional draw

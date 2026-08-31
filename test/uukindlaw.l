@@ -1,13 +1,13 @@
-; test/uukindlaw.l -- the LAWS of the kinds-lattice join, proved of the GENERATED
+; test/uukindlaw.l -- the laws of the kinds-lattice join, proved of the generated
 ; term (test/uukind.l, lifted from doc/misc/proto/kinds.l by tools/kinds2uu.l). the
-; abstract domain is FINITE -- seven codes, bot..top plus the incomparable str --
-; so the semilattice laws are DECIDABLE by exhausting the carrier: we evaluate the
+; abstract domain is finite -- seven codes, bot..top plus the incomparable str --
+; so the semilattice laws are decidable by exhausting the carrier: we evaluate the
 ; generated `kjoin` in the kernel (vof) over every pairing/tripling of uk-codes and
 ; check idempotence, commutativity, associativity and the bot/top bounds. a check
-; here is thus a COMPLETE proof over the carrier, and drift-gated: a kinds.l edit
+; here is thus a complete proof over the carrier, and drift-gated: a kinds.l edit
 ; that breaks a law re-emits a kjoin that fails an assert at `make test`. the four
 ; kinds.l driver cases ride below as uu idpath lemmas -- the bridge to Rocq + Lean.
-; guard: the uu kernel (test/uu.l -- vof/defn/kjoin/...) MUST load before these laws. $t front-loads
+; guard: the uu kernel (test/uu.l -- vof/defn/kjoin/...) must load before these laws. $t front-loads
 ; it, but a locale-sorted corpus glob puts uukind* first and the laws would run against an unloaded
 ; kernel (a cryptic ;; missing vof -> BADJJ). Fail loudly and by name instead if that ever recurs.
 (assert (member? 'vof (names ())))
@@ -26,14 +26,14 @@
  (uk-all3 (\ a b c (id? (uk-jj (uk-jj a b) c) (uk-jj a (uk-jj b c))))) ; associative
  (uk-all  (\ a (&& (id? (uk-jj uk-bot a) a) (id? (uk-jj a uk-bot) a)))) ; bot the identity
  (uk-all  (\ a (&& (id? (uk-jj uk-top a) uk-top) (id? (uk-jj a uk-top) uk-top)))) ; top absorbs
- ; --- str (the last code) is the incomparable branch: it joins UP to top against
- ;     any numeric, so it is NOT the spine's max (that is the whole point of str) ---
+ ; --- str (the last code) is the incomparable branch: it joins up to top against
+ ;     any numeric, so it is not the spine's max (that is the whole point of str) ---
  (id? (vof 0 '(numq 6)) (vof 0 'false))            ; str is not numeric
  (id? (uk-jj 6 1) uk-top))                         ; str `join` charm = top, not str
 
 ; --- the bridge: kinds.l's four driver cases as uu idpath lemmas. these are real
 ;     kernel proof terms (paths over a computing join), so they export axiom-free
-;     through tools/uu2coq.l + uu2lean.l to Rocq AND Lean alongside the uu corpus. ---
+;     through tools/uu2coq.l + uu2lean.l to Rocq and Lean alongside the uu corpus. ---
 (assert
  (defq kjoin-tier-wins  (paths nat (kjoin 1 4) 4) (idpath 4))   ; A. higher tier wins
  (defq kjoin-bot-unit   (paths nat (kjoin 0 3) 3) (idpath 3))   ; B. bot is the unit

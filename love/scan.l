@@ -3,31 +3,31 @@
 ; below costs 1.876, which is 364x, and every tool that reads lines or matches a
 ; pattern spends most of its life in exactly this loop.
 ;
-; the glaze does NOT reach this code: auto.l's lanes recognise integer-arithmetic
+; the glaze does not reach this code: auto.l's lanes recognise integer-arithmetic
 ; leaves, counted loops, recursive arithmetic groups and float grids, so string work
 ; falls to the plain interpreter -- LOVE_NO_GLAZE moves `kore grep` by 0.02% while it
 ; moves a numeric loop by 4.5x. a hand-written kernel is the only way in.
 ;
-; EIGHT BYTES A STEP: (w - ones) & ~w & highs is nonzero exactly when some byte of w
+; eight bytes a step: (w - ones) & ~w & highs is nonzero exactly when some byte of w
 ; is zero, so xor'ing the text with the needle in all eight lanes turns "is this byte
 ; the needle" into "is this byte zero". a hit inside a word falls to the byte loop,
 ; which is at most eight more steps.
 ;
-; ⚠ BUILT ON FIRST USE, not at a module binding -- and the reason is the REGISTRY,
+; built on first use, not at a module binding -- and the reason is the registry,
 ; not the bake. this module's text is evaluated inside the boot's own module registry
 ; (src/cats.c), which runs before the boot says (use 'holo): assembling there takes
 ; the whole registry down with it, and the symptom is a bare ";; no-module bao", the
 ; first module anyone asks for afterwards. so the assemble and the install both wait
 ; for a caller. one holo run and one arena blob per process, and never again.
 ;
-; ⚠ AND THE BLOB NAMES NO ADDRESS OF THE BINARY. natives ride the image now, so this
+; and the blob names no address of the binary. natives ride the image now, so this
 ; kernel can be carried into a bake and woken under another base -- which is sound
-; only because the string-kind guard LOADS its sentinel from g's jk table rather than
+; only because the string-kind guard loads its sentinel from g's jk table rather than
 ; wearing an li of (apof ""). that is emit.l's `jk` law and it binds here too.
 (module 'scan
 (:
    ; the honest answer, and the differential oracle the laws hold the kernel to.
-   ; it is also the ENGINE wherever the kernel cannot be built -- inle declines the
+   ; it is also the engine wherever the kernel cannot be built -- inle declines the
    ; install (its heap rides an NX window), and so does wasm
    (walk s c i)
     (: n #s
@@ -35,16 +35,16 @@
        (go (i < 0 ? 0 i)))
 
    ones 72340172838076673                        ; 0x0101010101010101
-   ; highs is ones << 7 (0x8080808080808080), SHIFTED rather than written: as a
+   ; highs is ones << 7 (0x8080808080808080), shifted rather than written: as a
    ; literal it needs all 64 bits, and a tagged fixnum holds 62 -- so the spelled
    ; constant is a bignum, which is not what `li` wants
    ;
-   ; ⚠ THE ABI IS SPELLED NOWHERE BELOW. the lvm ops are tail-called C functions of
+   ; the ABI is spelled nowhere below. the lvm ops are tail-called C functions of
    ; (g, Ip, Hp, Sp), so the four roles sit wherever the platform's own convention
    ; puts the first four arguments -- and only Hp (r2) lands in the same abstract
-   ; register on both. r1 IS Sp ON amd64 AND Ip ON arm64, so a kernel that writes
+   ; register on both. r1 is Sp on amd64 and Ip on arm64, so a kernel that writes
    ; its registers out cannot move: assembled for the other target it would read its
-   ; arguments off the instruction pointer. SC is the scratch and is here for the
+   ; arguments off the instruction pointer. sc is the scratch and is here for the
    ; same reason -- r0 is free on amd64 and is `g` on arm64.
    ;                            g   ip  sp  scratch
    (abi tgt) (? (id? tgt 'arm64) '(r0 r1 r3 r4) '(r6 r5 r1 r0))
@@ -52,7 +52,7 @@
    ; cursor, r9 = the bytes, r10 = n, r11 = the charm in all eight lanes, r12 = ones,
    ; r13 = highs, r14 = ~w. r11..r14 are callee-saved on amd64 (x86's r12..r15) so
    ; they are pushed; on arm64 they are caller-saved and the pushes are merely idle.
-   ; ⚠ the guards deopt BEFORE any push, so the machine sp is balanced on every way
+   ; the guards deopt before any push, so the machine sp is balanced on every way
    ; out -- and arm64's push is `str s, [sp, #-16]!`, which keeps sp 16-aligned
    (scan-ir tgt)
     (: rg (abi tgt) G <rg IP <>rg SP <>>rg SC <>>>rg
@@ -109,7 +109,7 @@
                    ((g 'nif) (cask bs) walk '(\ q (q)) 3))))
    box (tablet 0)                                ; one install for the process, not one per ask
    ; (scanner ()) -> (f s c i), answering the index of charm c at-or-after i, or -1.
-   ; a caller with many texts asks ONCE and holds f: this is a tablet read, which is
+   ; a caller with many texts asks once and holds f: this is a tablet read, which is
    ; ~1000 instructions, and belongs outside any loop
    (scanner _) (: k (peep box 'k 'none)
                   (k !== 'none ? k (: k2 (mk ()) _ (pin box 'k k2) k2)))

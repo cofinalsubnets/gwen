@@ -1,7 +1,7 @@
 ; kore's fs tools on the rung-2 tree -- doc/misc/inle.md's rung-2 gate: ls, cp, mv, rm,
 ; mkdir, touch, pwd smoke on the K_TEST kernel. crew/kore/{text,core,fs}.l load
 ; just before this file (kernel.mk's kt), with kore0.l's identity `quit` pinned
-; ahead of them, so a main ANSWERS its exit code instead of leaving; every effect
+; ahead of them, so a main answers its exit code instead of leaving; every effect
 ; is then proved on the tree itself, and unmade at the foot. (The tools print
 ; their usual output to the console mid-corpus; that is the smoke, not a mess.)
 

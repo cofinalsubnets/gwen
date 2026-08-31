@@ -1,5 +1,5 @@
 ; --- test/host/berth.l: the berth emulator's moor, end to end over a real pty ---
-; NOT in the test/*.l corpus (screen/scribe/tether live in host/*.c; love0 links
+; not in the test/*.l corpus (screen/scribe/tether live in host/*.c; love0 links
 ; none of them). loads the berth library off disk with reads, berths real
 ; children, and reads the grid back through the glass:
 ;
@@ -30,26 +30,26 @@
  _ (assert (two? st) (= 3 (cap st)))     ; the status pair came home
  (close (cup md)))
 
-; --- the pty's ONLCR: a child's bare \n arrives as \r\n, so columns behave ---
+; --- the pty's onlcr: a child's bare \n arrives as \r\n, so columns behave ---
 (: md (tether ["sh" "-c" "printf 'a\\nb'"])
  s (mkscr 5 20)
  bx {s}
  _ (moor bx (cup md) ())
  _ (assert
     (= 97 (chat s 0))
-    (= 98 (chat s 20)))                  ; b at row 1 COLUMN 0, not under the a
+    (= 98 (chat s 20)))                  ; b at row 1 column 0, not under the a
  _ (waitfor (cap md))
  (close (cup md)))
 
-; --- the dialogue lane: a DSR answer rides home and the child reads it ---
+; --- the dialogue lane: a dsr answer rides home and the child reads it ---
 ; the child asks where the cursor is, drinks the 6-byte "\e[1;1R" answer off
 ; its own stdin, then says it back through cat -v -- proof the moor forwards
-; replies to the pty, and IN ORDER. stty raw -echo, as any real full-screen
-; guest would: a COOKED slave holds input until a newline (the answer has none)
+; replies to the pty, and in order. stty raw -echo, as any real full-screen
+; guest would: a cooked slave holds input until a newline (the answer has none)
 ; and would echo it back onto the grid besides.
-; ⚠ the child SAYS what it read rather than discarding it. it used to be
+; the child says what it read rather than discarding it. it used to be
 ; `head -c 6 >/dev/null`, which passed just as happily while moor wrote the
-; answer BACKWARDS -- a reply is a byte stream, and a test that never looks at
+; answer backwards -- a reply is a byte stream, and a test that never looks at
 ; the bytes cannot tell "\e[1;1R" from "R1;1[\e".
 (: md (tether ["sh" "-c" "stty raw -echo; printf '\\033[6n'; head -c 6 | cat -v"])
  s (mkscr 5 20)
@@ -72,7 +72,7 @@
 
 ; --- the utf-8 round trip, all the way through the painter: a guest says
 ; ─ and é; the grid folds them to cp437; full berth (painter and all, on
-; its own pty) says them back OUT as the same utf-8 ---
+; its own pty) says them back out as the same utf-8 ---
 (: (find h n i) (? (< (+ i (tally n)) (+ (tally h) 1))
                   (? (= n (snip h i (+ i (tally n)))) 1 (find h n (+ i 1)))
                   0)
@@ -120,7 +120,7 @@
  _ (waitfor (hpid (hpane hb 1)))
  _ (close (hmas (hpane hb 1)))
 
- ; --- a split re-opens BOTH screens to their new rectangles ----------------
+ ; --- a split re-opens both screens to their new rectangles ----------------
  ; 21 columns divide 10 + bar + 10, and every pty is told what it now has.
  hb2 (mkhb 10 21 ["sh" "-c" "sleep 30"])
  _ (hsplit hb2 'beside)
@@ -130,7 +130,7 @@
     (10 = (wharf-cols <lay)) (10 = (wharf-cols <>lay))
     (0 = (wharf-col <lay))   (11 = (wharf-col <>lay))
     (2 = (hb2 'focus))                    ; the new berth takes the focus
-    (10 = (gaze (scrof hb2 1) 2))         ; ⚠ pane 1 was re-opened, not left at 21
+    (10 = (gaze (scrof hb2 1) 2))         ; pane 1 was re-opened, not left at 21
     (10 = (gaze (scrof hb2 2) 2))
     (10 = (gaze (scrof hb2 1) 1)))        ; the undivided axis is untouched
 
@@ -140,7 +140,7 @@
     (sub? f2 "\e[1;1H" 0)                 ; pane 1's first row
     (sub? f2 "\e[1;11H" 0)                ; the bar's own column
     (sub? f2 limn-down 0)                     ; ... drawn with it
-    ; ⚠ anchor on a row the CURSOR never addresses: it lands on pane 2's origin
+    ; anchor on a row the cursor never addresses: it lands on pane 2's origin
     ; too, so "\e[1;12H" alone passes even with the pane painter ignoring it
     (sub? f2 "\e[2;12H" 0)                ; pane 2's second row, one past the bar
     (sub? f2 "\e[10;12H" 0)               ; ... and its last
@@ -171,8 +171,8 @@
 ; --- C-a v, on a real berth, over a real pty -------------------------------
 ; the prefix intercept is the one piece the harbour laws above cannot reach: it
 ; lives in the key pump, and a key has to arrive to exercise it. so berth runs
-; on its own pty and the split is TYPED -- two bytes onto the master -- and the
-; bar it draws comes back out in the frames. ⚠ a fresh pty reports 0x0, so berth
+; on its own pty and the split is typed -- two bytes onto the master -- and the
+; bar it draws comes back out in the frames. a fresh pty reports 0x0, so berth
 ; falls back to 24x80 and the geometry here is deterministic: 39 + bar + 40.
 (: (sub? h n i) (? (< (+ i (tally n)) (+ (tally h) 1))
                    (? (= n (snip h i (+ i (tally n)))) 1 (sub? h n (+ i 1)))
@@ -182,7 +182,7 @@
  _ (assert (two? md))
  m (cup md)
  _ (rest 1200)                            ; let berth come up and moor its first child
- ; ⚠ the ORDER is the content: "v C-a" is not the prefix, so the two puts are sequenced
+ ; the order is the content: "v C-a" is not the prefix, so the two puts are sequenced
  _ (put m 1) _ (put m 118) _ (flush m)     ; C-a v: split beside
  outb (slurp m)                           ; ... until both children leave and berth ends
  _ (assert

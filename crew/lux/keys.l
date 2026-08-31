@@ -1,9 +1,9 @@
-; crew/lux/keys.l -- the keymap DSL + xmonad's DEFAULT keymap + the config's custom
-; table. PURE DATA: a binding is (mods keysym action), an action a tagged list
+; crew/lux/keys.l -- the keymap dsl + xmonad's default keymap + the config's custom
+; table. pure data: a binding is (mods keysym action), an action a tagged list
 ; the driver (crew/lux/lux.l) interprets -- so the whole table rides the corpus and
 ; crew/lux/law.l asserts its shape, the union law, and the directional generator.
 ; The config is xmonad's `(. keys def) . M.union . M.fromList $ [custom]`:
-; custom bindings UNION over the stock table, custom winning on (mods keysym).
+; custom bindings union over the stock table, custom winning on (mods keysym).
 ; keys-build is the same union with a user's rows on top -- it takes plain
 ; operands, never a settings tablet, so this file compiles before crew/lux/config.l
 ; reads salt (a bare `salt-one` here would fold against nothing).
@@ -16,7 +16,7 @@
 ;   (view T) (shift T) (spawn ARGV) (exec ARGV) (kill) (quit) (restart)
 ;   (refresh) (reset-layout) (sink) (float-toggle) (next-match FWD)
 ;   (focus-dn) (focus-up) (focus-master) (swap-dn) (swap-up) (swap-master)
-; A body-LESS `:` -- the vocabulary leaks to the driver.
+; a body-less `:` -- the vocabulary leaks to the driver.
 (:
    ; --- modifier masks (the X state bits) ---
    shiftm 1  ctrlm 4  altm 8  supm 64                                            ; sup = mod4, alt = mod1
@@ -34,16 +34,16 @@
    (keys-union custom def) (custom + (filter (r \ !(keys-has custom (kb-mods r) (kb-sym r))) def))
    (keys-syms t) (foldl (\ a r (any (x \ x = kb-sym r) a ? a (kb-sym r >< a))) () t)
 
-   ; --- KEY SPECS: a LIST, `(sup shift e)` -- the LAST element is the key, every
+   ; --- key specs: a list, `(sup shift e)` -- the last element is the key, every
    ;     one before it a modifier. a config writes these (crew/lux/config.l reads
    ;     them out of salt as plain data), so the reader hands over the structure
    ;     and nothing here parses a spelling.
    ;     the key field, four ways, each unambiguous:
    ;       e / Return    a symbol -- one char is its ascii keysym, longer names one below
-   ;       "," / "1"     a one-char STRING is that character, punctuation and digits included
-   ;       65027         a bare charm IS the keysym, so the table is a convenience,
-   ;                     never a ceiling (⚠ 32 and up: a digit key is "1" or 49, not 1) ---
-   xk-fkeys (map (i \ [("F" + show (i + 1)) (65470 + i)]) (jot 12))             ; F1..F12
+   ;       "," / "1"     a one-char string is that character, punctuation and digits included
+   ;       65027         a bare charm is the keysym, so the table is a convenience,
+   ;                     never a ceiling (32 and up: a digit key is "1" or 49, not 1) ---
+   xk-fkeys (map (i \ [("F" + show (i + 1)) (65470 + i)]) (jot 12))             ; f1..f12
    xk-names (xk-fkeys + [
      ["Return" xk-ret]   ["Tab" xk-tab]     '("space" 32)       '("Escape" 65307)
      ["Left" xk-left]    ["Up" xk-up]       ["Right" xk-right] ["Down" xk-down]
@@ -61,7 +61,7 @@
    (xk-of k) (? (charm? k) (31 < k ? k ())                                     ; a keysym, verbatim -- the escape hatch past the table
                 (: nm (name? k ? (string k) k)
                    (? !(string? nm) ()
-                      (#nm = 1) (nm 0)                                      ; one char IS its ascii keysym
+                      (#nm = 1) (nm 0)                                      ; one char is its ascii keysym
                       (: hit (afind (r \ <r = nm) xk-names)
                          (two? hit ? <>hit ())))))                             ; unknown name -> () (no keysym is 0, so nothing is lost)
    (kmod-of m modm) (? (id? m 'sup || id? m 'super || id? m 'mod4) supm
@@ -70,7 +70,7 @@
                        (id? m 'shift) shiftm
                        (id? m 'mod) modm                                         ; `mod` follows whatever the config chose
                        ())
-   ; a spec -> (mods keysym), or () if any field is unknown. ⚠ the mask ACCUMULATES
+   ; a spec -> (mods keysym), or () if any field is unknown. the mask accumulates
    ; through a `(1 mask)` wrapper: a bare mask of 0 (no modifiers) is a legitimate
    ; answer and would read as failure on its own.
    (kspec modm spec)
@@ -81,7 +81,7 @@
                     '(0) (take (n - 1) spec))
           (ks && two? ms ? [<ms ks] ())))
 
-   ; --- a config's own rows. `spawn`/`exec` carry their argv FLAT in a config
+   ; --- a config's own rows. `spawn`/`exec` carry their argv flat in a config
    ;     ((spawn "rofi" "-show" "drun")) and nested in a binding row, so they are
    ;     the two the reader re-wraps; every other action is already its own shape. ---
    (kb-act-of a) (? !(two? a) a
@@ -117,7 +117,7 @@
      (kb modm 96 '(spawn ("rofi" "-show" "drun")))                               ; mod+`       menu
      (kb modm 32 '(msg next-layout))                                             ; mod+space
      (kb modm 98 '(toggle-struts))                                               ; mod+b       ToggleStruts (ewmh.l's avoid flag)
-     (kb modm 109 '(msg mirror))                                                 ; mod+m       Toggle MIRROR
+     (kb modm 109 '(msg mirror))                                                 ; mod+m       Toggle mirror
      (kb modm 102 '(msg toggle-layout))                                          ; mod+f       toggleLayouts Full
      (kb modm 112 '(spawn ("xfce4-screenshooter")))                              ; mod+p
      (kb modm 119 '(float-toggle))                                               ; mod+w       f_t sink float
@@ -135,7 +135,7 @@
 
    ; --- xmonad's `keys def`, single-monitor subset (mod+{w,e,r} screens and
    ;     mod+shift+/ help are not ported; some rows are overridden by custom).
-   ;     the digit rows follow the TAG COUNT, and stop at 9 -- there is no tenth
+   ;     the digit rows follow the tag count, and stop at 9 -- there is no tenth
    ;     digit key to hang a tenth workspace on. ---
    (keys-def-for modm ntags) (: ds (map (+ 1) (jot (9 < ntags ? 9 ntags)))
     (cat [
@@ -163,7 +163,7 @@
      (cat (map (d \ kb modm (48 + d) ['view d]) ds)                           ; mod+1..9
           (map (d \ kb (modm | shiftm) (48 + d) ['shift d]) ds))))            ; mod+shift+1..9
 
-   ; --- the STOCK table: what lux drives with no config file anywhere ---
+   ; --- the stock table: what lux drives with no config file anywhere ---
    keys-dir (keys-dir-for supm 20)
    keys-cmd (keys-cmd-for supm)
    keys-custom (keys-dir + keys-cmd)
@@ -179,9 +179,9 @@
                                        (keys-def-for modm ntags)))
                unbinds)
 
-   ; --- nextMatch's MRU pick, pure: row = the workspace's windows, f = the
+   ; --- nextMatch's mru pick, pure: row = the workspace's windows, f = the
    ;     focus, hist = every focus ever, most recent first. Forward walks to
-   ;     the most recently used OTHER window (the alt-tab flip); Backward to
+   ;     the most recently used other window (the alt-tab flip); Backward to
    ;     the least. Windows never yet focused count as oldest. ---
    (nm-pick row f hist fwd)
     (: cands (filter (w \ !(w = f) && any (x \ x = w) row) hist)

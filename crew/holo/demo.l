@@ -1,11 +1,11 @@
-; demo -- build two RUNNABLE binaries from the assembler, the proof that the bytes are real machine
+; demo -- build two runnable binaries from the assembler, the proof that the bytes are real machine
 ; code and not just plausible hex. writes to /tmp and prints how to run each:
 ;
 ;   /tmp/love-x64.elf    a Linux x86-64 static executable -- write(1,msg,n); exit(7). run it directly:
 ;                        chmod +x /tmp/love-x64.elf && /tmp/love-x64.elf ; echo $?
 ;
 ;   /tmp/love-arm64.elf  a bare-metal aarch64 image for the qemu `virt` board -- it writes a line to
-;                      the PL011 UART at 0x09000000, then spins. run it on an emulated ARM cpu:
+;                      the pl011 uart at 0x09000000, then spins. run it on an emulated ARM cpu:
 ;                        qemu-system-aarch64 -M virt -cpu cortex-a57 -nographic -kernel /tmp/love-arm64.elf
 ;                      (ctrl-a x to quit qemu.)
 ;
@@ -23,7 +23,7 @@
    _ (write-bytes "/tmp/love-x64.elf" (peep xe 'bytes 0))
 
    ;; -- the aarch64 bare-metal program: no syscalls (there's no OS), just store each byte to the
-   ;; UART data register, then loop. li the UART base once into r1; per char li r2,c ; st r1,0,r2. --
+   ;; uart data register, then loop. li the uart base once into r1; per char li r2,c ; st r1,0,r2. --
    amsg "hi from love-asm running on emulated aarch64!\n"
    (a-char c) [['li 'r2 c] '(st r1 0 r2)]
    a-prog ([['li 'r1 0x09000000]]

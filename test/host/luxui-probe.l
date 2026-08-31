@@ -1,18 +1,18 @@
-; test/host/luxui-probe.l -- the lux UI probe: a SEPARATE process with its own
+; test/host/luxui-probe.l -- the lux ui probe: a separate process with its own
 ; clean X streams (the one-process gate desynced -- see test/host/luxui.l), driven
 ; by (probe dpy). It creates its own InputOutput toplevels (xterm needs fonts
-; a bare Xvfb lacks), drives lux with SYNTHETIC input -- XTEST FakeInput for
+; a bare Xvfb lacks), drives lux with synthetic input -- xtest FakeInput for
 ; super+drag move/resize, SendEvent ClientMessages for the EWMH requests --
 ; and asserts every effect off GetGeometry/GetProperty/GetInputFocus:
 ;   manage -> tile, maximize add/remove (the _NET_WM_STATE stamp both ways),
-;   super+btn1 move EXACT, super+btn3 resize EXACT, the float holds the input
-;   focus, a second client tiles while the float rides, _NET_CLOSE_WINDOW
+;   super+btn1 move exact, super+btn3 resize exact, the float holds the input
+;   focus, a second client tiles while the float rides, _net_close_window
 ;   kills it (no WM_DELETE_WINDOW advertised -> the KillClient fallback),
 ;   a Qt-style withdraw (real unmap then the ICCCM synthetic) leaves a
-;   fullscreen float UNMAPPED and a re-show re-manages it (the telegram
+;   fullscreen float unmapped and a re-show re-manages it (the telegram
 ;   media-viewer zombie: the crossing's render must not resurrect it),
 ;   the unmap ledger: lux's own hides (switch, minimize) never evict, a
-;   RUDE client unmap with no courtesy synthetic does (xmonad's rule),
+;   rude client unmap with no courtesy synthetic does (xmonad's rule),
 ;   closing the focused tile hands the keyboard to the survivor.
 ; Exits 0 iff every assertion held; any failure names itself and exits 1.
 ; Load order: core -> layout -> wire, then this file; test/host/luxui.l spawns it.
@@ -30,7 +30,7 @@
       ; --- lux is up when ewmh-init has stamped the root ---
       _ (waitp "wm-up" (u \ two? (x-getprop-atoms s root (x-intern s "_NET_SUPPORTED"))) 100)
 
-      ; --- XTEST: the extension's major opcode, then the super keycode
+      ; --- xtest: the extension's major opcode, then the super keycode
       ;     (mod4 row of GetModifierMapping, first nonzero) ---
       qx (: n #"XTEST"
             _ (x-w8 s 98) _ (x-w8 s 0) _ (x-w16 s (+ 2 (/ (+ n (x-pad4 n)) 4)))
@@ -42,7 +42,7 @@
             (go j) (< j kpm ? (: c (data (+ (* 6 kpm) j)) (< 0 c ? c (go (+ j 1)))) 0)
             (go 0))
       _ (must "super-keycode" (< 0 sk))
-      ; one synthetic input event: xXTestFakeInputReq is 36 bytes (length 9),
+      ; one synthetic input event: xxtestFakeInputReq is 36 bytes (length 9),
       ; rootX/rootY at bytes 24/26; type 2/3 key, 4/5 button, 6 motion (abs)
       (fake ty dt rx ry)
        (x-w8 s qx, x-w8 s 2, x-w16 s 9, x-w8 s ty, x-w8 s dt, x-w16 s 0,
@@ -76,7 +76,7 @@
       _ (waitp "w1-tiled" (u \ < 600 ((x-getgeom s w1) 2)) 100)
       _ (waitp "w1-focused" (u \ = w1 (getfocus ())) 50)
 
-      ; --- 2. maximize add/remove while TILED (a float's toggle is a no-op
+      ; --- 2. maximize add/remove while tiled (a float's toggle is a no-op
       ;     by design: float-state is the proxy) -- the stamp goes on and off ---
       _ (cmsg w1 a-st 1 a-mv a-mh)
       _ (waitp "maximized" (u \ (: g (x-getgeom s w1)
@@ -85,7 +85,7 @@
       _ (cmsg w1 a-st 0 a-mv a-mh)
       _ (waitp "unmax-stamped" (u \ ! (x-getprop-atoms s w1 a-st)) 50)
 
-      ; --- 3. super+btn1 drag: float + move, the delta lands EXACT ---
+      ; --- 3. super+btn1 drag: float + move, the delta lands exact ---
       g0 (x-getgeom s w1)
       cx (+ (g0 0) (// (g0 2) 2)) cy (+ (g0 1) (// (g0 3) 2))
       _ (fake 6 0 cx cy) _ (rest 80)
@@ -100,7 +100,7 @@
                                          (&& (= (g 1) (+ (g0 1) 45))
                                              (= (g 2) (g0 2)))))) 50)
 
-      ; --- 4. super+btn3 drag: resize, the delta lands EXACT ---
+      ; --- 4. super+btn3 drag: resize, the delta lands exact ---
       g1 (x-getgeom s w1)
       rx (+ (g1 0) (// (g1 2) 2)) ry (+ (g1 1) (// (g1 3) 2))
       _ (fake 6 0 rx ry) _ (rest 80)
@@ -115,9 +115,9 @@
       _ (waitp "float-focused" (u \ = w1 (getfocus ())) 50)
 
       ; --- 5. a second client (its own connection) tiles alongside;
-      ;     _NET_CLOSE_WINDOW fells it -- no WM_DELETE_WINDOW advertised, so
+      ;     _net_close_window fells it -- no wm_delete_window advertised, so
       ;     lux takes the KillClient fallback, verified through
-      ;     FRESH eyes (the reply stream of a client whose window died
+      ;     fresh eyes (the reply stream of a client whose window died
       ;     mid-poll echoes stale replies) ---
       s2 (connectu dpy)
       sc2 (x-setup s2 ())
@@ -127,17 +127,17 @@
       _ (cmsg w2 a-cl 0 0 0)
       s3 (connectu dpy)
       sc3 (x-setup s3 ())
-      _ (waitp "w2-felled" (u \ (: t (x-querytree s3 root)                       ; a FAILED query is NOT
+      _ (waitp "w2-felled" (u \ (: t (x-querytree s3 root)                       ; a failed query is not
                                     (&& (two? t) (! (any (k \ = k w2) (caup t)))))) 100)   ; "felled"
 
       ; --- 5b. the withdraw race (the telegram media-viewer zombie): a client
-      ;     hides a fullscreen float Qt-style -- a REAL unmap, then the ICCCM
+      ;     hides a fullscreen float Qt-style -- a real unmap, then the ICCCM
       ;     synthetic UnmapNotify. The real unmap's pointer crossing renders
       ;     while the float is still in the sheaf, so the render re-maps it;
-      ;     the withdraw must leave the window UNMAPPED anyway, and a re-show
+      ;     the withdraw must leave the window unmapped anyway, and a re-show
       ;     must arrive as a fresh MapRequest and re-manage fullscreen. ---
       a-fs (x-intern s "_NET_WM_STATE_FULLSCREEN")
-      wt (+ w1 1)                                                                ; a TILE under the pointer: the crossing into a tile is the
+      wt (+ w1 1)                                                                ; a tile under the pointer: the crossing into a tile is the
       _ (mkwin s wt root)                                                        ; rendering branch (a float's crossing only fmarks)
       _ (waitp "wt-tiled" (u \ < 600 ((x-getgeom s wt) 2)) 100)
       wv (+ w1 2)
@@ -146,14 +146,14 @@
            _ (x-w16 s 0) _ (x-w16 s 0) _ (x-w16 s 300) _ (x-w16 s 200)
            _ (x-w16 s 1) _ (x-w16 s 1) _ (x-w32 s 0)
            _ (x-w32 s 2) _ (x-w32 s 16777215) (x-flush s))
-      _ (: _ (x-w8 s 18) _ (x-w8 s 0) _ (x-w16 s 7) _ (x-w32 s wv)               ; _NET_WM_STATE = [FULLSCREEN] BEFORE the map (Qt showFullScreen)
+      _ (: _ (x-w8 s 18) _ (x-w8 s 0) _ (x-w16 s 7) _ (x-w32 s wv)               ; _net_wm_state = [fullscreen] before the map (Qt showFullScreen)
            _ (x-w32 s a-st) _ (x-w32 s 4) _ (x-w8 s 32) _ (x-w8 s 0)
            _ (x-w16 s 0) _ (x-w32 s 1) _ (x-w32 s a-fs) (x-flush s))
       (mapv u) (x-w8 s 8, x-w8 s 0, x-w16 s 2, x-w32 s wv, x-flush s)
       (mstv u) (cap (x-attrs s wv))                                              ; 2 = viewable, 0 = unmapped
-      _ (fake 6 0 30 20) _ (rest 80)                                             ; park the pointer over the BARE tile (the w1 float, dragged
+      _ (fake 6 0 30 20) _ (rest 80)                                             ; park the pointer over the bare tile (the w1 float, dragged
                                                                                  ; off its near-fullscreen tiled rect, leaves only this strip):
-                                                                                 ; the withdraw's crossing must land in the TILE to render
+                                                                                 ; the withdraw's crossing must land in the tile to render
       _ (mapv ())
       _ (waitp "wv-fullscreen" (u \ < 600 ((x-getgeom s wv) 2)) 50)
       (withdraw u) (: _ (x-unmap s wv)                                           ; the real unmap, then the courtesy synthetic to the root
@@ -172,9 +172,9 @@
       _ (withdraw ())                                                            ; leave it withdrawn: the moor leg leans on nothing here
       _ (waitp "wv-rewithdraw" (u \ = 0 (mstv ())) 50)
 
-      ; --- 5c. the unmap ledger (xmonad's waitingUnmap): lux's OWN hides --
-      ;     workspace switch, minimize -- echo back counted and must NOT evict;
-      ;     a RUDE client unmap (no ICCCM courtesy synthetic at all) must ---
+      ; --- 5c. the unmap ledger (xmonad's waitingUnmap): lux's own hides --
+      ;     workspace switch, minimize -- echo back counted and must not evict;
+      ;     a rude client unmap (no ICCCM courtesy synthetic at all) must ---
       a-cd (x-intern s "_NET_CURRENT_DESKTOP")
       a-aw (x-intern s "_NET_ACTIVE_WINDOW")
       a-ic (x-intern s "WM_CHANGE_STATE")
@@ -192,7 +192,7 @@
       _ (waitp "wr-tiled" (u \ known? ()) 50)
       _ (cmsg root a-cd 1 0 0)                                                   ; our hide: the switch away...
       _ (waitp "wr-switch-hidden" (u \ = 0 (mstr ())) 50)
-      _ (must "wr-switch-keeps" (known? ()))                                     ; ...counted, NOT a withdraw
+      _ (must "wr-switch-keeps" (known? ()))                                     ; ...counted, not a withdraw
       _ (cmsg root a-cd 0 0 0)
       _ (waitp "wr-switch-back" (u \ = 2 (mstr ())) 50)
       _ (cmsg wr a-ic 3 0 0)                                                     ; our hide: iconify (the layout drops it)...
@@ -200,15 +200,15 @@
       _ (must "wr-minimize-keeps" (known? ()))                                   ; ...counted too
       _ (cmsg wr a-aw 0 0 0)                                                     ; a pager activates: restore
       _ (waitp "wr-restored" (u \ = 2 (mstr ())) 50)
-      _ (x-unmap s wr) _ (x-flush s)                                             ; the RUDE hide: a raw client unmap, NO synthetic --
-      _ (waitp "wr-rude-evicts" (u \ ! (known? ())) 50)                        ; an unowed real unmap IS the withdraw
+      _ (x-unmap s wr) _ (x-flush s)                                             ; the rude hide: a raw client unmap, no synthetic --
+      _ (waitp "wr-rude-evicts" (u \ ! (known? ())) 50)                        ; an unowed real unmap is the withdraw
       _ (waitp "wr-rude-unstamped" (u \ ! (two? (x-getprop-atoms s wr (x-intern s "WM_STATE")))) 50)
       _ (rest 300)                                                               ; let any resurrecting render land before the read
       _ (must "wr-rude-unmapped" (= 0 (mstr ())))
       _ (mapr ())                                                                ; and the re-show re-manages
       _ (waitp "wr-remanaged" (u \ && (known? ()) (= 2 (mstr ()))) 50)
 
-      ; --- 5d. close the FOCUSED tile: the survivor must take the keyboard.
+      ; --- 5d. close the focused tile: the survivor must take the keyboard.
       ;     the pointer parks over the float first, so no crossing can hand
       ;     focus on -- only lux's own refocus after the eviction can ---
       gf (x-getgeom s w1)
@@ -218,12 +218,12 @@
       _ (x-w8 s 4, x-w8 s 0, x-w16 s 2, x-w32 s wt, x-flush s)   ; DestroyWindow: the app quits
       _ (waitp "survivor-focused" (u \ = wr (getfocus ())) 50)
 
-      ; --- 6. LAST, the moor: the live repl evals, survives a scare, CHANGES state
+      ; --- 6. last, the moor: the live repl evals, survives a scare, changes state
       ;     (msg! 'next-layout flips the ||| index -- read back through the
-      ;     SNAPSHOT over the moor socket, so the assert leans on no window
-      ;     and no X read), and REFUSES garbage ((lux! 0): (0 st) is 1, not
-      ;     a sane 4-list). A queued change drains at lux's next X event; we
-      ;     nudge with a no-op ClientMessage from a FRESH connection each time
+      ;     snapshot over the moor socket, so the assert leans on no window
+      ;     and no X read), and refuses garbage ((lux! 0): (0 st) is 1, not
+      ;     a sane 4-list). a queued change drains at lux's next X event; we
+      ;     nudge with a no-op ClientMessage from a fresh connection each time
       ;     (kept open: this Xvfb spuriously CloseDownClient's one client
       ;     ~10s in -- gdb'd to ospoll_wait -> CloseDownClient with the
       ;     victim's socket provably untouched -- so nothing here may lean on
@@ -265,7 +265,7 @@
 
       ; --- 7. keybindings under a lock modifier: super+space (next-layout,
       ;     read back through the moor's snapshot like leg 6) must fire with
-      ;     NumLock OFF -- and just the same with NumLock ON: a lock bit rides
+      ;     NumLock off -- and just the same with NumLock on: a lock bit rides
       ;     the KeyPress state, so the grab must cover the variant or every
       ;     chord goes dead while plain typing sails on (the 2026-07-27
       ;     symptom) ---
@@ -295,7 +295,7 @@
 
       ; --- 9. the back door: (lux-restart ()) over the moor execs in place.
       ;     the old generation is marked through its lux-cell; the reborn moor
-      ;     answers with a FRESH cell (the marker gone), the SAME pid (exec),
+      ;     answers with a fresh cell (the marker gone), the same pid (exec),
       ;     and the windows adopted. one connection per poll: a try that lands
       ;     on the dying generation just answers wrong and is retried ---
       (askonce q) (: p (connectu rsock)

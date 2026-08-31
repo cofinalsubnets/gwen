@@ -1,15 +1,15 @@
-; test/uuvaldiff.l -- the DIFFERENTIAL that binds test/uuval.l's model to the
-; implementation. the model proves the tower's SHAPE (retraction, idempotence,
+; test/uuvaldiff.l -- the differential that binds test/uuval.l's model to the
+; implementation. the model proves the tower's shape (retraction, idempotence,
 ; factorisation) and carries no arithmetic theorem on purpose; this file runs the
 ; other half -- love's own saturate/bit/nil?/ceil beside the model's vsat/vbit/
 ; vnil/vceil over an encoding of test/law.l's corpus, so a wrong zadd, a wrong
 ; fold, or a wrong ceil reddens `make test` even though no proof could see it.
 ;
-; the encoding is STRUCTURAL where love's values are: a pair becomes the model's
+; the encoding is structural where love's values are: a pair becomes the model's
 ; link (ii2 over a tpair, both limbs at the height below), an atom becomes a
 ; leaf carrying its measure. the leaf measure is read off love's own net -- that
 ; primitive is the one thing this lane cannot second-guess, the same standing gap
-; uuwm has with the C runtime under crew/lux/core.l. what IS under test is
+; uuwm has with the C runtime under crew/lux/core.l. what is under test is
 ; everything above it: the fold over links, re, ceil, the clamp and the bit.
 ;
 ; the model's reals are the half-integers, so a measure that is neither whole nor
@@ -92,19 +92,19 @@
  (-2 = (uv2-ceil -2.5))
  (4 = (uv2-ceil (q 7 2)))
  (3 = (uv2-ceil (twin 3 4)))                              ; re drops the imaginary rung
- ; the ceiling BITES at the model's width, which is the whole of what it says
+ ; the ceiling bites at the model's width, which is the whole of what it says
  (7 = (uv2-satc 9))
  (7 = uv2-chmax)
  ; ..and () is not 0 down here either: same net, same nil?, different value
  (0 = (vof 0 ['veq (uv2-enc ()) (uv2-enc 0)] = 'true ? 1 0))
  (1 = (vof 0 ['veq (uv2-enc ()) (uv2-enc ())] = 'true ? 1 0)))
 
-; --- and the same differential for the BAND ALGEBRA (test/uuvalband.l): love's
+; --- and the same differential for the band algebra (test/uuvalband.l): love's
 ; --- own + and * beside the model's vadd and vmul, over every ordered pair of a
 ; --- corpus drawn from the three bands the model carries -- (), a number, a
-; --- chain. the comparison is through the NET, which is what sees a mixed band
+; --- chain. the comparison is through the net, which is what sees a mixed band
 ; --- degenerate (5 + '(1 2) nets 3, not 8) and what a wrong cell would move.
-; --- the corpus is WHOLE by construction: * is modelled at the integer rung.
+; --- the corpus is whole by construction: * is modelled at the integer rung.
 (:
    (uv3-add x y) (vof 0 ['vsat ['vadd (uv2-enc x) (uv2-enc y)]])
    (uv3-mul x y) (vof 0 ['vsat ['vmul (uv2-enc x) (uv2-enc y)]])

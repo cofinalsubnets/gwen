@@ -2,16 +2,16 @@
 ; rename, chdir/cwd -- plus chmod and utime, which kore's cp and touch ride -- and
 ; the environment (getenv setenv environ), a tablet in the kernel's boot text. The
 ; shapes are doc/misc/posix.md's and the host's exactly: an effect answers () | a
-; POSITIVE errno (the host's numbers) | 22 on misuse; a value answers the value |
+; positive errno (the host's numbers) | 22 on misuse; a value answers the value |
 ; (); chdir wears the host's negative lane. test/host/fs.l holds sibling laws
 ; against the real tree.
 ;
-; KERNEL ONLY -- kernel.mk's kt, never $t: on the host these paths are the real
+; kernel only -- kernel.mk's kt, never $t: on the host these paths are the real
 ; filesystem. Everything made here is unmade at the foot, so the corpus behind
 ; reads the tree as this file found it.
 ;
-; ⚠ the `:` HAS a body -- the assert itself -- so the helpers stay local; and each
-; law is its own assert ARGUMENT, since assert maps over its args and a `do` would
+; the `:` has a body -- the assert itself -- so the helpers stay local; and each
+; law is its own assert argument, since assert maps over its args and a `do` would
 ; report only the last one.
 
 (: (rd p) (: q (open p "r") (? (port? q) (: s (slurp q) _ (close q) s) ()))
@@ -30,24 +30,24 @@
    (member? "a" (readdir d))
    (: q (open (d + "/b") "a") (? (port? q) (: _ (close q) 1) 0))
    (two? (stat (d + "/b")))
-   (! (port? (open "/no-such-dir/x" "w")))      ; an absent PARENT refuses
+   (! (port? (open "/no-such-dir/x" "w")))      ; an absent parent refuses
    ; -- unlink: the entry leaves the tree; absence and misuse answer the host's way --
    (id? (unlink (d + "/b")) ())
    (id? (stat (d + "/b")) ())
    (< 0 (unlink (d + "/b")))                    ; gone is a live errno
-   (= 21 (unlink d))                            ; a directory refuses: EISDIR
+   (= 21 (unlink d))                            ; a directory refuses: eisdir
    (= 22 (unlink 7))                            ; misuse: EINVAL
-   ; -- mkdir/rmdir: a directory is a THING now, empty and stattable --
+   ; -- mkdir/rmdir: a directory is a thing now, empty and stattable --
    (id? (mkdir e 493) ())
    (= 16384 (& 61440 <>>(stat e)))
    (id? (readdir e) ())                         ; empty, told from absent by stat
    (= 17 (mkdir e 493))                         ; again: EEXIST
    (= 17 (mkdir "lib" 493))                     ; a baked prefix is a directory too
-   (= 20 (mkdir (f + "/x") 493))                ; under a file: ENOTDIR
+   (= 20 (mkdir (f + "/x") 493))                ; under a file: enotdir
    (= 2 (mkdir "/hole/x" 493))                  ; under a hole: ENOENT
    (= 22 (mkdir 7 493))
    (wr (e + "/k") "y")
-   (= 39 (rmdir e))                             ; occupied: ENOTEMPTY
+   (= 39 (rmdir e))                             ; occupied: enotempty
    (id? (unlink (e + "/k")) ())
    (id? (rmdir e) ())
    (= 2 (rmdir e))                              ; and gone is ENOENT
@@ -97,7 +97,7 @@
    (member? "WFS=2" (environ 0))
    (id? (setenv "WFS2" "x") ())
    (= 2 (tally (environ 0)))
-   (id? (setenv "WFS2" ()) ())                  ; a non-string value UNSETS
+   (id? (setenv "WFS2" ()) ())                  ; a non-string value unsets
    (id? (getenv "WFS2") ())
    (= 1 (tally (environ 0)))
    (= 22 (setenv 7 "x"))

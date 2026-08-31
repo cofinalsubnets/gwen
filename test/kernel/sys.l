@@ -3,7 +3,7 @@
 ; (kernel.mk's kt) -- no other seat can ask this question, since on a host the
 ; same __ai_sys is a mksys lay issuing the machine's own trap.
 ;
-; (syswrite fd str) is the gate's one instrument, K_TEST-only (kmain.c): it
+; (syswrite fd str) is the gate's one instrument, k_test-only (kmain.c): it
 ; calls write(2) and nothing else, so what it proves is the whole path.
 
 ; the bytes land in a pipe, and the pipe reads them back -- the syscall wrote to
@@ -26,7 +26,7 @@
    _ (close (fdopen wfd)) _ (close (fdopen (cap pp)))
  (assert (= n -1)))
 
-; ⚠ a row that is not there is the VOID, not an error: k_row_write answers what
+; a row that is not there is the void, not an error: k_row_write answers what
 ; it took off an absent row, which is what keeps a closed seat's output from
 ; failing a task that cannot know. -1 here would make every such write a fault.
 (: n (syswrite 4096 "into the void")
@@ -35,7 +35,7 @@
 ; --- the rows themselves, through (syscall "name" ..) ------------------------
 ; the instrument takes the NAME: close is 3 on x86_64 and 57 on aarch64, so a
 ; test that spelled a number would pass on one seat and mean nothing on the
-; other. a name no row answers to is (), which is how a MISSING row is told
+; other. a name no row answers to is (), which is how a missing row is told
 ; from a row that refused. an argument spells itself by kind: a charm is the
 ; integer, a string passes its bytes, a cask lends its bytes as an output
 ; buffer -- anything else is misuse and answers -1.
@@ -55,29 +55,29 @@
    _ (syscall "close" rfd 0 0 0)
  (assert (= 0 a) (= -9 b)))
 
-; lseek: a pipe has a row but no seek -- ESPIPE, which is exactly the distinction
+; lseek: a pipe has a row but no seek -- espipe, which is exactly the distinction
 ; the love door could not make (its lvm_lseek answers a bare -1 for both)
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
    r (syscall "lseek" rfd 0 0 0)
    _ (fdclose wfd) _ (fdclose rfd)
  (assert (= -29 r)))
 
-; lseek: EBADF beats ESPIPE -- no row at all is a different answer from a row
+; lseek: EBADF beats espipe -- no row at all is a different answer from a row
 ; that will not seek, and the order of the two checks is what says so
 (assert (= -9 (syscall "lseek" 4096 0 0 0)))
 
-; lseek on a ramfs file: SET, CUR and END all land, and END is the size --
+; lseek on a ramfs file: set, cur and end all land, and end is the size --
 ; lib/fat.l is baked, so its length is a fact this seat can check against read
 (: fd (openfd "lib/fat.l" 0)
-   z (syscall "lseek" fd 0 2 0)                 ; END -> the size
-   a (syscall "lseek" fd 0 0 0)                 ; SET 0 -> 0
-   b (syscall "lseek" fd 10 1 0)                ; CUR +10 -> 10
-   c (syscall "lseek" fd 5 1 0)                 ; CUR +5  -> 15
+   z (syscall "lseek" fd 0 2 0)                 ; end -> the size
+   a (syscall "lseek" fd 0 0 0)                 ; set 0 -> 0
+   b (syscall "lseek" fd 10 1 0)                ; cur +10 -> 10
+   c (syscall "lseek" fd 5 1 0)                 ; cur +5  -> 15
    _ (fdclose fd)
  (assert (< 0 z) (= 0 a) (= 10 b) (= 15 c)))
 
 ; lseek: a seek before the start is EINVAL and moves nothing; an unknown whence
-; is EINVAL too, where the love door quietly read it as SEEK_SET
+; is EINVAL too, where the love door quietly read it as seek_set
 (: fd (openfd "lib/fat.l" 0)
    _ (syscall "lseek" fd 8 0 0)
    r (syscall "lseek" fd (- 0 99) 1 0)          ; 8 - 99 < 0
@@ -135,11 +135,11 @@
  (assert (= -1 r)))
 
 ; --- the *at path family -----------------------------------------------------
-; nolibc's path members all issue the *at numbers with AT_FDCWD (-100), so the
+; nolibc's path members all issue the *at numbers with at_fdcwd (-100), so the
 ; dispatch honors exactly that; an absolute path ignores its dirfd (POSIX's own
-; rule) and any other seat refuses ENOTSUP. a NULL path is EFAULT, not a crash.
+; rule) and any other seat refuses enotsup. a NULL path is efault, not a crash.
 
-; openat reads: O_RDONLY is 0, the fd hands over the same bytes the love door
+; openat reads: o_rdonly is 0, the fd hands over the same bytes the love door
 ; slurps, and close by number retires it
 (: at (- 0 100)
    fd (syscall "openat" at "lib/dns.l" 0 0)
@@ -176,10 +176,10 @@
  (assert (= s "halfmoon") (= 0 u) (= -2 g)))
 
 ; newfstatat fills the kernel's own struct stat: size at 48 and mtime at 88
-; land on BOTH arches; st_mode moves (16 aarch64, 24 x86_64) but the other
+; land on both arches; st_mode moves (16 aarch64, 24 x86_64) but the other
 ; arch's word there carries no type bits, so the union picks the true one
 (: at (- 0 100)
-   ; ⚠ + is binary: (+ a b c) applies the sum -- these chain infix instead
+   ; + is binary: (+ a b c) applies the sum -- these chain infix instead
    (le4 v i) ((v i) + ((v (+ i 1)) << 8) + ((v (+ i 2)) << 16) + ((v (+ i 3)) << 24))
    (le8 v i) ((le4 v i) + ((le4 v (+ i 4)) << 32))
    b (cask 144)
@@ -197,8 +197,8 @@
          (= -2 (syscall "newfstatat" at "lib/no-such" b 0))))
 
 ; mkdirat mints a directory, EEXIST the second time; unlinkat wants the
-; AT_REMOVEDIR bit (512) to take one, refuses a full one ENOTEMPTY, and
-; without the bit a directory is EISDIR
+; at_removedir bit (512) to take one, refuses a full one enotempty, and
+; without the bit a directory is eisdir
 (: at (- 0 100)
    a1 (syscall "mkdirat" at "lib/sys-d" 493 0)
    a2 (syscall "mkdirat" at "lib/sys-d" 493 0)
@@ -225,7 +225,7 @@
  (assert (= 0 r) (= -2 old) (= s "ren") (= -2 miss)))
 
 ; chdir moves the one seat and getcwd spells it back, length NUL-counted; a
-; file refuses ENOTDIR, absence ENOENT, a tight buffer ERANGE -- and the seat
+; file refuses enotdir, absence ENOENT, a tight buffer erange -- and the seat
 ; goes home after, because every other test spells relative paths
 (: b (cask 64)
    nd (syscall "chdir" "lib/dns.l" 0 0 0)
@@ -251,8 +251,8 @@
  (assert (= 0 r) (= 384 (& 4095 <>>now)) (= <>>was <>>back)
          (= -2 (syscall "fchmodat" at "lib/no-such" 384 0))))
 
-; utimensat: the cask spells two timespecs and the SECOND is the mtime -- an
-; explicit 1700000000s lands whole; UTIME_OMIT (nsec 2^30-2) moves nothing;
+; utimensat: the cask spells two timespecs and the second is the mtime -- an
+; explicit 1700000000s lands whole; utime_omit (nsec 2^30-2) moves nothing;
 ; NULL says now, which is also what puts the date back in the living present
 (: at (- 0 100)
    ts (cask [0 0 0 0 0 0 0 0  0 0 0 0 0 0 0 0
@@ -275,7 +275,7 @@
 ; --- the fd family -----------------------------------------------------------
 
 ; pipe2 fills the caller's int pair, and the ends behave as the rows they are;
-; a flag word carries nothing here (nothing execs), and a NULL pair is EFAULT
+; a flag word carries nothing here (nothing execs), and a NULL pair is efault
 (: b (cask 8)
    r (syscall "pipe2" b 0 0 0)
    v (string b)
@@ -290,7 +290,7 @@
          (= -22 (syscall "pipe2" b 1 0 0))
          (= -14 (syscall "pipe2" 0 0 0 0))))
 
-; dup3 lands the alias IN the named slot; a write through either twin reaches
+; dup3 lands the alias in the named slot; a write through either twin reaches
 ; the one queue. src == dst is dup3's own refusal, a dead src EBADF
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
    r (syscall "dup3" wfd 40 0 0)
@@ -346,7 +346,7 @@
          (= -9 (syscall "fstat" 4096 b 0 0))))
 
 ; a directory opens read-only (POSIX's own rule) as a dents row: read(2) on it
-; is EISDIR, and getdents64 walks exactly the names readdir answers -- each
+; is eisdir, and getdents64 walks exactly the names readdir answers -- each
 ; record 8-aligned, reclen at 16, the name behind 19 with its NUL. the cursor
 ; is the row's, so a second call says done, and a buffer too small for even
 ; one record refuses
@@ -367,7 +367,7 @@
          (= 0 z) (= -21 rr) (= -22 tiny)
          (= -20 (syscall "getdents64" 1 b 4096 0))))
 
-; getpid: inle is ONE process and love tasks are its threads, so the syscall
+; getpid: inle is one process and love tasks are its threads, so the syscall
 ; answers the machine's constant -- the task pid stays (getpid _)'s, a nif
 ; with g, which is where that answer lives
 (assert (= 1 (syscall "getpid" 0 0 0 0)))

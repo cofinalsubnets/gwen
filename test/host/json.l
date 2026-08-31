@@ -39,14 +39,14 @@
  ("123456789012345678901234567890" = (json-rt "123456789012345678901234567890"))
  ("null" = (json-show (1.0e308 * 10.0))))         ; ieee-inf has no json spelling
 
-; strings: the named escapes both ways, \uXXXX surrogates rejoined to utf-8
+; strings: the named escapes both ways, \uxxxx surrogates rejoined to utf-8
 (assert
  ("\"a\\nb\"" = (json-show "a\nb"))
  (: r (json-read "\"a\\nb\"") ("a\nb" = <>r))
  ("\"𝄞\"" = (json-rt "\"\\uD834\\uDD1E\""))
  ("\"𝄞\"" = (json-rt "\"𝄞\"")))                    ; already-utf-8 rides untouched
 
-; a real lsp message: publishDiagnostics with an EMPTY diagnostics array, the shape
+; a real lsp message: publishDiagnostics with an empty diagnostics array, the shape
 ; that forced the design -- [] must come back [], never null
 (assert
  (: r (json-read (+ "{\"jsonrpc\":\"2.0\",\"method\":\"textDocument/publishDiagnostics\","

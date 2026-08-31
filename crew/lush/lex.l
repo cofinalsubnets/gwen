@@ -19,7 +19,7 @@
 ;                          reader's own extent (sh-lovep). one field always --
 ;                          never IFS-split, never globbed, quiet like "${x}"
 ;   ('op . o)            | || & && ; ;; ( ) and "nl" (a newline is a separator,
-;                        NOT whitespace)
+;                        not whitespace)
 ;   ('rd . (ion . o))    a redirect: < > >> >& <& glued or spaced; ion is the
 ;                        io-number out of band -- () default, (n) attached.
 ;                        a heredoc lexes as op "<h" whose target word is the
@@ -74,7 +74,7 @@
                    41 (depth = 1 ? (i + 1) (sh-subp s n (i + 1) (depth - 1) 0 0))
                       (sh-subp s n (i + 1) depth 0 0)))))
    ; $(( .. )): the arithmetic extent. i is past the two ( -- scan to the ) that
-   ; closes the INNER one, then demand a ) hard after it. the demand is the whole
+   ; closes the inner one, then demand a ) hard after it. the demand is the whole
    ; test: `$((cd a) && b)` is a command substitution whose first word opens a
    ; subshell, and POSIX says a real arithmetic expansion writes `$( (a) )` to say
    ; the other thing. So a failed match is not an error, it is the other reading.

@@ -1,9 +1,9 @@
-; Closed-loop round trip: feed the printer's OUTPUT back through the reader (and
+; Closed-loop round trip: feed the printer's output back through the reader (and
 ; evaluator), rather than checking print-string and read-literal separately.
 ;   rd: value -> show (print) -> read         (datum round-trip)
 ;   rt: value -> show (print) -> read -> eval  (value round-trip)
-; Datums (symbols, lists, atoms) print as their literal form, so they re-READ
-; equal but would re-EVAL as code -- those use rd. Self-evaluating atoms and the
+; Datums (symbols, lists, atoms) print as their literal form, so they re-read
+; equal but would re-eval as code -- those use rd. Self-evaluating atoms and the
 ; value forms (tuple/tray/hash/functions, and the complex form (re ~ im))
 ; reconstruct the value under eval -- those use rt.
 ; s2cl turns a string into a charlist of byte codes (get is generic over strings).
@@ -26,15 +26,15 @@
  (= 42 (rt 42))
  (= "hi\n" (rt "hi\n"))
  (= 1.5 (rt 1.5))
- ; ⚠ NEGATIVE ZERO, the one float whose round trip `=` CANNOT check: -0.0 = 0.0
+ ; negative zero, the one float whose round trip `=` cannot check: -0.0 = 0.0
  ; is true by IEEE, so a printer that drops the sign passes an equality check
- ; while losing the value -- and this one did, until it read the sign BIT rather
+ ; while losing the value -- and this one did, until it read the sign bit rather
  ; than testing (x < 0), which is false for -0.0. love has a negative zero; the
- ; printer simply could not say it. compare through the RECIPROCAL, where the
+ ; printer simply could not say it. compare through the reciprocal, where the
  ; sign is the whole answer.
  ("-0.0" = (show -0.0)) ("0.0" = (show 0.0))
  ("0.0" = (show (0 - 0.0)))                          ; +0.0 stays unsigned: 0 - 0 is +0
- ("-ieee-inf" = (show (1.0 / (rd -0.0))))            ; the sign SURVIVED the loop
+ ("-ieee-inf" = (show (1.0 / (rd -0.0))))            ; the sign survived the loop
  ("ieee-inf" = (show (1.0 / (rd 0.0))))
  ; ,-prefixed constructor forms reconstruct an equal value
  (aall (= (tuple 1 2 3) (rt (tuple 1 2 3))))

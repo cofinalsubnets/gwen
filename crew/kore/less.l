@@ -1,25 +1,25 @@
 ; crew/kore/less.l -- the pager: one screenful of a text at a time, with the keys
-; less answers to. `less` and `more` are the SAME door -- the toolbox holds one
+; less answers to. `less` and `more` are the same door -- the toolbox holds one
 ; pager and those are the two spellings a script reaches for, so both land here
 ; and both behave like less (backward motion, no exit at the end unless -e).
 ;
 ; the split is crew/vi/'s, for the same reason: the engine is pure -- a state
-; tablet stepped one BYTE at a time (pgstep) and rendered to one escape frame
+; tablet stepped one byte at a time (pgstep) and rendered to one escape frame
 ; (pgframe), no port and no tty in it -- and the face below reads keys, performs
 ; the file requests the engine leaves, and blits. the laws drive pgstep with byte
 ; lists and read the tablet back.
 ;
-; keys: SPACE f ^F ^V forward a screen, b ^B back one, RETURN j e ^N ^E down a
+; keys: space f ^F ^V forward a screen, b ^B back one, return j e ^N ^E down a
 ; line, k y ^Y ^P up one, d ^D half down, u ^U half up, g < top, G > end, p %
-; a percentage, a COUNT prefix on any of them (5j, 100g, 50p), / and ? search
+; a percentage, a count prefix on any of them (5j, 100g, 50p), / and ? search
 ; (ERE, over love/re.l), n and N repeat forward and reversed, = ^G the position,
-; : then n or p or q the file walk and the exit, h the help, q Q ZZ quit.
+; : then n or p or q the file walk and the exit, h the help, q Q zz quit.
 ; flags: -N line numbers, -i case-blind search, -s runs of blank lines squeezed
 ; to one, -e quit at the end rather than hold there; +N opens at line N and
-; +/PAT at its first match.
+; +/pat at its first match.
 ;
-; the text is HELD: a pager scrolls back, so the reading floor the line tools
-; ride is no help here. long lines WRAP, which is less's default -- a display row
+; the text is held: a pager scrolls back, so the reading floor the line tools
+; ride is no help here. long lines wrap, which is less's default -- a display row
 ; is a fragment carrying the source line it came off, so the counts and the
 ; percentage stay the source's. a tab steps to the next 8th column, a control
 ; byte shows as ^X, and a utf-8 tail byte is no column of its own.
@@ -68,7 +68,7 @@
                  (: _ (put o b) (go (k + 1) (c + 1))))))
        (go 0 0))
    ; the byte index where column k of s falls -- a utf-8 tail byte is no column.
-   ; the count is taken at the LEAD byte and the stop is BEFORE it, or the cut
+   ; the count is taken at the lead byte and the stop is before it, or the cut
    ; lands in the middle of the character that would have overflowed
    (pgspan s k)
     (: n #s
@@ -77,7 +77,7 @@
                       (? (k < c2) i (go (i + 1) c2))))
        (go 0 0))
    (pgclip w s) (: k (pgspan s w) (? (k < #s) (snip s 0 k) s))
-   ; the STATUS line clips from the LEFT, the way vi's does: its tail is what
+   ; the status line clips from the left, the way vi's does: its tail is what
    ; carries the news -- the line span, the percent, the end of the / being typed
    ; -- and a deep path would otherwise push every word of it off the screen
    (pgclipl w s) (: k #s (? (w < k) ("<" + snip s ((k - w) + 1) k) s))
@@ -106,7 +106,7 @@
    (pgat l i) (? !(two? l) () (i < 1) <l (pgat >l (i - 1)))
    ; the rows from 'top, walked on from the last answer when the view did not move
    ; back. without it every frame re-walks the buffer from its head, which is a
-   ; whole 50k-row list per KEYSTROKE once you are near the end of one
+   ; whole 50k-row list per keystroke once you are near the end of one
    (pgfrom st)
     (: top (st 'top) ct (st 'ct)
        l (? ((0 <= ct) && (ct <= top)) (drop (top - ct) (st 'cr)) (drop top (st 'rw)))
@@ -220,7 +220,7 @@
           ((c = 113) || (c = 81)) (pin st 'quit 1)
           (c = 27) st
           (pgmsg st ("no : command " + string c))))
-   ; the typed line: RETURN runs it, ESC drops it, a backspace off the front does too
+   ; the typed line: return runs it, ESC drops it, a backspace off the front does too
    (pgtyped st c)
     (: cm (st 'cmd)
        (? ((c = 13) || (c = 10))
@@ -281,7 +281,7 @@
         + "-" + show l2 + "/" + show nl + "  " + show pc + "%"
         + (? end? "  (END)" "")))
    ; the matches in a fragment, in standout. a match spanning a wrap shows on both
-   ; halves, which is what painting the FRAGMENT rather than the line buys
+   ; halves, which is what painting the fragment rather than the line buys
    (pgpaint e nds s)
     (: n #s
        (go i acc)
@@ -317,13 +317,13 @@
    ; not a terminal: pour the operands through, which is what more and less both
    ; do when nothing is going to read a screen
    (pgpour as) (uchunks "less" puts as)
-   ; less's start command: +N opens at line N, +/PAT at its first match
+   ; less's start command: +N opens at line N, +/pat at its first match
    (pgstart st p)
     (? !(0 < #p) st
        (p 0 = 47) (pgsearch st (snip p 1 #p) 1)
        (pgline! st (uatoi p - 1)))
    ; one key, the arrow and page keys decoded to their plain twins. any other byte
-   ; after ESC is delivered AFTER the bare 27 (a one-byte pushback), so ESC q reads
+   ; after ESC is delivered after the bare 27 (a one-byte pushback), so ESC q reads
    ; as the two keys it is. answers (byte next-pushback)
    (pgkey kq pend)
     (? (0 <= pend) [pend -1]
@@ -344,7 +344,7 @@
    ; winsize's (rows . cols) as [h w]. a fresh pty answers 0x0 before anyone has
    ; sized it, and that is a terminal with no size yet, not a missing one
    (pgwin ws) [(? (0 < <ws) <ws 24) (? (0 < >ws) >ws 80)]
-   ; the window may move under us; the top LINE is what survives a rewrap
+   ; the window may move under us; the top line is what survives a rewrap
    (pgresize st)
     (: ws (winsize 0)
        (? !(two? ws) 0
@@ -397,7 +397,7 @@
     (: r (pgopts as)
        t <r
        rest <>r
-       ; +N / +/PAT sits ahead of the names, which is where less takes it
+       ; +N / +/pat sits ahead of the names, which is where less takes it
        plus? ((two? rest) && (1 < #(<rest)) && (<rest 0 = 43))
        plus (? plus? (snip <rest 1 #(<rest)) "")
        fs (? plus? >rest rest)
@@ -411,7 +411,7 @@
               (pgride fs (lines <>rd) f in <>hw <hw t plus))
           ; no operand, so stdin is the TEXT -- and fd 0 is the only door `raw`
           ; has, so the pipe moves aside and /dev/tty takes fd 0. no controlling
-          ; terminal, no keys: pour it through instead. ⚠ stdin being the terminal
+          ; terminal, no keys: pour it through instead. stdin being the terminal
           ; means there is no text at all, and `raw` is the isatty we have: it
           ; answers () for a terminal on fd 0 and an errno for anything else
           (: tty0? !(raw 1)

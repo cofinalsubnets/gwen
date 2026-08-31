@@ -1,19 +1,19 @@
-; crew/kore/patch.l -- patch(1), the other half of diff. crew/kore/diff.l WRITES unified
+; crew/kore/patch.l -- patch(1), the other half of diff. crew/kore/diff.l writes unified
 ; hunks; this reads them back and lays them on a tree, which is what every third-party
 ; source in doc/misc/plan/lfs.md's ladder is delivered as. a toolbox of one: patch-main, no
 ; seat, kore.l is its door.
 ;
-; UNIFIED DIFFS ONLY, deliberately. The context (`***`/`---`) and normal (`3c3`) formats
+; unified diffs only, deliberately. The context (`***`/`---`) and normal (`3c3`) formats
 ; are two more parsers for a shape nothing in this decade emits, and half a parser is
 ; worse than a refusal that names itself.
 ;
 ; the shape of the work:
-;   * a FILE is a list of (text nl) pairs -- the line and whether a newline follows it.
-;     ⚠ A MISSING FINAL NEWLINE IS DATA here as everywhere in kore, and a patch can
+;   * a file is a list of (text nl) pairs -- the line and whether a newline follows it.
+;     a missing final newline is data here as everywhere in kore, and a patch can
 ;     both carry one in and take one away ("\ No newline at end of file"), so the flag
 ;     rides per line rather than per file.
-;   * a HUNK is (ostart nstart lines), a line (op text nl), op 32 keep / 45 del / 43 add.
-;   * applying walks the hunks in order over the EVOLVING file, carrying a delta: the
+;   * a hunk is (ostart nstart lines), a line (op text nl), op 32 keep / 45 del / 43 add.
+;   * applying walks the hunks in order over the evolving file, carrying a delta: the
 ;     running difference between a position in the original and the same content's
 ;     position now. a hunk that does not sit where it says searches outward from there,
 ;     which is what `offset` in patch's own report means.
@@ -24,7 +24,7 @@
 (module 'kore
 (:
    (pt-pfx s p) ((tally p <= tally s) && (snip s 0 (tally p) = p))
-   ; ⚠ the say FLUSHES: the hunk reports go to err and the file report to out, so an
+   ; the say flushes: the hunk reports go to err and the file report to out, so an
    ; unflushed out lands its line in the middle of a later one -- patch's own output
    ; reads as one conversation and has to stay one
    (pt-say s) (: _ (say out s) _ (put out 10) (flush out))
@@ -35,7 +35,7 @@
     (: n (tally ln)
        (go k) (? (n <= k) n (ln k = 9) k (go (k + 1)))
        (? (n < 5) "" (snip ln 4 (go 4))))
-   ; -p N: drop N leading components. UNSAID drops them all, which is patch's own
+   ; -p N: drop N leading components. unsaid drops them all, which is patch's own
    ; default and the reason a bare `patch < p` run from inside the tree works at all
    (pt-strip nm p)
     (? !(charm? p) (ubase nm "")
@@ -63,8 +63,8 @@
    ; a section opens on a --- / +++ pair and runs to the next one. anything between
    ; sections is prose (a mail body, a commit message) and is skipped, which is how a
    ; patch pulled off a mailing list applies at all.
-   ; ⚠ THE `\` LINE IS TESTED BEFORE THE COUNTS RUN OUT. `\ No newline at end of file`
-   ; carries no count of its own, so the one that follows the hunk's LAST line arrives
+   ; the `\` line is tested before the counts run out. `\ No newline at end of file`
+   ; carries no count of its own, so the one that follows the hunk's last line arrives
    ; after both counters have hit zero -- and a body that stopped on the counts alone
    ; would leave every "the patch takes the newline away" case unmarked.
    (pt-body m no nn acc)
@@ -107,7 +107,7 @@
        (go m) (? !(two? m) (slurp o)
                  (: _ (say o <<m) _ (? <><m (put o 10) 0) (go >m)))
        (go ps))
-   ; the two sides of a hunk: the old TEXTS to look for, the new PAIRS to lay down
+   ; the two sides of a hunk: the old texts to look for, the new pairs to lay down
    (pt-old h) (map (\ l <>l) (filter (\ l !(<l = 43)) (h 2)))
    (pt-new h) (map (\ l [<>l (l 2)]) (filter (\ l !(<l = 45)) (h 2)))
 
@@ -116,7 +116,7 @@
     (: (go m o) (? !(two? o) 1 !(two? m) 0 (<<m = <o) (go >m >o) 0)
        (go (drop k ps) old))
    (pt-fits ps k old) (((0 <= k) && ((k + tally old) <= tally ps)) && (pt-match ps k old))
-   ; ⚠ the reach is (n + 1 + |want|), not n: a create hunk's `-0,0` wants seat -1 in a
+   ; the reach is (n + 1 + |want|), not n: a create hunk's `-0,0` wants seat -1 in a
    ; file of no lines, so a search bounded by the file's own length never takes a step.
    (pt-seek ps old want)
     (: far ((tally ps + 1) + (abs want))
@@ -142,7 +142,7 @@
        (slurp o))
 
    ; --- one file's worth ----------------------------------------------------------
-   ; ⚠ the hunks are reversed BEFORE anything else under -R: swapping each line's op and
+   ; the hunks are reversed before anything else under -R: swapping each line's op and
    ; the two starts turns the patch around, and everything downstream then reads one
    ; shape. a -R that reversed at apply time would owe every later step a second lane.
    (pt-flip h)
@@ -156,7 +156,7 @@
         (? !(two? m) [ps bad (rev rej) off?]
            (: h <m
               old (pt-old h) new (pt-new h)
-              ; the -0,0 convention: a side with no lines names the seat BEFORE it, so
+              ; the -0,0 convention: a side with no lines names the seat before it, so
               ; start 0 is position 0 and not -1 (diff.l writes it, this reads it)
               want ((? (0 < <h) (<h - 1) 0) + delta)
               s (pt-seek ps old want)
@@ -180,7 +180,7 @@
                      + (" FAILED -- saving rejects to file " + nm + ".rej")))
             ())
        _ (? dry? ()
-            ; ⚠ the .orig lands on a MISMATCH and not only on a failure -- a hunk
+            ; the .orig lands on a mismatch and not only on a failure -- a hunk
             ; that moved applied to a file the patch did not quite describe, and GNU's
             ; --backup-if-mismatch keeps the original for exactly that case
             (: _ (? ((bad || off?) && !fresh) (uwrite (nm + ".orig") <>r) ())
@@ -214,7 +214,7 @@
               (slurp in))
        secs (pt-parse (lines txt))
        _ (? (two? secs) () (udie 2 "patch: no unified diff in the input"))
-       ; the name: the new side unless the patch CREATES the file, and an operand wins
+       ; the name: the new side unless the patch creates the file, and an operand wins
        ; over both -- which is how `patch f < p` retargets a diff cut somewhere else
        (name sec) (? (two? rest) <rest
                      (: nn <>sec

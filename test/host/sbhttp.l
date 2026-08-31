@@ -1,18 +1,18 @@
 ; --- test/host/sbhttp.l: svalbard pulling a store over a real socket ---
-; NOT in the test/*.l corpus: the socket nifs live in src/sock.c, which love0 does
+; not in the test/*.l corpus: the socket nifs live in src/sock.c, which love0 does
 ; not link, and this loads two crew files and splices their modules.
 ;
-; the whole thing runs in ONE process, test/host/kiosko.l's shape: kiosko twirled
+; the whole thing runs in one process, test/host/kiosko.l's shape: kiosko twirled
 ; onto a listener over the origin nest's .sb/, svalbard.s client in the main task,
 ; the two interleaving through the cooperative scheduler. so this is a real HTTP
 ; pull off a real socket, and the two crew members meet the way they would in
 ; anger -- love serving love.
 ;
-; what it proves is the claim the design rests on: an sb remote needs NO server
+; what it proves is the claim the design rests on: an sb remote needs no server
 ; logic. the store is content-addressed and immutable, there is no listing
 ; endpoint, and the walk discovers everything by reading what it already fetched
 ; -- /tips names the heads, each patch names its `deps` and its `hunks`. an
-; EMPTY blob rides through too, which is the case that found kiosko's 404.
+; empty blob rides through too, which is the case that found kiosko's 404.
 (use 'sb)                                 ; the baked module: the whole stack, spliced
 (use 'kiosko)
 
@@ -26,9 +26,9 @@
    _ (mkdir (root + "/origin") 493) _ (mkdir (root + "/clone") 493)
    home (cwd 0)
    ; the server task shares this process's cwd, and the client chdirs into the
-   ; clone before pulling -- so the root it serves must be ABSOLUTE
+   ; clone before pulling -- so the root it serves must be absolute
    oroot (home + "/" + root + "/origin/.sb")
-   ; --- the origin nest: a nested path and an EMPTY file, then a release ---
+   ; --- the origin nest: a nested path and an empty file, then a release ---
    _ (chdir (root + "/origin"))
    _ (mkdir "sub" 493)
    _ (lay "a.txt" "v1\n") _ (lay "sub/b.txt" "nested\n") _ (lay "empty.txt" "")
@@ -64,8 +64,8 @@
  (0 < got)                                                           ; the pull went through
  (2 = npat) (4 = nblob)                                              ; every patch, every blob
  (<>a = "v2\n")                                                    ; the head content
- (<>b = "nested\n")                                                ; ...a NESTED path materialized
- (two? e) (0 = (tally <>e))                                        ; ...and the EMPTY file, 0 bytes
+ (<>b = "nested\n")                                                ; ...a nested path materialized
+ (two? e) (0 = (tally <>e))                                        ; ...and the empty file, 0 bytes
  (two? ref)                                                          ; the ref rode along
  (0 = clean))                                                        ; the tree matches the snap
 

@@ -2,13 +2,13 @@
 ; lib/gz.l's two doors. gz.l is the codec; this file is the face -- the options, the
 ; suffix rules, and the in-place replace that carries the mode and the mtime across.
 ;
-;   gzip [-cdfklnNqrtv] [-1..-9] [-S SUF] [FILE..]    FILE.gz written, FILE removed
+;   gzip [-cdfklnNqrtv] [-1..-9] [-S suf] [file..]    file.gz written, file removed
 ;   gunzip [..]  = gzip -d          zcat [..] = gzip -dc
 ;   -c stdout   -d decompress   -f overwrite an existing output   -k keep the input
 ;   -l list     -n write no name or time into the header   -N take both back out of it
-;   -q quiet    -r walk directories   -t test only   -v say what happened   -S SUF
+;   -q quiet    -r walk directories   -t test only   -v say what happened   -S suf
 ;
-; no FILE (or a bare `-`) is the filter: stdin -> stdout, which is what a pipe wants.
+; no file (or a bare `-`) is the filter: stdin -> stdout, which is what a pipe wants.
 ; a status like GNU's: 0 clean, 1 something failed, 2 a warning (a name refused).
 ;
 ; one member per file. gz-unzip reads the trailer off the tail, so a legal concatenation
@@ -51,12 +51,12 @@ no file, or a bare -, is the filter: stdin -> stdout"
                    (go 0 0))
    (gzc-dir p) (: n #p
                   (go k r) (? (k < n) (go (k + 1) (? (p k = 47) (k + 1) r)) r)
-                  (go 0 0))                          ; the head INCLUDING its slash, "" for none
+                  (go 0 0))                          ; the head including its slash, "" for none
    (gzc-dirp? q) (: st (stat q) (two? st && <>>st & 61440 = 16384))
    (gzc-worse a b) (? (a = 1 || b = 1) 1 (a = 2 || b = 2) 2 0)
 
    ; --- the member's own header, which -l and -N read and gz-unzip does not tell --
-   ; every optional field must be STEPPED OVER even though only FNAME is wanted.
+   ; every optional field must be stepped over even though only fname is wanted.
    (gzc-hdr s)                         ; -> (1 stamp name body-seat) | ()
     (: n #s
        (skip i) (? (n <= i) () (s i = 0) (i + 1) (skip (i + 1)))

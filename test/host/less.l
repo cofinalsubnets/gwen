@@ -1,14 +1,14 @@
-; --- test/host/less.l: the pager's FACE on a real terminal ---
+; --- test/host/less.l: the pager's face on a real terminal ---
 ; the engine (crew/kore/less.l's pgstep/pgframe) is lawed in crew/kore/law.l with no
 ; tty at all; what is left is the face -- raw mode, the alternate screen, the key
 ; loop, the frame blit, and the file the : commands ask for. That lane needs a
 ; terminal, so it gets one: `tether` spawns `kore less` on a pty, we type at the
-; master and read the frames back off it. NOT in the test/*.l corpus -- tether and
+; master and read the frames back off it. not in the test/*.l corpus -- tether and
 ; winsize live in src/posix.c, which love0 does not link. Run it (the assert macro
-; comes from test/00-init.l; $LOVEBIN names the binary under test and $LESSTESTDIR a
+; comes from test/00-init.l; $lovebin names the binary under test and $lesstestdir a
 ; scratch directory it may write in):
 ;
-;   LOVEBIN=out/host/love LESSTESTDIR=out/host sh -c "cat test/00-init.l test/host/less.l | out/host/love"
+;   lovebin=out/host/love lesstestdir=out/host sh -c "cat test/00-init.l test/host/less.l | out/host/love"
 ;
 ; the pty starts 0x0 until setwinsize lands, and the child may read its size before
 ; we push one -- so nothing here asks about geometry, only about what any window
@@ -23,7 +23,7 @@
         (close q))
    (waitfor pid) (: s (gather pid) (? (two? s) s (= 0 s) (do (rest 2) (waitfor pid)) s))
    ; spawn `love kore less ARGS..` on a pty, size it, type keys, answer what it drew
-   ; ⚠ the keys carry a "qq\n" tail: they are typed before the child has raw mode,
+   ; the keys carry a "qq\n" tail: they are typed before the child has raw mode,
    ; so the line discipline is still canonical and holds a partial line back -- and
    ; a sequence that failed to quit would otherwise park the harness on `slurp`
    ; forever. two q's, because the first leaves the help page rather than the pager
@@ -54,14 +54,14 @@
    r2 (run "G" [f])
    _ (assert (= <>r2 0) (has? <r2 "juliet") (has? <r2 "(END)"))
 
-   ; --- /PATTERN moves to the match, and h swaps the help page in
+   ; --- /pattern moves to the match, and h swaps the help page in
    r3 (run "/india\n" [f])
    _ (assert (= <>r3 0) (has? <r3 "india"))
-   ; ⚠ the first q comes back OUT of the help; only the second one leaves
+   ; the first q comes back out of the help; only the second one leaves
    r4 (run "h" [f])
    _ (assert (= <>r4 0) (has? <r4 "the pager") (has? <r4 "alpha"))
 
-   ; --- -N numbers the lines, and +/PAT opens where the match is
+   ; --- -N numbers the lines, and +/pat opens where the match is
    r5 (run "" ["-N" f])
    _ (assert (= <>r5 0) (has? <r5 "1 alpha"))
    r6 (run "" ["+/golf" f])
@@ -91,7 +91,7 @@
    _ (assert (= <>ra 0) (has? <ra "alpha") (has? <ra "\e[?1049h"))
 
    _ (unlink f) _ (unlink g)
-   _ (test_fin ())                          ; ⚠ no zz-fin here: quit before claiming ok
+   _ (test_fin ())                          ; no zz-fin here: quit before claiming ok
    _ (say err "test/host/less: the pager face on a pty -- screenfuls, search, help, -N, +/PAT, the file walk and the pipe ok")
    _ (put err 10)
    0)

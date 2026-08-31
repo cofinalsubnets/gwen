@@ -10,7 +10,7 @@
   (= 1 (tally "\t"))           (= "\t" (string (link 9 0)))
   (= 1 (tally "\r"))           (= "\r" (string (link 13 0)))
   (= 1 (tally "\0"))           (= "\0" (string (link 0 0)))
-  ; \xHH: two hex digits.
+  ; \xhh: two hex digits.
   (= 1 (tally "\x00"))         (= "\x00" (string (link 0 0)))
   (= 1 (tally "\x41"))         (= "\x41" (string (link 65 0)))
   (= 1 (tally "\xff"))         (= "\xff" (string (link 255 0)))
@@ -38,11 +38,11 @@
    (= (string (link 0 0))                    (parse '(34 92 48 34)))    ; "\0"
    (= (string (link 92 0))                   (parse '(34 92 92 34)))    ; "\\"
    (= (string (link 34 0))                   (parse '(34 92 34 34)))    ; "\""
-   ; \xHH: 120='x', then 2 hex digits
+   ; \xhh: 120='x', then 2 hex digits
    (= (string (link 0 0))                    (parse '(34 92 120 48 48 34)))    ; "\x00"
    (= (string (link 65 0))                   (parse '(34 92 120 52 49 34)))    ; "\x41" = 'A'
    (= (string (link 255 0))                  (parse '(34 92 120 102 102 34)))  ; "\xff"
-   (= (string (link 171 0))                  (parse '(34 92 120 65 66 34)))    ; "\xAB"
+   (= (string (link 171 0))                  (parse '(34 92 120 65 66 34)))    ; "\xab"
    (= (string (link 97 (link 10 (link 98 0))))     (parse '(34 97 92 110 98 34)))   ; "a\nb"
    (= (string (link 97 (link  9 (link 98 0))))     (parse '(34 97 92 116 98 34)))   ; "a\tb"
    (= (string (link 97 (link 13 (link 98 0))))     (parse '(34 97 92 114 98 34)))   ; "a\rb"

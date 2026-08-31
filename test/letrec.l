@@ -1,11 +1,11 @@
-; --- test/letrec.l: the letrec CAPTURE laws under a shadowing binder ----------------------
-; both letrecs load a sibling lambda's captures BY NAME at each reference site and
+; --- test/letrec.l: the letrec capture laws under a shadowing binder ----------------------
+; both letrecs load a sibling lambda's captures by NAME at each reference site and
 ; propagate them by name across siblings, so a lambda binder that shadows a name free in
 ; a sibling def used to hand the site its own value. both compilers now mint such a
 ; binder before analysis -- ev.l's cplam and c0_lambda hold the same law -- and every
 ; shape here answered wrongly without it, under either.
 (assert
-    ; a sibling's param shadows the name a LATER sibling captures; reads and calls both ways
+    ; a sibling's param shadows the name a later sibling captures; reads and calls both ways
     (5 = ((\ a (: (h a) (go a) (go b) (* b a) (h 5))) 1))
     (5 = ((\ a (: h (\ a (go a)) go (\ b (* b a)) (h 5))) 1))
     (6 = ((\ a (: (h a) (+ 1 (go a)) (go b) (* b a) (h 5))) 1))
@@ -27,7 +27,7 @@
     (5 = ((\ a (: (h a) (go (go a)) (go b) (* b a) (h 5))) 1))
     (5 = ((\ a (: (f a) (g a) (g a) (h a) (h b) (* b a) (f 5))) 1))          ; f -> g -> h, one name
     ('(10 10) = ((\ a (: (h a) (go a) (go b) (* b a) [(h 5) (go 5)])) 2))
-    ; a lambda in the let BODY shadowing the capture
+    ; a lambda in the let body shadowing the capture
     ('(5 6) = ((\ a (: (go b) (* b a) (map (\ a (go a)) [5 6]))) 1))
     ; the shapes that were already right, held right: an inner : VALUE shadow (cells are
     ; by location), a sibling reading the let's own value name, and a shadowed let name

@@ -1,13 +1,13 @@
-; test/holo/fuzz/sysdiff.l -- holo SYSTEM-lane differential: every privileged encoding,
-; byte-exact against llvm-mc. fuzz.l is a DECODE oracle (holo may legally pick among
+; test/holo/fuzz/sysdiff.l -- holo system-lane differential: every privileged encoding,
+; byte-exact against llvm-mc. fuzz.l is a decode oracle (holo may legally pick among
 ; encodings); the system lane is the opposite -- each op has exactly one encoding and a
-; small enumerable operand space, so the sharp oracle is ASSEMBLE-side: write the
+; small enumerable operand space, so the sharp oracle is assemble-side: write the
 ; instruction llvm-mc's way, assemble, demand the same bytes holo produced.
 ;
-; the arm64 op tables are read STRAIGHT OUT of crew/holo/arm64.l, so a row added to
+; the arm64 op tables are read straight out of crew/holo/arm64.l, so a row added to
 ; holo is checked the next run with no edit here -- the uncovered row is the one that
 ; ships wrong. the x86 side has no name tables (the operand space IS the register
-; file), so it enumerates. SYSDIFF_ARCH=x64|arm64 narrows; default both.
+; file), so it enumerates. sysdiff_arch=x64|arm64 narrows; default both.
 ;
 ;   out/host/love test/holo/fuzz/sysdiff.l          (exit 1 on any disagreement)
 
@@ -15,7 +15,7 @@
 (reads (open "crew/holo/amd64.l" "r"))
 (reads (open "crew/holo/arm64.l" "r"))
 (reads (open "crew/holo/rv64.l" "r"))
-; holo rides module 'holo: reading the source REGISTERS it, and the names come
+; holo rides module 'holo: reading the source registers it, and the names come
 ; through the door rather than off this file's layer.
 (use 'holo)
 
@@ -79,8 +79,8 @@
                 out (table "arm64-barrier-opts"))
      out (foldl (\ a f (a + foldl (\ b i (b + [[['msri (intern f) i] ("msr " + f + ", #" + show i) ()]])) () ^16))
                 out (table "arm64-pstate"))
-     ; the SYS family: llvm-mc knows which operations take a register and refuses the
-     ; other spelling; offer BOTH, and `pair` demands the accepted one matched.
+     ; the sys family: llvm-mc knows which operations take a register and refuses the
+     ; other spelling; offer both, and `pair` demands the accepted one matched.
      out (foldl (\ a row (: ir <row
                             (foldl (\ b o (: pk (ir + " " + o)
                                              (b + [[[(intern ir) (intern o) 'r7] (ir + " " + o + ", x7") pk]
@@ -95,7 +95,7 @@
                               [['udf imm] ("udf #" + show imm) ()]]))
                 out '(0 1 2 15 255 4660 61440 65535))
      out (foldl (\ a n (a + [[[(intern n)] n ()]])) out '("isb" "wfi" "wfe" "eret"))
-     (out + [[['lea 'r9 'sp 0] "mov x9, sp" ()]                 ; the SP move `mov` cannot make
+     (out + [[['lea 'r9 'sp 0] "mov x9, sp" ()]                 ; the sp move `mov` cannot make
              [['lea 'sp 'r9 0] "mov sp, x9" ()]]))
 
  x64-r2x '((r0 "rax") (r1 "rcx") (r2 "rdx") (r3 "rbx") (r4 "rbp") (r5 "rsi") (r6 "rdi")
@@ -105,7 +105,7 @@
          ("rsi" "si") ("rdi" "di") ("r8" "r8w") ("r9" "r9w") ("r10" "r10w") ("r11" "r11w")
          ("r12" "r12w") ("r13" "r13w") ("r14" "r14w") ("r15" "r15w"))
  (cases-x64 _)
-  (: gp (filter (\ p !(id? <p 'sp)) x64-r2x)               ; rsp is not a CR-move operand
+  (: gp (filter (\ p !(id? <p 'sp)) x64-r2x)               ; rsp is not a cr-move operand
      out (foldl (\ a n (a + foldl (\ b p (b + [[['ldcr <p n] ("mov " + <>p + ", cr" + show n) ()]
                                               [['stcr n <p] ("mov cr" + show n + ", " + <>p) ()]]))
                                   () gp))
@@ -117,7 +117,7 @@
                                     a '(0 8 16 200))
                           (a2 + [[['ltr r] ("ltr " + (: w (assoc x x64-w) <>w)) ()]])))
                 out x64-r2x)
-     out (foldl (\ a n (? (n = 3) a                        ; llvm folds `int 3` to CC; holo keeps CD 03
+     out (foldl (\ a n (? (n = 3) a                        ; llvm folds `int 3` to CC; holo keeps cd 03
                           (a + [[['int n] ("int " + show n) ()]])))
                 out ^256)
      (out + foldl (\ a n (a + [[[(intern n)] n ()]])) ()
@@ -197,7 +197,7 @@
                [<st (nthl st 1) ((nthl st 2) + [[ir asm got ("want " + want)]])])))
      st (: (go m rs st) (? !(two? m) st (go >m >rs (one <m <rs st)))
            (go cs ref [0 0 ()]))
-     ; a pair whose spellings llvm-mc BOTH refused hides a table typo -- fail it
+     ; a pair whose spellings llvm-mc both refused hides a table typo -- fail it
      fails ((nthl st 2)
             + (foldl (\ a c (: pk (nthl c 2)
                                (? (id? pk ()) a

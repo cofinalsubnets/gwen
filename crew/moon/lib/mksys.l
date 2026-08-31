@@ -2,16 +2,16 @@
 ; the five functions C cannot say. everything else in the gcc-free link is C compiled
 ; by mooncc (nolibc.c + math/); these are the register-exact leaves under it:
 ;   __ai_sys(n,a,b,c,d,e,f)  the 7-slot syscall trampoline (nolibc.c calls nothing else)
-;   __sigsetjmp / siglongjmp our own jmp_buf INSIDE the glibc-sized 25-long buffer:
+;   __sigsetjmp / siglongjmp our own jmp_buf inside the glibc-sized 25-long buffer:
 ;                            [0..5] rbx rbp r12 r13 r14 r15, [6] rsp, [7] rip,
 ;                            [8] the signal mask (rt_sigprocmask saves/restores it --
 ;                            love.c's fault barrier is sigsetjmp(env,1), the mask is load-bearing)
-;   __ai_sigret              the SA_RESTORER tail (rt_sigreturn) nolibc's sigaction installs
+;   __ai_sigret              the sa_restorer tail (rt_sigreturn) nolibc's sigaction installs
 ; (sqrt stays in C -- crew/moon/lib/math/am.c's am_sqrt, OURS and IEEE-exact; a thing
-; C CAN say has no place here.) three targets, one layer: (mksys dst) lays x64,
+; C can say has no place here.) three targets, one layer: (mksys dst) lays x64,
 ; (mksys-arm64 dst) aarch64, (mksys-riscv dst) riscv64 -- all seed mksys-as, which
-; picks the arch's IR table. the x64 lane serves TWO kernels from one object
-; (doc/misc/plan/seed-universal.md rung UV1): the tail is OS-blind -- CF cleared
+; picks the arch's IR table. the x64 lane serves two kernels from one object
+; (doc/misc/plan/seed-universal.md rung UV1): the tail is OS-blind -- cf cleared
 ; before the insn, and a carry answer (freebsd's error convention) parked
 ; below linux's band as -(errno+4096), so impl.h's __ai_call reads one law --
 ; and the sigprocmask leaves branch on __ai_osv (os.c's probe) between
@@ -31,14 +31,14 @@
    (mksys-riscv dst) (mksys-as 'rv64 dst)
    (mksys-freebsd dst) (mksys-as 'amd64 dst)   ; one object serves both kernels
    (mksys-as arch dst) (write-bytes dst (mksys-bytes arch))
-   ; ⚠ THE NETBSD/AARCH64 DISPATCH TABLE. That kernel takes the syscall number
-   ; from the SVC IMMEDIATE -- the number is in the INSTRUCTION -- and offers no
-   ; indirect door: SYS_syscall (svc #0, number in x0) and SYS___syscall (svc
-   ; #198) both SIGSYS, and x8 + svc #0 SIGSYSes too (all three probed on the
-   ; box). A runtime number is therefore unsayable in one instruction, so we lay
+   ; the netbsd/aarch64 dispatch table. That kernel takes the syscall number
+   ; from the svc immediate -- the number is in the instruction -- and offers no
+   ; indirect door: sys_syscall (svc #0, number in x0) and sys___syscall (svc
+   ; #198) both sigsys, and x8 + svc #0 sigsyses too (all three probed on the
+   ; box). a runtime number is therefore unsayable in one instruction, so we lay
    ; one `svc #n; ret' per number and BRANCH INTO IT. 512 covers the roster
    ; (the highest we speak is __wait450 at 449); 4 kB of sys.o, aarch64 only.
-   ; ⚠ the bound is spelled at the two sites, not bound once: a forward VALUE in
+   ; the bound is spelled at the two sites, not bound once: a forward VALUE in
    ; this group does not resolve the way a forward lambda does (c0's letrec).
    (nb-tab i acc) (? (i < 0) acc (nb-tab (i - 1) (['svcn i] >< (['ret] >< acc))))
    ; the bytes alone -- moon.l's runtime pull lays sys in-memory through this
@@ -48,7 +48,7 @@
          ; -- __ai_sys: SysV args (rdi rsi rdx rcx r8 r9 [rsp+8]) -> the kernel's
          ;    (rax rdi rsi rdx r10 r8 r9). each mov reads a slot the previous one
          ;    just drained, so the chain needs no scratch. the tail is OS-BLIND:
-         ;    CF goes in clear (linux hands it back untouched through r11), and a
+         ;    cf goes in clear (linux hands it back untouched through r11), and a
          ;    carry answer -- freebsd's error, +errno in rax ('below IS jc) --
          ;    parks below linux's band as -(errno+4096). impl.h's __ai_call
          ;    unparks; the tail never learns which kernel answered.
@@ -60,7 +60,7 @@
          (mov r9 r7)                 ; r10 <- d
          (mov r7 r8)                 ; r8  <- e
          (ld r8 sp 8)                ; r9  <- f (the one stack arg)
-         (cmp r0 0)                  ; clears CF; flags ride the insn both ways
+         (cmp r0 0)                  ; clears cf; flags ride the insn both ways
          (sys)
          (br below sys-err)
          (ret)                       ; rax rides out (-errno included; C wraps it)
@@ -112,12 +112,12 @@
          (li r0 0)
          (ret)
 
-         ; -- siglongjmp(buf, val): restore the mask FIRST (the fault barrier jumps
+         ; -- siglongjmp(buf, val): restore the mask first (the fault barrier jumps
          ;    out of a signal handler), then the register file, then jump the saved
-         ;    rip. ⚠ val and buf ride rbp/rbx: freebsd's syscall exit ZEROES the
+         ;    rip. val and buf ride rbp/rbx: freebsd's syscall exit zeroes the
          ;    scratch registers (a leak mitigation linux does not have), so only
          ;    the callee-saved file survives the kernel -- and it is about to be
-         ;    overwritten anyway. rbx restores LAST, off itself.
+         ;    overwritten anyway. rbx restores last, off itself.
          (label siglongjmp)
          (mov r4 r5)                 ; rbp <- val
          (mov r3 r6)                 ; rbx <- buf
@@ -159,9 +159,9 @@
          (label lj-live)
          (jmpr r1)
 
-         ; -- __ai_sigret: the restorer a kernel sigaction wants under SA_RESTORER.
+         ; -- __ai_sigret: the restorer a kernel sigaction wants under sa_restorer.
          ;    linux's number: only linux's sigaction installs it -- freebsd has no
-         ;    SA_RESTORER, a handler there returns on the kernel's own trampoline.
+         ;    sa_restorer, a handler there returns on the kernel's own trampoline.
          (label __ai_sigret)
          (li r0 15)                  ; rt_sigreturn
          (sys)
@@ -201,7 +201,7 @@
          (sys))
 
          (id? arch 'arm64)
-         ; ⚠ ONE EXPRESSION: the written leaves ++ the GENERATED netbsd table.
+         ; one expression: the written leaves ++ the generated netbsd table.
          ; the aarch64 lane: same four leaves on the asm-generic table. registers are
          ; holo's arm64 file, rN = xN one-to-one (plus fp/lr/sp by name). the jmp_buf
          ; inside the same 25-long buffer: [0..9] x19..x28, [10] fp, [11] sp, [12] lr
@@ -211,17 +211,17 @@
          ; register but x0 across svc, so buf/val stage in x9/x10 and ride through.
          ; __ai_sigret stays laid (rt_sigreturn 139) though aarch64's sigaction never
          ; points at it -- the kernel supplies its own vdso trampoline (nolibc gates
-         ; SA_RESTORER off); the symbol keeps the two sys.o surfaces identical.
+         ; sa_restorer off); the symbol keeps the two sys.o surfaces identical.
          ('(
          ; -- __ai_sys: args x0..x6 (n,a..f) -> the kernel's x8=nr, x0..x5.
          ;    x8 drains first, then each mov reads the slot ahead of it. the tail
-         ;    is OS-BLIND, as x64's is: the BSDs answer an error by SETTING THE
-         ;    CARRY with a positive errno in x0, and linux preserves NZCV across
+         ;    is OS-BLIND, as x64's is: the BSDs answer an error by setting the
+         ;    carry with a positive errno in x0, and linux preserves nzcv across
          ;    svc (it rides SPSR through the eret), so a carry going in clear can
-         ;    only have been raised by a BSD. ⚠ clearing it takes a BORROW --
-         ;    aarch64's cmp is subs, and subtracting 0 leaves C SET.
+         ;    only have been raised by a BSD. clearing it takes a borrow --
+         ;    aarch64's cmp is subs, and subtracting 0 leaves C set.
          (label __ai_sys)
-         (la r9 __ai_osv)            ; netbsd wants the number in the INSTRUCTION
+         (la r9 __ai_osv)            ; netbsd wants the number in the instruction
          (ld r9 r9 0)
          (cmp r9 3)
          (br eq sys-nb)
@@ -232,7 +232,7 @@
          (mov r3 r4)                 ; x3 <- d
          (mov r4 r5)                 ; x4 <- e
          (mov r5 r6)                 ; x5 <- f
-         (li r9 0)                   ; 0 - 1 borrows, so C goes CLEAR
+         (li r9 0)                   ; 0 - 1 borrows, so C goes clear
          (cmp r9 1)
          (sys)
          (br ae sys-err)             ; `ae' IS carry-set on this file: a BSD error
@@ -242,10 +242,10 @@
          (lea r0 r0 -4096)           ; -(errno+4096): parked for __ai_call
          (ret)
 
-         ; -- the netbsd lane: the same shuffle, then a BRANCH INTO the stub for
+         ; -- the netbsd lane: the same shuffle, then a branch into the stub for
          ;    this number (each is `svc #n; ret'). callr parks the return in lr,
-         ;    so the stub's ret comes back HERE and the carry answer is read the
-         ;    same way the register lanes read it. Out of range refuses ENOSYS
+         ;    so the stub's ret comes back here and the carry answer is read the
+         ;    same way the register lanes read it. Out of range refuses enosys
          ;    rather than jumping past the table.
          (label sys-nb)
          (mov r10 r0)                ; x10 <- n, before the shuffle drains x0
@@ -272,7 +272,7 @@
          (lea r0 r0 -4096)
          (ret)
          (label sysnb-nosys)
-         (li r0 -38)                 ; -ENOSYS, canonically
+         (li r0 -38)                 ; -enosys, canonically
          (ret)
 
          ; -- __ai_sys7(n,a..g): the wide door netbsd's classic pads want. On
@@ -378,12 +378,12 @@
          (li r0 0)
          (ret)
 
-         ; -- siglongjmp(buf, val): the mask FIRST (the fault barrier jumps out
+         ; -- siglongjmp(buf, val): the mask first (the fault barrier jumps out
          ;    of a signal handler), then the file, then ret through the saved lr.
-         ; ⚠ buf and val ride x19/x20, NOT the scratch file: freebsd's syscall exit
-         ;    ZEROES the caller-saved registers (a leak mitigation linux has not),
+         ; buf and val ride x19/x20, not the scratch file: freebsd's syscall exit
+         ;    zeroes the caller-saved registers (a leak mitigation linux has not),
          ;    so only the callee-saved half survives the kernel -- and that half is
-         ;    about to be overwritten from the buffer anyway. x19 restores LAST,
+         ;    about to be overwritten from the buffer anyway. x19 restores last,
          ;    off itself, x20 the line before it.
          (label siglongjmp)
          (mov r19 r0)                ; x19 <- buf
@@ -444,24 +444,24 @@
          (li r8 139)                 ; rt_sigreturn
          (sys)
 
-         ; -- the netbsd leaves. __ai_nb_sigtramp is READ OFF THE BOX'S OWN LIBC
+         ; -- the netbsd leaves. __ai_nb_sigtramp is read off the box's own libc
          ;    (nm + objdump: `mov x0, x28; svc #0x134'): the kernel calls the
-         ;    handler directly and leaves the ucontext in X28 -- aarch64's r15 --
-         ;    and setcontext is the way back. A fall-through exits loudly.
+         ;    handler directly and leaves the ucontext in x28 -- aarch64's r15 --
+         ;    and setcontext is the way back. a fall-through exits loudly.
          (label __ai_nb_sigtramp)
          (mov r0 r28)
          (svcn 308)                  ; setcontext
          (li r0 1)
          (svcn 1)                    ; exit, never reached
 
-         ; -- the OS PROBE's two doors, asked before __ai_osv is known and so in
-         ;    a form two kernels can answer at once: x8 AND the immediate carry
+         ; -- the OS probe's two doors, asked before __ai_osv is known and so in
+         ;    a form two kernels can answer at once: x8 and the immediate carry
          ;    the same number, linux ignores the immediate and runs x8, netbsd
          ;    reads the immediate. `20' is getpid on netbsd (positive) and
          ;    epoll_create1 on linux/arm64 (-EINVAL, negative) -- the
          ;    discriminator os.c wants -- and 202 is __sysctl, which parts netbsd
          ;    from any other BSD arriving on this door later.
-         ; ⚠ freebsd may never hear either: it signals SIGILL/ILL_ILLOPN for any
+         ; freebsd may never hear either: it signals sigill/ill_illopn for any
          ;    svc immediate but zero. It is out before this runs -- crt0 knows it
          ;    by the entry protocol and answers 2 without asking anyone.
          (label __ai_nbp20)
@@ -482,7 +482,7 @@
          ; holo's riscv file: r0..r7 = a0..a7, r8/r9 = t0/t1, fp = s0,
          ; r15/r13/r14 = s1/s2/s3, r19..r26 = s4..s11, lr = ra. the jmp_buf
          ; inside the 25-long buffer: [0] ra (the return pc), [1] sp,
-         ; [2..13] s0..s11, [14] the signal mask. NO fp slots: the backend's
+         ; [2..13] s0..s11, [14] the signal mask. no fp slots: the backend's
          ; fp file is all caller-saved (fa/ft; the fs bank is unmapped), so no
          ; mooncc-compiled frame can hold a live double in one across a call.
          '(
@@ -525,7 +525,7 @@
          (li r0 0)                   ; the first arrival answers 0
          (ret)
 
-         ; -- siglongjmp(buf, val): the mask FIRST (the fault barrier jumps out
+         ; -- siglongjmp(buf, val): the mask first (the fault barrier jumps out
          ;    of a signal handler), then the file, then ret through the saved ra.
          (label siglongjmp)
          (mov r8 r0)                 ; t0 <- buf
@@ -562,7 +562,7 @@
          (label __ai_sigret)
          (li r7 139)                 ; rt_sigreturn
          (sys)))
-       ; what each lane EXPORTS, and the three differ: the wide door rides wherever
+       ; what each lane exports, and the three differ: the wide door rides wherever
        ; a BSD does (x64 through the stack, arm64 through x6), and riscv exports
        ; neither it nor the netbsd pair -- nothing has laid that tail, which is
        ; the whole of what impl.h's AiOsTranslate says to the C.

@@ -1,9 +1,9 @@
-; crew/moon/floor.l -- THE C TYPE FLOOR: the laws that are neither syntax nor codegen,
+; crew/moon/floor.l -- the C type floor: the laws that are neither syntax nor codegen,
 ; spelled once and read from both sides. pure over the shared type vocabulary
 ; ('char 'short 'int 'long .. | ('ptr t) | ('arr t n) | ('struct tag) | ('bitfield ty off w)):
-; the machine WORD and the struct-tag table arrive as PARAMETERS, which is the whole point --
-; parse threads them off ps, gen off g, and a front that is NEITHER stands on this file alone.
-; ⚠ nothing here may name a token, a parse state, a register or a target: the moment it does,
+; the machine WORD and the struct-tag table arrive as parameters, which is the whole point --
+; parse threads them off ps, gen off g, and a front that is neither stands on this file alone.
+; nothing here may name a token, a parse state, a register or a target: the moment it does,
 ; a second front has to drag cparse in to size a struct.
 (module 'moon
 (:
@@ -12,14 +12,14 @@
    (arr? ('arr . _)) 1
    (fn? ('fn . _)) 1                     ; ('fn ret?) -- a function; decays to its address
    (stru? ('struct . _)) 1
-   (bitf? ('bitfield . _)) 1             ; (bitfield uty bitoff width); its lvalue is a UNIT address
+   (bitf? ('bitfield . _)) 1             ; (bitfield uty bitoff width); its lvalue is a unit address
    (cplxty? ty) (stru? ty && member? <>ty '("__cplx_double" "__cplx_float"))   ; a seeded complex
 
-   ; -- sizes and alignment. w is the machine word in BYTES (4 on the 32-bit thumb ABI, 8
+   ; -- sizes and alignment. w is the machine word in bytes (4 on the 32-bit thumb ABI, 8
    ; otherwise), stag the tag table: tag -> (fields size align).
-   ; ⚠ ONE body on purpose: parse BAKES member offsets into stag at playout and gen TRUSTS
-   ; them, so a divergence mislays every pointer-bearing struct SILENTLY.
-   ; ⚠ the widths spell their members out rather than reaching for gen's `llt?`/`d128?` -- those
+   ; one body on purpose: parse bakes member offsets into stag at playout and gen trusts
+   ; them, so a divergence mislays every pointer-bearing struct silently.
+   ; the widths spell their members out rather than reaching for gen's `llt?`/`d128?` -- those
    ; two name a register pair and a protocol, which is gen's business and no law of C. that is
    ; the admission rule here: a name earns the floor by being about C, not about a machine.
    (tysz w stag ty)
@@ -30,7 +30,7 @@
        (ty @ ('char || 'uchar || 'bool) 1
              ('short || 'ushort) 2
              ('int || 'uint || 'float) 4
-             ('llong || 'ullong || 'double) 8  ; 8-byte on EVERY target (t32's word is 4)
+             ('llong || 'ullong || 'double) 8  ; 8-byte on every target (t32's word is 4)
              ('i128 || 'u128) 16
              w))
    (tyalign w stag ty)
@@ -41,10 +41,10 @@
        (tysz w stag ty))
    (aup n a) ((n + (a - 1)) & -a)     ; round n up to alignment a
 
-   ; -- the typing door: C's promotion and conversion law spelled ONCE -- integer promotions
+   ; -- the typing door: C's promotion and conversion law spelled once -- integer promotions
    ; (C11 6.3.1.1) and the usual arithmetic conversions (6.3.1.8). parse's arithmetic lanes
-   ; read it, gen's cmpu (compare/divide signedness) CONSUMES it. w64 is the one seam: whether
-   ; long is 8 bytes -- on ILP32 a long cannot hold every uint, so long meets uint at ULONG
+   ; read it, gen's cmpu (compare/divide signedness) consumes it. w64 is the one seam: whether
+   ; long is 8 bytes -- on ilp32 a long cannot hold every uint, so long meets uint at ulong
    ; where LP64 answers long.
    (parith? ty) (? (bitf? ty) 1
                    (member? ty '(bool char uchar short ushort int uint long ulong
@@ -57,7 +57,7 @@
                  (member? ty '(bool char uchar short ushort)) 'int
                  ty)
    (puac w64 ta tb)
-    ; ⚠ EITHER operand decides, so this reads both and cannot be an @ over ta alone
+    ; either operand decides, so this reads both and cannot be an @ over ta alone
     (? (ta = 'double || tb = 'double) 'double
        (ta = 'float || tb = 'float) 'float
      (: a (pprom ta) b (pprom tb)

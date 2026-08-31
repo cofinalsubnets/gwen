@@ -5,11 +5,11 @@
 ; proves the two answer the same bytes. this asks the other question: what does
 ; the readable one cost?
 ;
-; ⚠ THE ANSWER IS THE BINARY'S, NOT THE LANGUAGE'S. love ships mooncc-built, and
+; the answer is the binary's, not the language's. love ships mooncc-built, and
 ; mooncc is weakest at exactly the shape both ciphers lean on -- an indexed loop
-; over an array. run this again under the clang binary the STATIC lane leaves in
+; over an array. run this again under the clang binary the static lane leaves in
 ; out/host-musl/ and the C chacha moves ~25x, the love chacha ~2x, while a scalar
-; VM loop moves the catalogued 1.3x. a ratio off ONE binary is a ratio about that
+; VM loop moves the catalogued 1.3x. a ratio off one binary is a ratio about that
 ; binary, and the chacha ratio is the one that moves most.
 ;
 ; not a gate: it prints numbers, it asserts nothing. run it by hand --
@@ -22,7 +22,7 @@
    non (bytes 12 (\ i (? (i = 7) 74 0)))
    msg (bytes size (\ i (& ((i * 7) + 11) 255)))
 
-   ; fire f `n` times and answer the nanoseconds. ⚠ (f) at zero operands is f
+   ; fire f `n` times and answer the nanoseconds. (f) at zero operands is f
    ; itself, unrun -- the unit is the operand, and it is () rather than 0.
    (rep n f) (? (n < 1) 0 (: _ (f ()) (rep (n - 1) f)))
    (ns n f) (: t0 (nclock 0) _ (rep n f) (nclock t0))

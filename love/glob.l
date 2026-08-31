@@ -1,12 +1,12 @@
-; glob -- fnmatch, pure love and no filesystem. the PATTERN law only: pathname
+; glob -- fnmatch, pure love and no filesystem. the pattern law only: pathname
 ; expansion (readdir, the dotfile rule at the directory scan) stays in crew/lush/glob.l,
 ; where the substrate belongs. this half is a predicate over two strings, and more than
 ; the shell asks it -- lush's case patterns, kore's find -name, the sb ignore law, the
-; selfpack walk. ⚠ selfpack runs on LOVE0, which carries no lush: that is why this is a
+; selfpack walk. selfpack runs on love0, which carries no lush: that is why this is a
 ; love/ module and not a crew one.
 ;
 ; patterns travel as (text . mask) -- the mask a parallel string of '1'/'0' bytes, '1'
-; where the char came in UNQUOTED (glob-live), '0' where a quote shielded it ('*' matches
+; where the char came in unquoted (glob-live), '0' where a quote shielded it ('*' matches
 ; a literal star) -- absence-of-specialness carried out of band, the quoting law made
 ; byte-addressable. a caller with no quoting to express asks `match`, which is all-live.
 ;   (fmatch pat mask s) -> 1 | 0     * ? [a-z] [!..], quoted chars literal
@@ -34,7 +34,7 @@
                 (fnd (k + 3) 0 (hit || b <= s j && s j <= p (k + 2)))
                (fnd (k + 1) 0 (hit || b = s j)))))
            r (fnd st 1 0)
-           ; ⚠ presence is `two?`, never truth. a class that MISSES answers
+           ; presence is `two?`, never truth. a class that misses answers
            ; (0 . past), and net drops an improper tail, so a falsy r would read
            ; as "no class here" -- which negation then never gets to invert.
            (two? r ? ((neg ? !<r <r) . >r)))

@@ -4,40 +4,40 @@
 ;
 ;   lapiz  reads each page into the AST and shows it as html      (crew/lapiz/lapiz.l)
 ;   cook   decides which pages are stale and runs only those      (crew/cook/cook.l)
-;   papel  is what is left: the SITE -- titles, anchors, contents, cross-links, the page
+;   papel  is what is left: the site -- titles, anchors, contents, cross-links, the page
 ;          template -- the things that are true of a page only because of the other pages.
 ;
-; that split is the whole design. papel declares one cook RECIPE per page (out/site/x.html
+; that split is the whole design. papel declares one cook recipe per page (out/site/x.html
 ; from doc/x.md) and hands the lot to cook, so an incremental site build is not a feature
 ; papel implements -- it is cook's ordinary job, arriving for free. and papel never parses
-; markdown or emits a paragraph: it asks lapiz. what it does own is the SITE-LEVEL reading
+; markdown or emits a paragraph: it asks lapiz. what it does own is the site-level reading
 ; of the AST, and each piece of that is a small walk over the middle:
 ;
-;   TITLE     the first head-1, else the meta `title`, else the file name.
-;   ANCHORS   every head gets a stable id (`slug`, deduped), so a heading is linkable.
-;   CONTENTS  the same heads become the page's toc -- one parse, two uses.
-;   BLURB     the first paragraph, clipped, becomes the page's line on the index.
-;   RELINK    a `[x](hatch.md)` link is rewritten to hatch.html -- but ONLY when that page
+;   title     the first head-1, else the meta `title`, else the file name.
+;   anchors   every head gets a stable id (`slug`, deduped), so a heading is linkable.
+;   contents  the same heads become the page's toc -- one parse, two uses.
+;   blurb     the first paragraph, clipped, becomes the page's line on the index.
+;   relink    a `[x](hatch.md)` link is rewritten to hatch.html -- but only when that page
 ;             is in the site. a link out of the site is left exactly as written, so papel
 ;             cannot invent a dead link that markdown did not already have.
 ;
 ; the index page is built the same way as any other: papel makes an AST (a head and a
 ; deflist of link/blurb pairs) and hands it to lapiz to show. there is no html in papel
-; except the page TEMPLATE and one line -- the anchored heading -- which is the single
+; except the page template and one line -- the anchored heading -- which is the single
 ; node papel renders itself, because lapiz has nowhere to put an id. everything else is
 ; `htb`, lapiz's own block shower.
 ;
-; usage:  papel [-o OUT] [-t TITLE] [SRC ..]        (with the `papel` script on PATH)
-;     or: love -l crew/papel/papel.l [-o OUT] [SRC ..]
-; SRC is a .md file or a directory of them; with none, this tree's own docs (README.md
-; and doc/). OUT defaults to out/site. papel writes OUT/<name>.html per source, OUT/
-; papel.css, and OUT/index.html -- the last only when no source is itself an index.md.
+; usage:  papel [-o out] [-t title] [src ..]        (with the `papel` script on PATH)
+;     or: love -l crew/papel/papel.l [-o out] [src ..]
+; src is a .md file or a directory of them; with none, this tree's own docs (README.md
+; and doc/). out defaults to out/site. papel writes out/<name>.html per source, out/
+; papel.css, and out/index.html -- the last only when no source is itself an index.md.
 
-; NO BRACKETS HERE: the runtime supplies the layer (a module consumer says
+; no brackets here: the runtime supplies the layer (a module consumer says
 ; (use 'papel); a -l load rides the session layer, where the seat reads bare).
 
 ; --- the modules papel stands on ---------------------------------------------------------
-; papel loads its siblings ITSELF rather than being handed them: two tool files cannot both
+; papel loads its siblings itself rather than being handed them: two tool files cannot both
 ; be -l'd, since each one's seat would fire on the other's command line, so the `papel`
 ; script -l's this file alone. the crew root comes off our own seat word, which means an
 ; installed script pointing at the source tree finds its siblings wherever that tree is --
@@ -54,7 +54,7 @@
    (findme (a . u)) ; the word that named this file, if any
     (bn a @ ("papel" || "papel.l") a (findme u))
    (up p) (: n #p (0 < n ? (dirof (snip p 0 (n - 1))) p))   ; "a/b/" -> "a/"
-   ; ..and follow a SYMLINK to it. `papel` installs the way cook does, as a link on PATH
+   ; ..and follow a symlink to it. `papel` installs the way cook does, as a link on PATH
    ; pointing at this source file, so the name we were invoked by lives in ~/.local/bin
    ; and the siblings do not. readlink is what turns the link back into the source tree.
    root (: me (findme >cmdline)
@@ -63,7 +63,7 @@
    ; want: the sibling module, wherever this papel lives -- beside this file in
    ; the source tree (root came off our own seat), else by NAME off the registry
    ; an installed love baked. the tree lane probes first, so a tree papel running
-   ; under an installed love reads its OWN siblings, never the baked older copies.
+   ; under an installed love reads its own siblings, never the baked older copies.
    (want nm f) (? (from nm) 1
                   (: q (open (root + f) "r")
                      (? q (: _ (close q) _ (use (root + f)) 1)
@@ -72,9 +72,9 @@
    _ (want 'cook "cook/cook.l"))
 
 ; --- the two seams -------------------------------------------------------------------
-; from lapiz, the DOCUMENT surface (read a page, show a page) plus the three pieces the
+; from lapiz, the document surface (read a page, show a page) plus the three pieces the
 ; template needs to render one node itself: `hq` (escape), `hti` (an inl), `htb` (a block).
-; papel renders exactly ONE node -- an anchored head -- and defers every other to `htb`.
+; papel renders exactly one node -- an anchored head -- and defers every other to `htb`.
 ; from cook, the two verbs a build is made of.
 (: L (from 'lapiz)
    mdread (L 'mdread)  htshow (L 'htshow)  htb (L 'htb)  hti (L 'hti)  hq (L 'hq)  mget (L 'mget)
@@ -94,12 +94,12 @@
                                   (g (i + 1) (acc * 10 + (s i - 48))) acc)) 0 0)
    (slurpf f)    (: q (open f "r") (? q (slurp q) ""))
    (spitf f s)   (: q (open f "w") _ (? q (: _ (say q s) (close q)) 0) (? q 1 0))
-   ; a directory answers a list from readdir, a file answers nothing -- that IS the test,
+   ; a directory answers a list from readdir, a file answers nothing -- that is the test,
    ; and it needs no mode bits (love has no bitwise and to pick S_IFDIR out of stat's mode).
    (dir? p)      (two? (readdir p))
    ; mkdir every prefix, ignoring an already-there (mkdir answers an errno, and we do not
    ; care which -- a real failure surfaces at the first open for writing). it walks the
-   ; path rather than splitting it, so a LEADING SLASH survives: splitting on / and
+   ; path rather than splitting it, so a leading slash survives: splitting on / and
    ; rejoining quietly turns /tmp/x into tmp/x, and the whole build then writes nowhere.
    (mkdirp p)    (: n #p
                     (go i) (? (i < n) (: _ (? ((0 < i) && (p i = 47)) (mkdir (snip p 0 i) 493) 0)
@@ -138,7 +138,7 @@
    (head? b)  (id? <b 'head)
    (pmeta d)  (: m (filter (\ b (id? <b 'meta)) d) (? (two? m) (<>(<m)) ()))
    (pbody d)  (filter (\ b !(id? <b 'meta)) d)
-   ; the heads, each with its deduped slug: ((level slug label) ..). ONE parse feeds both
+   ; the heads, each with its deduped slug: ((level slug label) ..). one parse feeds both
    ; the anchors in the body and the toc beside it, so the two cannot drift apart.
    (pheads d) ((: (g l seen acc)
                   (? !(two? l) (rev acc)
@@ -188,7 +188,7 @@
    (relink f d) (map (b \ rlb f b) d))
 
 ; --- showing: lapiz shows every block but one ------------------------------------------
-; the anchored head is the ONE node papel emits itself, because lapiz's html has nowhere
+; the anchored head is the one node papel emits itself, because lapiz's html has nowhere
 ; to put an id and inventing a node for it would push a site's concern into the lens. the
 ; heads arrive already slugged, in document order, so the walk just consumes them in step.
 (: (hhead lev sl inl) (: h ("h" + show lev)
@@ -286,24 +286,24 @@ table{border-collapse:collapse}
                 (ends? p ".md") [p])
    (sources conf) (foldl (+) () (map mdsof (peep conf 'src ())))
    (conf0 _) {'out "out/site" 'title "papel" 'src () 'self "crew/papel/papel.l"}
-   ; the BUILD is a declaration, not a loop: one recipe per page, one for the stylesheet,
+   ; the build is a declaration, not a loop: one recipe per page, one for the stylesheet,
    ; one for the index, and a phony `site` over the lot -- then cook decides what is stale.
-   ; every output also depends on THIS FILE, since the template and the stylesheet live in
+   ; every output also depends on this file, since the template and the stylesheet live in
    ; it; edit either and the whole site is correctly out of date. (only when the file is
    ; really there -- cook quits on an ingredient that exists neither on disk nor as a rule.)
-   ; the DEV-SERVER gate. before calling `build` at all, take a cheap fingerprint of
+   ; the dev-server gate. before calling `build` at all, take a cheap fingerprint of
    ; the sources -- one `stat` nif call each -- and only call it when that changed:
    ; a no-op `build` still walks the whole recipe graph, and a page should serve in
    ; the sub-ms its serving actually costs. answers what `build` answers, 0 when
    ; nothing did. (cook's date is the same stat nif now; the fingerprint keeps the
    ; per-request path down to the sources alone.)
    ;
-   ; comparing against a REMEMBERED fingerprint rather than against the outputs is what
+   ; comparing against a remembered fingerprint rather than against the outputs is what
    ; makes this safe to be coarse. the nif's mtime is milliseconds, so an edit landing in
    ; the same millisecond as our reading could be missed once -- but the very next
    ; request compares against that same reading and sees it. and `build` itself is
    ; untouched, so the decision that actually matters stays cook's, at cook's resolution.
-   ; mtime AND size, because an edit can preserve either one alone.
+   ; mtime and size, because an edit can preserve either one alone.
    (fprint conf) (foldl (+) 0 (map (\ s (: st (stat s) (two? st ? (<>st + <st) 0)))
                                    (sources conf)))
    (refresh conf box) (: f (fprint conf)
@@ -326,7 +326,7 @@ table{border-collapse:collapse}
       own? (peep known "index.md" 0)                 ; a real index.md wins; papel adds none
       _ (? own? 0 (recipe idx (srcs + dep) [(_ \ windex conf srcs idx)]))
       _ (recipe 'site (dsts + [sheet] + (? own? () [idx])) ())
-      ; cook's own `cook` prints its verdict; papel wants the NUMBER, so it takes the
+      ; cook's own `cook` prints its verdict; papel wants the number, so it takes the
       ; quiet entry. $ of a map is its key count, and cook marks an item shipped only when
       ; the recipe really advanced its mtime -- so this is exactly "files written".
       n $(prepped 'site)
@@ -348,7 +348,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
                 (quit 0))
    (need h r) (? (two? r) 0 (: _ (say err ("papel: " + h + " needs an argument")) _ (put err 10) (quit 2)))
    (papel-main as)
-   (: _ (? (lit? (from 'papel)) (use 'papel) 0)   ; splice my REGISTERED self if I am one (cook-main's
+   (: _ (? (lit? (from 'papel)) (use 'papel) 0)   ; splice my registered self if I am one (cook-main's
                                                   ; guard); on a -l load my names already walk
       c (conf0 ())
       (loop ws) (? !(two? ws) 0
@@ -366,7 +366,7 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
       ; stays one -- papel does not know what a socket is, and kiosko does not know what
       ; markdown is. the whole integration is a directory, a port, and a thunk.
       ;
-      ; the thunk is what makes it a DEV SERVER rather than a viewer: kiosko runs it before
+      ; the thunk is what makes it a dev server rather than a viewer: kiosko runs it before
       ; each client, and it is `refresh` -- a fingerprint of the sources, and `build` only
       ; when that moved. so an unchanged page load costs nothing and an edited one
       ; re-renders exactly what changed, between hitting save and hitting reload. quiet,
@@ -385,8 +385,8 @@ usage: papel [-o OUT] [-t TITLE] [SRC ..]
 
    papel-main _)
 
-; the SEAT (cook's shape): fire papel-main iff this file -- or the installed `papel`
+; the seat (cook's shape): fire papel-main iff this file -- or the installed `papel`
 ; script -- sits in the program seat of the real command line, on the args after it.
-; body-having, so the machinery leaks nothing; papel-main reads BARE -- whichever
+; body-having, so the machinery leaks nothing; papel-main reads bare -- whichever
 ; layer holds this file's binds is still the head here.
 (: s (from 'verbs 'fire ["papel" "papel.l"]) (two? s ? (papel-main >s)))

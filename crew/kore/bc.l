@@ -1,11 +1,11 @@
 ; crew/kore/bc.l -- bc: the arbitrary-precision calculator language. a toolbox
 ; file, no seat -- kore is its door, and it stands on the u-floor alone.
 ;
-;   bc [-l] [-q] [FILE..]        the files in turn, then stdin, as POSIX says
+;   bc [-l] [-q] [file..]        the files in turn, then stdin, as POSIX says
 ;
-; A NUMBER IS [v s]: the exact integer v over 10^s. every digit is love's own
+; a number is [v s]: the exact integer v over 10^s. every digit is love's own
 ; bigint, so nothing rounds and nothing overflows. the scale rules are POSIX's,
-; and every one of them TRUNCATES -- which is why love's // (toward zero, never
+; and every one of them truncates -- which is why love's // (toward zero, never
 ; floored) is the divide this file wants:
 ;   + -  max(sa, sb)                  *  min(sa + sb, max(scale, sa, sb))
 ;   /    scale                        %  max(scale + sb, sa)
@@ -15,11 +15,11 @@
 ; last (and its `.` spelling), && || !, and the # comment.
 ;
 ; out of dialect, deliberately -- each is a rung, not an oversight:
-; ⚠ read(). the program and read()'s answer come off ONE stdin, and this reads a
+; read(). the program and read()'s answer come off one stdin, and this reads a
 ;   whole item before it runs any of it.
-; ⚠ -s and -w. both only refuse or complain about what we already accept, and a
+; -s and -w. both only refuse or complain about what we already accept, and a
 ;   -w that warns about nothing is worse than no -w at all.
-; ⚠ quit is EXECUTED here. GNU's fires when the LEXER reaches it, so GNU leaves
+; quit is executed here. GNU's fires when the lexer reaches it, so GNU leaves
 ;   on `if (0) quit`; ours does not, and halt is the same statement either way.
 (module 'kore
 (:
@@ -71,7 +71,7 @@
        (: t (show v)
           (go x) (: y (// (x + (// v x)) 2) (? (y < x) (go y) x))
           (go (bn-p10 ((// #t 2) + 1)))))
-   ; ⚠ 0 and 1 answer THEMSELVES, scale and all -- GNU's own two short circuits,
+   ; 0 and 1 answer themselves, scale and all -- GNU's own two short circuits,
    ; and the reason `scale=5; sqrt(1)` is 1 where sqrt(4) is 2.00000
    (bn-sqrt sc a)
     (: _ (? (<a < 0) (bc-err "Square root of a negative number") 0)
@@ -100,7 +100,7 @@
        (go v ()))
    ; a base over 16 has no charm per digit, so each one is written as a
    ; zero-padded decimal with a space in front -- all but the first of a
-   ; FRACTION, which sits straight against the point
+   ; fraction, which sits straight against the point
    (bc-digs b ds lead)
     (: wide (16 < b)
        w (: t (show (b - 1)) #t)
@@ -126,7 +126,7 @@
              ((? (v < 0) "-" "") + ip + fp))))
 
    ; -- the output column -----------------------------------------------------
-   ; ⚠ EVERY byte bc prints goes through here and shares ONE count: 68 columns,
+   ; every byte bc prints goes through here and shares one count: 68 columns,
    ; then a backslash and a break. that is why a long string wraps exactly as a
    ; long number does, and why two numbers in one `print` wrap as a single run
    (bc-put st c)
@@ -142,9 +142,9 @@
    (bc-print st n) (: _ (pin st 'last n) (bc-say st (bc-show st n)))
 
    ; -- the complaints --------------------------------------------------------
-   ; ⚠ `?` SUMS what it is handed, so a signal or a node may not be asked for its
+   ; `?` sums what it is handed, so a signal or a node may not be asked for its
    ; presence with one -- ['ret v] carrying a negative v reads as false, and the
-   ; return is silently dropped. presence is a PATTERN here, everywhere
+   ; return is silently dropped. presence is a pattern here, everywhere
    (bc-nil? ()) 1
    (bc-there? v) !(bc-nil? v)
    (bc-err m) (scare 'bc-err m)
@@ -167,7 +167,7 @@
     (: (has t) (: m #t (k + m <= n && t = snip s k (k + m)))
        (try (w . u)) (? (has w) [w (k + #w)] (try u))
        (try bc-ops))
-   ; GNU's print escapes; a backslash before anything else DROPS both charms
+   ; GNU's print escapes; a backslash before anything else drops both charms
    (bc-esc c) (c @ 110 10  116 9  114 13  97 7  98 8  102 12  113 34  92 92  -1)
    (bc-strlit s n i)                           ; past the quote -> [text next]
     (: o (jug 0)
@@ -180,8 +180,8 @@
                            (go (k + 2)))
                        (: _ (put o c) (go (k + 1))))))
        (go i))
-   ; ⚠ A NUMERAL KEEPS ITS TEXT. its digits are worth what the ibase of the
-   ; moment says, and `ibase=16` is a STATEMENT -- so nothing may be converted
+   ; a numeral keeps its TEXT. its digits are worth what the ibase of the
+   ; moment says, and `ibase=16` is a statement -- so nothing may be converted
    ; before the statement ahead of it has run
    (bc-lex src)
     (: n #src
@@ -213,7 +213,7 @@
                  (bc-op-at src n k @ [w j] (go j (['op w] . acc))
                    (bc-syn ("unexpected character " + string c))))))
        (go 0 ()))
-   ; ⚠ a numeral is its own value when it is ONE figure -- `ibase=2; 9` is 9, not
+   ; a numeral is its own value when it is one figure -- `ibase=2; 9` is 9, not
    ; 1. every other numeral clamps a figure at or above the base to base-1
    (bc-numeral t ib)
     (: n #t
@@ -253,7 +253,7 @@
           (? (id? k 'num) [['num v] r]
              (id? k 'str) (bc-syn "a string is not an expression")
              (id? k 'name)
-              ; ⚠ `b[]` is the whole ARRAY, and only a call has any use for one --
+              ; `b[]` is the whole array, and only a call has any use for one --
               ; a subscript that is not there is not an empty one
               (? (bc-op? r "[")
                   (? (bc-op? >r "]") [['aref v] >>r]
@@ -264,7 +264,7 @@
                     [['call v es] (bc-want r2 ")" "expected ) after the arguments")] ())
                  [['var v] r])
              (id? k 'kw)
-              ; ⚠ `scale` is BOTH: the register, and the function when a ( follows.
+              ; `scale` is both: the register, and the function when a ( follows.
               ; the register arm has to come second or scale(x) never reads
               (? ((member? v '("length" "sqrt")) || ((v = "scale") && bc-op? r "("))
                   (: r2 (bc-want r "(" ("expected ( after " + v))
@@ -289,7 +289,7 @@
          [['incr 0 (? (<><r = "++") 1 -1) e] >r]
          [e r])
       ())
-   ; ⚠ the unary minus binds TIGHTER than the power, which is why -2^2 is 4 and
+   ; the unary minus binds tighter than the power, which is why -2^2 is 4 and
    ; not -4; the exponent takes a whole neg, which is what makes 2^-2 read
    (bc-neg ts)
     (? (bc-op? ts "-") (bc-neg >ts @ [e r] [['neg e] r] ())
@@ -448,7 +448,7 @@
           (nm == 'obase)
            (pin st 'obase (? (k < 2) (: _ (bc-warn "obase too small, set to 2") 2) k))
           (pin st 'last v)))
-   ; a PLACE is the lvalue with its subscript already counted, so `a[i++] = 1`
+   ; a place is the lvalue with its subscript already counted, so `a[i++] = 1`
    ; moves i once
    (bc-place st lv)
     (<lv @ 'var ['v <>lv]
@@ -476,7 +476,7 @@
              'reg (bc-getreg st <>nd)
              'neg (: v (bc-ev st <>nd) [(0 - <v) <>v])
              'not (bc-bool !(bc-true? (bc-ev st <>nd)))
-             ; bc's && and || are SHORT, and love's are the same two operators --
+             ; bc's && and || are short, and love's are the same two operators --
              ; the right side of a settled one never runs, which a function with a
              ; side effect in it can tell
              'and (bc-bool (bc-true? (bc-ev st <>nd) && bc-true? (bc-ev st <>>nd)))
@@ -516,9 +516,9 @@
              'call (bc-call st <>nd <>>nd)
              'aref (bc-err "an array has no value of its own")
              (bc-err "internal: an expression shape with no evaluator")))
-   ; ⚠ bc's autos are DYNAMICALLY scoped: the old values are stacked on entry and
+   ; bc's autos are dynamically scoped: the old values are stacked on entry and
    ; put back on the way out, which is the whole of what `auto` means. an array
-   ; goes in BY VALUE, so a callee's a[] is a copy and the caller's is untouched
+   ; goes in by VALUE, so a callee's a[] is a copy and the caller's is untouched
    (bc-copy t) (: b (tablet 0) _ (map (\ k (pin b k (peep t k bn-zero))) (keys t)) b)
    (bc-save st ns)
     (map (\ p (? (<p == 's) ['s <>p (peep (bc-vars st) <>p bn-zero)]
@@ -536,7 +536,7 @@
        ps <fn au <>fn body <>>fn
        _ (? (#ps = #args) 0
             (bc-err ("Function " + nm + " called with the wrong count of arguments")))
-       ; the operands are counted in the CALLER's frame, before anything is stacked
+       ; the operands are counted in the caller's frame, before anything is stacked
        (val p a) (? (<p == 'a)
                     (: _ (? (<a == 'aref) 0 (bc-err "an array parameter wants an array"))
                        (bc-copy (bc-arr st <>a)))
@@ -547,7 +547,7 @@
        (put1 m u) (? !(two? m) 0 (: _ (bc-bind st <m <u) (put1 >m >u)))
        _ (put1 ps vs)
        _ (map (\ p (bc-bind st p (? (<p == 'a) (tablet 0) bn-zero))) au)
-       ; the frame comes back even when the body DIES: nothing unwinds through a
+       ; the frame comes back even when the body dies: nothing unwinds through a
        ; scare here, so the restore is laid on the error path by hand -- without it
        ; a divide by zero leaves the callee's parameters standing as globals
        r (trap (\ _ (bc-runs st body)) ()
@@ -621,7 +621,7 @@
        (? (!(two? m0) || bc-eof? m0) ()
           (bc-kwd? m0 "define") (bc-define st m0)
           (bc-stmt m0 @ [s r] (: _ (bc-guard st (\ _ (bc-run st s))) r) ())))
-   ; a SYNTAX error stops this source where a runtime one does not: nothing past
+   ; a syntax error stops this source where a runtime one does not: nothing past
    ; the bad token has a meaning to walk on to
    (bc-source st src)
     (trap (\ _ (: ts (bc-lex src)
@@ -633,9 +633,9 @@
                     (: _ (flush out) _ (say err ("bc: " + b)) _ (put err 10)
                        _ (flush err) 0)
                     (scare a b))))
-   ; is the buffer still mid-item? the LEXER answers it: an unclosed brace, or a
+   ; is the buffer still mid-item? the lexer answers it: an unclosed brace, or a
    ; string or comment that ran off the end. this is what makes stdin a prompt
-   ; rather than a slurp. asked once per line, over the OPEN text only -- a closed
+   ; rather than a slurp. asked once per line, over the open text only -- a closed
    ; line costs one line, and only a define pays for its own length twice
    (bc-open? t)
     (: n #t
@@ -658,7 +658,7 @@
        (go ""))
 
    ; -- the math library, in bc's own language --------------------------------
-   ; ⚠ AGREEMENT WITH GNU STOPS AT SCALE 10. above it these are byte-identical over
+   ; agreement with GNU stops at scale 10. above it these are byte-identical over
    ; every argument swept; below it the two part on 29 of 735 sampled calls, each one
    ; a place where GNU's own series ran out of guard digits -- ours is the correctly
    ; truncated value every time, asked of GNU itself at scale 40. the gate takes the

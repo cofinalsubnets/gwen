@@ -1,14 +1,14 @@
 ; test/host/gz.l -- the laws of lib/gz.l and lib/tar.l, the .tar.gz written and read
-; in love. What is proved here is INTERNAL: crc32 against its published vector, both
+; in love. What is proved here is internal: crc32 against its published vector, both
 ; coders against each other over the shapes that break coders, and the ustar header
 ; field by field. The half that needs the outside world -- that GNU tar and GNU gzip
 ; agree with us, in both directions, over a real tree with a symlink and an odd mode --
 ; is test/gate/targz.sh, because it needs those two programs and this file needs
 ; nothing.
 ;
-; ⚠ the round-trip shapes are chosen, not arbitrary. EMPTY and ONE BYTE are where a
-; block coder's edges live; a long RUN is the overlapping copy (dist 1) that a bulk
-; move would get wrong; INCOMPRESSIBLE data is the lane where matches never fire; and
+; the round-trip shapes are chosen, not arbitrary. empty and one byte are where a
+; block coder's edges live; a long run is the overlapping copy (dist 1) that a bulk
+; move would get wrong; incompressible data is the lane where matches never fire; and
 ; text is the only one that looks like the happy path.
 (use 'gz)
 (use 'tar)
@@ -38,12 +38,12 @@
 (assert
  (gz-all gz-rt gz-shapes)
  (gz-all gz-crt gz-shapes)
- ; a run of one byte is the OVERLAPPING copy: the match source is still being
+ ; a run of one byte is the overlapping copy: the match source is still being
  ; written as it is read, so a decoder that moved the block at once would answer
  ; the first bytes repeated rather than the run.
  (: r (gz-inflate (gz-deflate gz-run) 0) (300 = (tally (<(>r)))))
  ; the container's trailer is the only thing that can catch a stream that inflates
- ; and is still wrong, so a corrupted body must be REFUSED, not returned.
+ ; and is still wrong, so a corrupted body must be refused, not returned.
  (: g (gz-zip gz-text "" 0)
     n (tally g)
     bad (gz-mk n (\ i (? (i = 20) (^ (g i) 255) (g i))))
@@ -55,9 +55,9 @@
  ((tally (gz-deflate gz-run)) < 20)
  ((tally (gz-deflate gz-text)) < (tally gz-text)))
 
-; --- ustar --- the header is a wire, so the laws are its offsets. A field written
+; --- ustar --- the header is a wire, so the laws are its offsets. a field written
 ; where the next one starts is the classic tar bug and it survives a round trip
-; through our own reader, which is why these are checked against the OFFSETS and
+; through our own reader, which is why these are checked against the offsets and
 ; not against what we read back.
 (: tz-e (tar-entry "dir/file.txt" 'file "hello")
    _ (pin tz-e 'mode 420) _ (pin tz-e 'mtime 1234)
@@ -67,16 +67,16 @@
  (100 = (tz-h 0))                               ; name starts at offset 0: 'd'
  ((tz-h 156) = 48)                              ; typeflag '0', a regular file
  ("ustar" = (tar-txt tz-h 257 6))               ; the magic, at 257
- ((tz-h 263) = 48) ((tz-h 264) = 48)            ; version "00", NOT NUL-ended
+ ((tz-h 263) = 48) ((tz-h 264) = 48)            ; version "00", not NUL-ended
  (420 = (tar-oct tz-h 100 8))                   ; mode
  (5 = (tar-oct tz-h 124 12))                    ; size
  (1234 = (tar-oct tz-h 136 12))                 ; mtime
- ; ⚠ a path of 12 characters is NOT split. The prefix exists for names past 100,
+ ; a path of 12 characters is not split. The prefix exists for names past 100,
  ; and reaching for it earlier would produce an archive every tar can still read
  ; but none writes -- so the empty prefix here is the law, not an omission.
  ("" = (tar-txt tz-h 345 155))
  ("dir/file.txt" = (tar-txt tz-h 0 100))
- ; the checksum covers the block with its OWN field read as spaces, which is the
+ ; the checksum covers the block with its own field read as spaces, which is the
  ; only way a field can live inside what it sums.
  ((tar-sum tz-h) = (tar-oct tz-h 148 8)))
 
@@ -97,7 +97,7 @@
  ("alpha\n" = (peep <tz-back 'body ()))
  (id? 'dir (peep <(>tz-back) 'kind ()))
  ("sub/b.txt" = (peep <(>(>tz-back)) 'nom ()))
- ; ⚠ ORDER IS THE ARCHIVE'S. a reader that answered entries reversed would satisfy
+ ; order is the archive's. a reader that answered entries reversed would satisfy
  ; every "is it in there" law and still extract a tree whose directories arrive
  ; after the files that need them.
  ("beta beta\n" = (peep <(>(>tz-back)) 'body ()))
@@ -107,7 +107,7 @@
 
 ; --- the name split --- ustar's 100-byte name with a 155-byte prefix, joined by a
 ; "/" that is not stored. The refusal at the end is the point: a path that fits
-; NEITHER field is refused rather than truncated, because a silently shortened path
+; neither field is refused rather than truncated, because a silently shortened path
 ; is a wrong archive that looks right until something extracts it.
 (: tz-long (: (go i a) (? (12 <= i) a (go (i + 1) (a + "0123456789/"))) (go 0 ""))
    tz-deep (tz-long + "leaf.txt"))

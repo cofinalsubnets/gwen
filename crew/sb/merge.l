@@ -1,16 +1,16 @@
 ; crew/sb/merge.l -- diff3: the three-way line merge svalbard falls to when two
-; patches write ONE path from a shared base. the base is free: a hunk records the
+; patches write one path from a shared base. the base is free: a hunk records the
 ; content hash it expected (its `old`), so the common ancestor is already in the
 ; store -- no ancestry search, just a blob read.
 ;
-; the shape: myers each side against the base, then read each script as one PART
-; PER SLOT, the slots ALTERNATING gap/line/gap/line../gap -- a line slot is what
+; the shape: myers each side against the base, then read each script as one part
+; per slot, the slots alternating gap/line/gap/line../gap -- a line slot is what
 ; that side puts where base line i stood, a gap slot what it inserts between two
 ; base lines. the alternation is what keeps edits apart: a substitution moves its
-; LINE slot only (the replacement rides with the del it answers), an insertion
-; moves a GAP slot only, so two disjoint edits never share a slot and never meet.
-; a slot where both sides produce the base's own content is STABLE; a maximal run
-; where either side differs is UNSTABLE, and the run resolves by comparison alone:
+; line slot only (the replacement rides with the del it answers), an insertion
+; moves a gap slot only, so two disjoint edits never share a slot and never meet.
+; a slot where both sides produce the base's own content is stable; a maximal run
+; where either side differs is unstable, and the run resolves by comparison alone:
 ;   ours = theirs   -> both made the same edit, take it (convergent)
 ;   ours = base     -> only theirs moved, take theirs
 ;   theirs = base   -> only ours moved, take ours
@@ -36,7 +36,7 @@
    (m3grab m a) (? (two? m && (<<m = 'add)) (m3grab >m (<><m . a)) [m (rev a)])
 
    ; a myers script -> the 2n+1 slots, gap line gap line .. gap. an 'add after a
-   ; KEEP is an insertion and lands in the pending gap; the 'adds after a DEL are
+   ; keep is an insertion and lands in the pending gap; the 'adds after a del are
    ; that line's replacement and land in its line slot.
    (m3parts sc)
     (: (go m gp acc)
@@ -75,7 +75,7 @@
              (tb = bb) (m3go <r <>r <>>r ol tl (ob . acc) nc)        ; only ours moved
              (m3go <r <>r <>>r ol tl (m3marks ob tb ol tl . acc) (nc + 1)))))
 
-   ; THE ENTRY: three texts + the two side labels -> (mergedtext nconflicts).
+   ; the entry: three texts + the two side labels -> (mergedtext nconflicts).
    ; nconflicts is 0 when the merge came out clean.
    (diff3 base ours theirs ol tl)
     (: b (lines base)

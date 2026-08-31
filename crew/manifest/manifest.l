@@ -2,12 +2,12 @@
 ;
 ; every cell is a love expression, read repl-style (wrapped in parens, so
 ; infix goes bare: `a1 * 2`). a cell that names other cells compiles as a
-; LAMBDA OVER ITS DEPENDENCIES -- b1 holding "a1 * 7" becomes (\ a1 (a1 * 7))
+; lambda over its dependencies -- b1 holding "a1 * 7" becomes (\ a1 (a1 * 7))
 ; applied to a1's worth -- computed on demand, memoized, a visiting set
 ; standing watch for cycles. an empty cell is (), the unit, so it rides
 ; through any arithmetic the way nothing should. a bare unknown name is its
 ; own spelling (labels for free); known globals stay free, so a cell may use
-; the whole language -- and a cell may HOLD a function: g1 = "(+ 2)" and
+; the whole language -- and a cell may hold a function: g1 = "(+ 2)" and
 ; h1 = "(g1 40)" is 42. everything is a function, now with a cursor.
 ;
 ; the sheet is a little book: slot 0 the sources (nom -> string), slot 1 the
@@ -35,14 +35,14 @@
              (: (digs i) (i >= t || (48 <= s i <= 57 ? (digs (+ i 1))))) 1)))
 
  ; --- the book of known names, laid once on first use: a name off this
- ; book and off the sheet is a LABEL and binds to its own spelling ---
+ ; book and off the sheet is a label and binds to its own spelling ---
  known {}
  (knowns _) (!known ?
                   (map (\ n (pin known n 1)) (names ()),
-                   ; the READER-EMITTED noms ride formulas but sit OFF the book (the egg mops
+                   ; the reader-emitted noms ride formulas but sit off the book (the egg mops
                    ; them): @(..) reads as (tuple ..), backtick as (list ..), the printer round-
                    ; trips spread/mono. off `known` they'd be collected as deps and the formula
-                   ; lambda would SHADOW the real constructor -- which only ever worked because
+                   ; lambda would shadow the real constructor -- which only ever worked because
                    ; feel's fold resolved the head shadow-blind at compile (the glaze compiles
                    ; the honest lexical surface and applied the dep's spelling instead).
                    map (\ n (pin known n 1)) '(tuple list spread mono)),
@@ -82,7 +82,7 @@
                          whirl                          ; a whirl dep taints (it would ride as the unit)
                          (foldl id lam vs)))))
  ; a visiting-hit bumps the whirl count; any cell whose evaluation window saw
- ; a bump answers whirl itself, so the cycle wears its face at EVERY cell on
+ ; a bump answers whirl itself, so the cycle wears its face at every cell on
  ; the loop (a bare whirl is a mint -- the unit -- and would otherwise ride
  ; through the arithmetic and let a circle quietly converge).
  (worth sh n) (: v (peep (sh 1) n none)
@@ -118,7 +118,7 @@
                           sh))))
 
  ; --- faces: how a worth looks in its 9 columns ---
- ; ..the guard is the WIDE case: n * " " takes |n|, so an over-long s would pad, not cut
+ ; ..the guard is the wide case: n * " " takes |n|, so an over-long s would pad, not cut
  (padl s w) (tally s < w ? ((w - tally s) * " " + s) (snip s 0 w))
  (padr s w) (tally s < w ? (s + (w - tally s) * " ") (snip s 0 w))
  (face v) (? (id? v whirl) "cycle!"

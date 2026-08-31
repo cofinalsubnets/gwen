@@ -1,17 +1,17 @@
-; as -- a REAL assembler front over holo: it reads standard GNU AT&T `.s` and emits the SAME
+; as -- a real assembler front over holo: it reads standard GNU at&T `.s` and emits the same
 ; byte/fixup item stream the neutral backend (crew/holo/amd64.l) produces, so crew/holo/obj.l lays the
 ; relocatable `.o` and crew/holo/link.l links it -- the front tooth of the gcc-free chain, paired
-; with link.l's `ld`. where crew/holo/text.l parses holo's OWN mnemonics over abstract registers,
-; THIS parses real x86-64: physical registers (%rax/%eax/..), the AT&T operand grammar, the directive
+; with link.l's `ld`. where crew/holo/text.l parses holo's own mnemonics over abstract registers,
+; this parses real x86-64: physical registers (%rax/%eax/..), the at&T operand grammar, the directive
 ; set. the encoders mirror x64.l form-for-form but read the register number off the name and carry the
-; operand WIDTH (x64.l is 64-bit-mode only). scope: the GPR core at all four widths -- ALU, mov,
-; unary, push/pop, lea, test over register, immediate AND memory operands; call/jmp/jcc (NEAR;
+; operand width (x64.l is 64-bit-mode only). scope: the GPR core at all four widths -- ALU, mov,
+; unary, push/pop, lea, test over register, immediate and memory operands; call/jmp/jcc (NEAR;
 ; branch relaxation is M2), and the nullaries -- the sign-extend family in both spellings (cltq
-; as well as cdqe), the flag ops, and the trap/system handful. a memory operand is AT&T's full
+; as well as cdqe), the flag ops, and the trap/system handful. a memory operand is at&T's full
 ; disp(base,index,scale), rip-relative and indirect `*` included; the size suffix (movb/addl/..)
 ; gives the width wherever no register operand carries one.
 ;
-; load AFTER holo.l + x64.l (bare, dev/test context -- the encoder primitives le32/byte/fix/modrm..
+; load after holo.l + x64.l (bare, dev/test context -- the encoder primitives le32/byte/fix/modrm..
 ; are still on the global book; the eventual host path reaches them through the `holo` book):
 ;   out/host/love -l crew/holo/holo.l -l crew/holo/amd64.l -l crew/holo/as.l ...
 
@@ -34,7 +34,7 @@
                   _ (as-reg! (n + "w") i 2) _ (as-reg! (n + "b") i 1) 0))
         0 '(8 9 10 11 12 13 14 15))
 
-   ;; --- byte/number reading: AT&T immediates are decimal, 0x-hex, optionally signed. ---
+   ;; --- byte/number reading: at&T immediates are decimal, 0x-hex, optionally signed. ---
    (as-hexd c) (? (48 <= c <= 57)  (c - 48)
                   (97 <= c <= 102) (c - 87)
                   (65 <= c <= 70)  (c - 55)
@@ -46,9 +46,9 @@
    (as-num s)  (? (as-neg? s) (0 - as-num (snip s 1 #s))
                   (as-hex? s) (as-hexv (snip s 2 #s))
                   (as-decv s))
-   ;; ⚠ EVERY BYTE, or it is not a numeral. as-num reads digits off the FRONT and stops, so an
+   ;; every byte, or it is not a numeral. as-num reads digits off the front and stops, so an
    ;; unchecked `$N' comes back 30 -- the character's own value -- and encodes as a number nobody
-   ;; wrote. a symbolic immediate is a thing this front cannot do; it must SAY so.
+   ;; wrote. a symbolic immediate is a thing this front cannot do; it must say so.
    (as-dig? c)  ((c >= 48) && (c <= 57))
    (as-hexc? c) (as-dig? c || ((c >= 97) && (c <= 102)) || ((c >= 65) && (c <= 70)))
    (as-allof? s p k) (: n #s
@@ -77,7 +77,7 @@
       ((: (g i st acc) (? (i >= n) (rev (as-trim (snip s st n) . acc))
                           (s i = c) (g (i + 1) (i + 1) (as-trim (snip s st i) . acc))
                           (g (i + 1) st acc))) 0 0 ()))
-   ;; the operand list splits on TOP-LEVEL commas only -- a memory operand carries its own inside
+   ;; the operand list splits on top-level commas only -- a memory operand carries its own inside
    ;; the parens, and cutting there would tear it in three.
    (as-oplist s) (: n #s
       ((: (g i st d acc)
@@ -96,7 +96,7 @@
 
    ;; --- operand parsing: -> a tagged form.
    ;;   (rg enc w) | (im n) | (lbl sym) | (rip sym) | (ind o) | (mem base index scale disp)
-   ;; a memory operand is AT&T's disp(base,index,scale) with either register absent (-1 then); a
+   ;; a memory operand is at&T's disp(base,index,scale) with either register absent (-1 then); a
    ;; leading `*` marks the indirect branch target it wraps. ---
    (as-reglook nm) (: r (as-regs (name nm)) (two? r ? r (scare 'as-badreg nm)))
    (as-mreg f) (? (0 = #f) -1 <(as-reglook (snip f 1 #f)))   ; a %reg field, or absent
@@ -105,7 +105,7 @@
          (as-has? t 40)                                       ; contains '(' -> a memory operand
          (: op (as-idx t 40) inner (snip t (op + 1) (#t - 1))     ; strip the ')'
             disp (snip t 0 op)
-            (? (inner = "%rip") ['rip (name disp)]         ; sym(%rip) -- a SYMBOL displacement
+            (? (inner = "%rip") ['rip (name disp)]         ; sym(%rip) -- a symbol displacement
                (: fs (as-split inner 44) k #fs        ; ... everywhere else, a number
                   d (? (0 = #disp) 0 (as-imm disp))
                   (? (k > 3) (scare 'as-memform t)
@@ -126,12 +126,12 @@
    (as-scb s) (s @ 1 0 2 1 4 2 8 3 (scare 'as-badscale s))
    (as-regn o) <>o                                       ; a register operand's encoding number
    (as-regw o) (<o = 'rg ? <>>o 0)                      ; ... and its width, 0 if it isn't one
-   ;; spl/bpl/sil/dil name the low four's bytes only UNDER a REX -- bare, those slots spell
+   ;; spl/bpl/sil/dil name the low four's bytes only under a REX -- bare, those slots spell
    ;; ah/ch/dh/bh -- so a byte operand in 4..7 forces an otherwise-empty one.
    (as-frc o) (? !(as-regw o = 1) 0 (4 <= as-regn o <= 7))
    (as-frcs ops) (foldl (\ a o (a > 0 ? a (as-frc o))) 0 ops)
 
-   ;; --- the r/m half: a register (mod 3) or a memory operand, which lays a ModRM (+ SIB)
+   ;; --- the r/m half: a register (mod 3) or a memory operand, which lays a Modrm (+ SIB)
    ;; (+ displacement) and hands up the REX X and B bits. an rbp/r13 base has no disp-less slot
    ;; (mod 0 there means disp32) so force a disp byte; an rsp/r12 base needs a SIB to say so; a
    ;; base-less form is mod 0 + SIB base 5 + a full disp32; rip-relative is mod 0, rm 5, and the
@@ -155,9 +155,9 @@
                       (as-hi (as-regn o)))
    (as-mem? o)  ((<o = 'mem) || (<o = 'rip))
 
-   ;; --- operand size. the AT&T suffix sets it; absent one it is read off a register operand, and
+   ;; --- operand size. the at&T suffix sets it; absent one it is read off a register operand, and
    ;; 0 means neither said -- fine for the 64-bit-default forms (push/pop/call/jmp), a raise for
-   ;; anything else. width 2 takes a 66 prefix, width 1 the opcode one BELOW the wide one (89/88,
+   ;; anything else. width 2 takes a 66 prefix, width 1 the opcode one below the wide one (89/88,
    ;; 01/00, c7/c6, f7/f6, ff/fe all sit in that relation). ---
    (as-sfxw c) (c @ 98 1 119 2 108 4 113 8 0)
    as-sfxable '(mov add or and sub xor cmp test neg not inc dec push pop lea)
@@ -173,7 +173,7 @@
          (? (sw = 0) rw
             (rw > 0 && rw != sw) (scare 'as-widthclash [sw rw])
             sw))
-   ;; the whole reg-with-r/m family in one spelling: size prefix, REX, opcode, ModRM tail. `rn` is
+   ;; the whole reg-with-r/m family in one spelling: size prefix, REX, opcode, Modrm tail. `rn` is
    ;; the reg field -- a register encoding, or an opcode extension digit.
    (as-emit w frc opc rn rm)
       (catall [(as-p16 w) (as-rex frc (as-rexw w) (as-hi rn) (as-rm-x rm) (as-rm-b rm))
@@ -209,9 +209,9 @@
             (catall [rx [(184 | as-lo d)] (le64 imm)])))
 
    ;; --- the per-instruction encoders (each -> a byte/fix item list). ---
-   ;; ⚠ a rip-relative operand with an immediate TAIL is refused, not encoded: x64-patch measures
+   ;; a rip-relative operand with an immediate tail is refused, not encoded: x64-patch measures
    ;; rel32 from the end of its own field, and holo's fixup carries no addend to walk past the tail.
-   (as-2 mn w a b)                                           ; two-operand: AT&T src,dst
+   (as-2 mn w a b)                                           ; two-operand: at&T src,dst
       (: ka <a kb <b frc (as-frcs [a b])
          alu (as-alu mn)
          rr  (mn @ 'mov 137 'test 133 (alu @ (a . _) a 0))
@@ -257,10 +257,10 @@
             (: sym (at a 1) (mn @ 'call [232 (fix 4 'rel32 sym 0)] [233 (fix 4 'rel32 sym 0)]))
             (as-cc mn) (: sym (at a 1) [15 (peep as-cc mn 0) (fix 4 'rel32 sym 0)])
             (scare 'as-op1 mn)))
-   ;; --- the nullaries, in both spellings. AT&T names the sign-extend family c<from>t<to> and
-   ;; Intel names it c<from><to>, which puts the two halves of it ONE LETTER APART under names
+   ;; --- the nullaries, in both spellings. at&T names the sign-extend family c<from>t<to> and
+   ;; Intel names it c<from><to>, which puts the two halves of it one letter apart under names
    ;; that pair up wrong: cltq widens the accumulator (eax -> rax) and cltd splits it across
-   ;; edx:eax, and likewise cwtl against cwtd. gcc emits the AT&T spelling of all six. ---
+   ;; edx:eax, and likewise cwtl against cwtd. gcc emits the at&T spelling of all six. ---
    as-nils (tabof
         [('ret . '(195)) ('retq . '(195)) ('nop . '(144)) ('hlt . '(244))
           ('syscall . '(15 5)) ('leave . '(201)) ('leaveq . '(201))

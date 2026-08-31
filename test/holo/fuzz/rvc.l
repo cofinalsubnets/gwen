@@ -1,23 +1,23 @@
-; test/holo/fuzz/rvc.l -- the RVC squeeze, checked by EQUIVALENCE rather than by intent.
+; test/holo/fuzz/rvc.l -- the rvc squeeze, checked by equivalence rather than by intent.
 ; riscv.l collapses a lowered 32-bit word to its 2-byte C form where the operands fit
-; (rvc-of). the two words must mean the SAME thing, so this walks the whole reachable
+; (rvc-of). the two words must mean the same thing, so this walks the whole reachable
 ; operand space of every form -- in range and out, aligned and not -- and disassembles
 ; each compressed word beside the 32-bit word it replaced under llvm-mc. any pair that
 ; decodes differently is a miscompression.
 ;
 ; this is a different oracle from fuzz.l next door: that one asks whether holo encoded
 ; what the IR meant, over sampled forms; this one asks whether the squeeze preserved
-; meaning, over ALL of them. a form rvc-of declines is exercised too -- the sweep runs
+; meaning, over all of them. a form rvc-of declines is exercised too -- the sweep runs
 ; the boundaries (offset 248/256, immediate 31/32) from both sides.
 ;
-; part two covers the C forms the squeeze never sees: c.j and c.beqz/c.bnez, whose WIDTH
+; part two covers the C forms the squeeze never sees: c.j and c.beqz/c.bnez, whose width
 ; turns on a distance, so riscv.l's 'short hook chooses them and rv-patch writes them.
 ; there is no 32-bit word to compare against -- the wide form was a whole extra
-; instruction -- so these are checked by INTENT, every reachable even offset against the
-; spelling llvm-mc gives back, plus the cases rv-cbase must REFUSE.
+; instruction -- so these are checked by intent, every reachable even offset against the
+; spelling llvm-mc gives back, plus the cases rv-cbase must refuse.
 ;
-; ⚠ ONE alias is normalized: llvm-mc prints the 32-bit `add rd, x0, rs2` as itself but
-; prints the C form as `mv`. c.mv IS that add by definition (RISC-V spec), so the two
+; one alias is normalized: llvm-mc prints the 32-bit `add rd, x0, rs2` as itself but
+; prints the C form as `mv`. c.mv is that add by definition (RISC-V spec), so the two
 ; spellings are one instruction and the text compare must not part them.
 ;
 ; skips (exit 0, a note) without llvm-mc. run from the repo root:
@@ -30,7 +30,7 @@
 (reads (open "crew/holo/rv64.l" "r"))
 
 (: _ (use (name "holo"))
-   ;; the rv64 backend's test door -- the squeeze, the fixup writer and the CB base. holo's
+   ;; the rv64 backend's test door -- the squeeze, the fixup writer and the cb base. holo's
    ;; own surface carries the rest (imm?, at, jot).
    parts (peep (peep backends 'rv64 ()) 'parts ())
    _ (? (tablet? parts) 0
@@ -126,7 +126,7 @@
    (idx-of s sub) (: n (tally s) k (tally sub)
                      (go i) (? ((n - k) < i) () ((snip s i (i + k)) = sub) i (go (i + 1)))
                      (go 0))
-   ; `add rd, zero, rs2` and `mv rd, rs2` are ONE instruction -- see the header
+   ; `add rd, zero, rs2` and `mv rd, rs2` are one instruction -- see the header
    (demv s) (: t (norm s)
                (? (pfx? t "add ")
                   (: c (idx-of t ", zero, ")
@@ -155,8 +155,8 @@
    (bhex bs) (foldl (\ a b (a + "0x" + hx2 b + " ")) "" bs)
    (bform f3 rs1 rs2) ((f3 << 12) | ((rs1 << 15) | ((rs2 << 20) | 0x63)))
    abin   '("s0" "s1" "a0" "a1" "a2" "a3" "a4" "a5")     ; llvm-mc prints the ABI names
-   cjrels (map (\ i ((i * 2) - 2048)) (upto 2047))       ; every even offset CJ reaches
-   cbrels (map (\ i ((i * 2) - 256)) (upto 255))         ; and every even offset CB reaches
+   cjrels (map (\ i ((i * 2) - 2048)) (upto 2047))       ; every even offset cj reaches
+   cbrels (map (\ i ((i * 2) - 256)) (upto 255))         ; and every even offset cb reaches
    cbcases (flat (map (\ r (flat (map (\ f3 (map (\ rl [r f3 rl]) cbrels)) '(0 1)))) pregs))
    cjw (map (\ i (rv-patch 'cj ((i * 2) + (at cjrels i)) (i * 2) 2 0xA001)) (jot (tally cjrels)))
    cbw (map (\ i (: c (at cbcases i)
@@ -179,7 +179,7 @@
    _ (? !(two? bbad) 0
         (: _ (say err ("FAIL test_rvc: " + show (tally bbad) + " of " + show (tally want)
                         + " compressed branches carry the wrong offset\n")) (quit 1)))
-   ;; the domain: rv-cbase must REFUSE what CB cannot say -- out of reach either way, a
+   ;; the domain: rv-cbase must refuse what cb cannot say -- out of reach either way, a
    ;; register outside the window, a second source, a compare that is not beq/bne.
    nocb '((0 8 0 256) (0 8 0 -258) (0 7 0 100) (0 16 0 100) (0 8 9 100) (4 8 0 100) (6 8 0 100))
    loose (foldl (\ a c (? (imm? (rv-cbase (bform (at c 0) (at c 1) (at c 2)) (at c 3)))

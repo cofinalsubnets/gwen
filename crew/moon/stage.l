@@ -1,13 +1,13 @@
-; crew/moon/stage.l -- the PIPELINE'S TYPES: gen.l's stage contracts as an overlay
-; domain + sig table, checked STATICALLY by the moon gate. gen.l is read as DATA
+; crew/moon/stage.l -- the pipeline's types: gen.l's stage contracts as an overlay
+; domain + sig table, checked statically by the moon gate. gen.l is read as data
 ; (sound), never evaled, and nothing here rides any image -- the sigs live in this
 ; file and the gate's process alone, so the baked mooncc pays zero bytes and zero
 ; time (the ov-slot hook stays unarmed everywhere).
 ;
-; a die is the STAGE a form list is at. a cleanup pass is stage-PRESERVING ((a) a,
-; polymorphic -- its order among its peers is free), a staging pass ADVANCES through
+; a die is the stage a form list is at. a cleanup pass is stage-preserving ((a) a,
+; polymorphic -- its order among its peers is free), a staging pass advances through
 ; a concrete die -- so the post-choice chain types in exactly one order, and a
-; recomposition is a clash naming its site. a NEW PASS slots in by declaring a sig
+; recomposition is a clash naming its site. a new pass slots in by declaring a sig
 ; here: the input die says what must already be true, the result die says what the
 ; next pass may assume. the checker is gradual: a local name reads bot and binds
 ; nothing, so the enforcement is sharp exactly at the pass-to-pass seams.
@@ -24,7 +24,7 @@
                    'litdie stage-lit 'okr stage-okr)
    stage-sigs '((cgfn (gst top) top)                ; sigged so its body -- both chains -- is walked
                                                     ; (params gradual: a sig VARIABLE there would ride rigid into every concrete seam)
-                ; the build tail: vrfix ADVANCES (build's assembled list carries mints -- the
+                ; the build tail: vrfix advances (build's assembled list carries mints -- the
                 ; vreg shadow 5.1a -- and no vreg may reach sibcall/soften,
                 ; which reason about the physical file), then sibcall + the sweeps preserve
                 (vrfix (gst ir-vreg) ir-chosen)
@@ -32,7 +32,7 @@
                 (cfoldir (gst a) a) (deadcell (a) a) (deaddef (a) a) (spmerge (a) a)
                 (stld (gst a) a) (copyprop (a) a) (rezx (a) a) (addrfold (gst a) a) (cmpfuse (a) a)
                 (deadst (gst a) a) (repack (gst a) a)
-                ; the post-choice chain ADVANCES: deadlab must never touch what the
+                ; the post-choice chain advances: deadlab must never touch what the
                 ; rankers read, unframe re-addresses before jr0 retargets, unhome
                 ; renames last, cskeep sees only what ships -- one order types
                 (deadlab (ir-chosen) ir-nolab)

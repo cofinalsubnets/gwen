@@ -1,18 +1,18 @@
 #!/usr/bin/env -S love -l
-; tools/waits.l -- WHO WAITS. the device floor's invariant, made structural: the
+; tools/waits.l -- who waits. the device floor's invariant, made structural: the
 ; only code in the tree that blocks is the scheduler, plus a short roster of named
-; exceptions. a wait that comes back therefore comes back LOUDLY, at build time,
+; exceptions. a wait that comes back therefore comes back loudly, at build time,
 ; instead of arriving as a hang in somebody's test six months later.
 ;
 ; the hooks it watches are the four that actually stop the world -- ai_sleep,
 ; ai_wait_fds, ai_fd_drain, and the runtime's own wait_one shim. every call to one of
 ; them, in every tracked .c file, must name a function on the roster below.
-; the roster keys on the FILE, so a function that moves TUs moves its entry.
+; the roster keys on the file, so a function that moves TUs moves its entry.
 ;
-; ⚠ IT READS THE C AS WRITTEN, not the binary, and that is the whole design.
+; it reads the C as written, not the binary, and that is the whole design.
 ; every io_* and z* function in the runtime is `static`, so the compiler inlines
 ; them and their names are gone from the ELF; a call graph read off the image would
-; answer GREEN because it could not find the caller, which is the worst answer a
+; answer green because it could not find the caller, which is the worst answer a
 ; gate can give. vmret can disassemble because lvm_* aps are addressed and survive.
 ;
 ; the scan is one line at a time: an identifier immediately followed by `(` is a
@@ -20,19 +20,19 @@
 ; (love's C puts every definition there and indents every body). two edges of that
 ; rule are deliberate --
 ;
-;  * `Ap(lvm_yield_sw, g)` names `Ap`, never lvm_yield_sw. a tail-jump is NOT a
+;  * `Ap(lvm_yield_sw, g)` names `Ap`, never lvm_yield_sw. a tail-jump is not a
 ;    call: the op returns to the trampoline first and the scheduler then waits in
 ;    its own frame, which is exactly the shape this gate exists to permit.
 ;  * a `//` comment is stripped before the scan, so prose about a wait cannot
 ;    redden the gate -- a gate that reddens on writing about it teaches people to
 ;    stop writing about it. block comments are not stripped; nothing needs it.
 ;
-; ⚠ WHAT IT DOES NOT SEE, so nobody reads it as more than it is: the four hooks by
+; what it does not see, so nobody reads it as more than it is: the four hooks by
 ; NAME, never blocking in general. a raw read(2) in the runtime, a fresh primitive,
 ; or a hook through a function pointer all walk past it. it says "the named waits
 ; are where we put them", which is the thing that regresses.
 ;
-; Usage: love tools/waits.l FILE ..   (paths as the roster spells them: repo-relative)
+; Usage: love tools/waits.l file ..   (paths as the roster spells them: repo-relative)
 ; Exit:  0 = the waits are exactly the roster, 1 = they are not, 2 = usage error.
 
 (: (die m) (: _ (say err "waits: ") _ (say err m) _ (say err "\n") (quit 2))
@@ -40,14 +40,14 @@
    ; --- what counts as a wait -------------------------------------------------
    hooks ["ai_sleep" "ai_wait_fds" "ai_fd_drain" "wait_one"]
    (hook? nm) (any (\ h (h = nm)) hooks)
-   ; the three love.h CONTRACT symbols, whose bodies are the wait itself: a
-   ; frontend's `ai_wait_fds` reaching ai_sleep is what a wait hook IS, so the
+   ; the three love.h contract symbols, whose bodies are the wait itself: a
+   ; frontend's `ai_wait_fds` reaching ai_sleep is what a wait hook is, so the
    ; family's own implementations are exempt and only callers from outside it
-   ; have to answer. the runtime's wait_one is NOT one of these -- it is ordinary
+   ; have to answer. the runtime's wait_one is not one of these -- it is ordinary
    ; code that happens to wait, so it answers on the roster like anyone else.
    (impl? nm) (any (\ h (h = nm)) ["ai_sleep" "ai_wait_fds" "ai_fd_drain"])
 
-   ; --- THE ROSTER: (file function hook why) ----------------------------------
+   ; --- the roster: (file function hook why) ----------------------------------
    ; every wait in the tree, and the sentence that earns it.
    roster
    [["src/ev.c" "wait_one" "ai_wait_fds"
@@ -98,19 +98,19 @@
 
    ; --- naming the enclosing function ------------------------------------------
    ; a top-level line: column 0, has a paren, and is not a preprocessor line /
-   ; comment / brace. it either DEFINES (a header) or DECLARES (a prototype).
+   ; comment / brace. it either defines (a header) or declares (a prototype).
    (top? s) (: n (tally s)
                c (? (n < 1) 32 (s 0))
                (&& (n > 0)
                 (&& (! (blank? c))
                  (&& (! (any (\ x (x = c)) [35 47 42 125 41]))
                      (inch? s 40)))))
-   ; ⚠ the `{` half is load-bearing. the runtime puts the first statement on the
+   ; the `{` half is load-bearing. the runtime puts the first statement on the
    ; header line (`static lvm(lvm_yield_sw_mono) { uintptr_t my_wake = ..;`), so
    ; a bare "ends in a semicolon means prototype" test throws away the scheduler.
    (header? s) (: n (tally s)
                   (&& (top? s) (|| (inch? s 123) (! ((s (n - 1)) = 59)))))
-   ; ..and the other half declares. a prototype names a function and CALLS none:
+   ; ..and the other half declares. a prototype names a function and calls none:
    ; `static void wait_one(int fd, int events, uintptr_t ms);` is a wait's spelling,
    ; not a wait. the seam between the runtime's TUs is a block of these, so a scan
    ; that read them as calls would redden on the declaration of every hook.
@@ -128,7 +128,7 @@
                  (go 0))
    ; the function a definition line names: the first call-shaped identifier that
    ; is not a qualifier -- except for `lvm(name)`, love.h:70's definition macro,
-   ; where the name is INSIDE the parens and every VM op is spelled that way.
+   ; where the name is inside the parens and every VM op is spelled that way.
    (hdr-name s)
     (: j (find s "lvm(")
        cs (filter (\ x (! (any (\ q (q = x)) nonfn))) (calls s))
@@ -138,7 +138,7 @@
 
    ; --- the scan ---------------------------------------------------------------
    ; -> ((file fn hook line) ..), one entry per distinct wait; `line` is where it
-   ; was FIRST seen, which is where a reader should go look. the key is the first
+   ; was first seen, which is where a reader should go look. the key is the first
    ; three -- two calls to the same hook from the same function are one fact.
    (seen? l k) (any (\ e (e = k)) l)
    (key e) (+ <e (+ " " (+ (el e 1) (+ " " (el e 2)))))
@@ -165,7 +165,7 @@
    ; --- the report --------------------------------------------------------------
    (show2 e) (: _ (say out "  ") _ (say out (el e 1)) _ (say out " -> ")
                 _ (say out (el e 2)) (put out 10))
-   ; a found wait points AT its line; a roster entry has no line, it has a reason
+   ; a found wait points at its line; a roster entry has no line, it has a reason
    (showx e) (: _ (say out "  ") _ (say out <e) _ (put out 58)
                 _ (putbn out (el e 3) 10) _ (say out ":") _ (show2 e) 0)
    (show3 r) (: _ (say out "  ") _ (say out <r) _ (show2 r)

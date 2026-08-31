@@ -1,13 +1,13 @@
 ; test/holo/fuzz/fuzz.l -- holo encoder differential fuzz: x86-64 + aarch64 + riscv64.
 ; for each generated IR form we know the intended instruction. holo (loaded in-process)
-; encodes it; the bytes go through a FOREIGN decoder (x64: objdump -M intel, cross-read
+; encodes it; the bytes go through a foreign decoder (x64: objdump -M intel, cross-read
 ; by llvm-mc; arm64/riscv: llvm-mc) and the decoded instruction must match intent --
 ; mnemonic, operands, and nothing undecodable. tolerates encoding non-uniqueness:
-; registers compare by ABSTRACT identity (width-agnostic), immediates by value mod 2^64;
+; registers compare by abstract identity (width-agnostic), immediates by value mod 2^64;
 ; a byte-exact oracle would false-alarm on legal 32-bit-mov-zero-extend and disp-size
 ; choices. a decode oracle checks meaning, not layout.
 ;
-; knobs ride the environment: FUZZ_N (per class, default 8), FUZZ_SEED, FUZZ_ARCH
+; knobs ride the environment: fuzz_n (per class, default 8), fuzz_seed, fuzz_arch
 ; (amd64|arm64|riscv -- holo's own names, default all three). run from the repo root:
 ;
 ;   out/host/love test/holo/fuzz/fuzz.l
@@ -18,7 +18,7 @@
 (reads (open "crew/holo/amd64.l" "r"))
 (reads (open "crew/holo/arm64.l" "r"))
 (reads (open "crew/holo/rv64.l" "r"))
-; holo rides module 'holo: reading the source REGISTERS it, and the names come
+; holo rides module 'holo: reading the source registers it, and the names come
 ; through the door rather than off this file's layer.
 (use 'holo)
 
@@ -66,7 +66,7 @@
                                        ())
                           (d 0 0)))
                   (? (id? v ()) () (? neg (0 - v) v)))))
- ; ⚠ exact big division: int on an inexact big ratio rides a gem and drops digits
+ ; exact big division: int on an inexact big ratio rides a gem and drops digits
  (divp v d) (int ((v - (% v d)) / d))
  (show0x n) (: (h v acc) (? (v = 0) acc (h (divp v 16) ((nthl '(48 49 50 51 52 53 54 55 56 57 97 98 99 100 101 102) (% v 16)) >< acc)))
                (? (n = 0) "0x0" ("0x" + string (h n ()))))
@@ -81,7 +81,7 @@
  (rint a b) (a + rnd (b - a + 1))                            ; [a, b] inclusive
  (pick l) (nthl l (rnd (tally l)))
  (coin _) (rnd 2)
- (pick-n l k) (? (k = 0) ()                                  ; k DISTINCT draws
+ (pick-n l k) (? (k = 0) ()                                  ; k distinct draws
                  (: x (pick l) (x >< pick-n (filter (\ y !(y = x)) l) (k - 1))))
 
  ; ---- subprocess plumbing: sh with redirection; bytes laid via printf octal ----
@@ -130,9 +130,9 @@
      (go (lines (rdf (tmpd + "/.fuzz.out"))) ()))
 
  ; arm64/riscv: llvm-mc --disassemble. a fixed-width lane gets full consumption for free
- ; (count*4 must equal the byte count); riscv rides the C extension and is VARIABLE width, so
+ ; (count*4 must equal the byte count); riscv rides the C extension and is variable width, so
  ; vw walks the stream instead -- an instruction's first byte has its low two bits set on a
- ; 4-byte word and clear on a 2-byte one, which is the whole of RISC-V's length encoding here.
+ ; 4-byte word and clear on a 2-byte one, which is the whole of risc-v's length encoding here.
  (rv-icount bs)
   (: n (tally bs)
      (go i k) (? (n <= i) k (go (i + (? (((bs i) & 3) = 3) 4 2)) (k + 1)))
@@ -169,15 +169,15 @@
                                   (go i (j + 1) d acc))
                 (? (n = 0) () (go 0 0 0 ())))
 
- ; x64 memory: 'QWORD PTR [rbp-0x8]' / '[rax+rcx*4+0x10]' -> [base index scale disp]
+ ; x64 memory: 'QWORD ptr [rbp-0x8]' / '[rax+rcx*4+0x10]' -> [base index scale disp]
  (mem-x64 op)
   (: a (idx-of op "[") b (idx-of op "]")
      (? (!(charm? a) || !(charm? b)) ()
         (: in (snip op (a + 1) b)
-           ; the scaled index: REG*S
+           ; the scaled index: reg*S
            st (idx-of in "*")
-           ; ⚠ ix/sc take their values from r BELOW and nowhere else: a `:` binds a
-           ; repeated name ONCE, at its FIRST spelling, so an earlier ix/sc here would
+           ; ix/sc take their values from r below and nowhere else: a `:` binds a
+           ; repeated name once, at its first spelling, so an earlier ix/sc here would
            ; be the whole answer and the scaled index would read as absent.
            r (? (charm? st)
                 (: ib (: (bk i) (? ((0 < i) && (: c (in (i - 1)) ((digit? c) || ((97 <= c) && (c <= 122))))) (bk (i - 1)) i) (bk st))
@@ -258,8 +258,8 @@
  (a-imm s) ((peep AR 'imm 0) s)
 
  ; ---- the spec interpreter: one description checks one decode ----
- ; spec = ([mnems checks] ..); a check is [r ABS] [rw ABS W] [i VAL] [m BASE DISP]
- ; [mx BASE DISP IX SC] [x FN] [lit "cl"]. strict demands the operand counts match
+ ; spec = ([mnems checks] ..); a check is [r abs] [rw abs W] [i VAL] [m base disp]
+ ; [mx base disp ix sc] [x fn] [lit "cl"]. strict demands the operand counts match
  ; (the riscv lane's law); the others read a prefix.
  (chk1 got w)
   (: k <w
@@ -683,7 +683,7 @@
                       <>r))
      (foldl (\ a cl (a + class cl)) 0 gens))
 
- ; ⚠ a FUZZ_ARCH no lane answers to REFUSES: filtering to nothing would run zero
+ ; a fuzz_arch no lane answers to refuses: filtering to nothing would run zero
  ; classes, print "all classes green" and exit 0 -- a spelling mistake reading as a pass.
  lanes (? (0 < tally fz-arch)
            (: ls (filter (\ r (<r = fz-arch)) arches)

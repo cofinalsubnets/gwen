@@ -1,9 +1,9 @@
-; kanren-count -- SAT model-counting that falls out of love's GENERIC RING, as an expressiveness
+; kanren-count -- SAT model-counting that falls out of love's generic ring, as an expressiveness
 ; demo (NOT the solver -- see sat.l for the real CDCL engine; NOT a bench -- it's love-only and
-; exponential). A CNF formula is literally a PRODUCT of SUMS of unification literals: `*` is the
+; exponential). a cnf formula is literally a product of sums of unification literals: `*` is the
 ; semiring product (conjunction), `+` the sum (disjunction), over kanren's `===`/`var`/`load`
-; (a registered module: love/kanren.l). The solution STREAM is counted tail-recursively (scount), never
-; materialized, so RAM stays flat; the count carries SEARCH MULTIPLICITY (a model re-derived once
+; (a registered module: love/kanren.l). The solution stream is counted tail-recursively (scount), never
+; materialized, so ram stays flat; the count carries search multiplicity (a model re-derived once
 ; per clause that justifies it -- the stream is a semiring, not a set). The point is that #SAT
 ; needs no bespoke code here: the same `+`/`*` that add numbers and append lists express it.
 ; over n boolean vars x0..x(n-1), clauses (x_i | x_(i+1)) cyclically -- "no two adjacent 0s".

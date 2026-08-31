@@ -1,16 +1,16 @@
-; overlay -- an OPTIONAL, observe-only static-type overlay hooked at the ev seam (spike:
-; doc/misc/proto/overlay.l; design: memory pluggable-types). Install a user DOMAIN + SIG-TABLE with
-; (overlay-set DOM SIGS); `ev` then REPORTS a type clash for each top-level `:` def and runs the form
-; UNCHANGED (observe-only -- never alters eval). (overlay-off ()) uninstalls; uninstalled, `ev` is
-; transparent (one peep per top-level form). ERASABLE by construction. Engine internals stay private
+; overlay -- an optional, observe-only static-type overlay hooked at the ev seam (spike:
+; doc/misc/proto/overlay.l; design: memory pluggable-types). Install a user domain + sig-table with
+; (overlay-set DOM SIGS); `ev` then reports a type clash for each top-level `:` def and runs the form
+; unchanged (observe-only -- never alters eval). (overlay-off ()) uninstalls; uninstalled, `ev` is
+; transparent (one peep per top-level form). erasable by construction. Engine internals stay private
 ; inside `ov-eng`; only ov-*/overlay-*/the ev rebind leak. See doc/misc/proto/overlay-lib.l for the domain
 ; shape (a map {'join J 'tr T 'litdie L 'dice D}) and sigs ((name (param-dies..) result-die)..).
 ;
-; a MODULE: the frontend cats this source into the text its boot evals, the declaration below
+; a module: the frontend cats this source into the text its boot evals, the declaration below
 ; registers the layer, and the boot says (use 'overlay), then binds the accessor under the
-; module's OWN name and hooks ev through ov-hook below. the ambient splice serves the bare
+; module's own name and hooks ev through ov-hook below. the ambient splice serves the bare
 ; names (overlay-set / overlay-off / ov-slot / ov-eng).
-; kanren must be REGISTERED first -- the engine reaches its whole surface through the
+; kanren must be registered first -- the engine reaches its whole surface through the
 ; registry, and never needs it spliced.
 
 (module '(overlay ov-check ov-eng overlay-off overlay-set ov-hook ov-slot)
@@ -22,15 +22,15 @@
        (ov-look env x) (env @ ((ap . up) . env') (x == ap ? up (ov-look env' x)) 'bot)
        (ov2-var? dom d) (nom? d && !(member? d (dom 'dice)) && !(member? d (dom 'ctors)))   ; a sig variable: not concrete, not a constructor
        (ov2-vars dom d acc) (atom? d ? (ov2-var? dom d && !(member? d acc) ? (d . acc) acc) (foldl (flip $ ov2-vars dom) acc d))
-       (ov2-lk vm d)      (? (atom? vm) d (id? d <<vm) ><vm (ov2-lk >vm d))   ; ⚠ ><vm is GLUED: cuap, not the cons
+       (ov2-lk vm d)      (? (atom? vm) d (id? d <<vm) ><vm (ov2-lk >vm d))   ; ><vm is glued: cuap, not the cons
        (ov2-term vm d)    (? (atom? d) (ov2-lk vm d) (map (ov2-term vm) d))
        (ov2-uall ps as s) (? (atom? ps || atom? as) s
-                             (member? <as '(top bot)) (ov2-uall >ps >as s)   ; an UNKNOWN arg is gradual: consistent with any param, binds nothing
+                             (member? <as '(top bot)) (ov2-uall >ps >as s)   ; an unknown arg is gradual: consistent with any param, binds nothing
                              (: s1 (unify s <ps <as) (ufail? s1 ? ufail (ov2-uall >ps >as s1))))
        (ov2-inst dom sg args)                                          ; sg = (name (param-dies) result): structured caller instantiation
         (: params <>sg result <>>sg
            vm (map (nm \ nm . var nm) (ov2-vars dom (params . result) ()))            ; one fresh logic var per sig variable
-           s  (ov2-uall (map (ov2-term vm) params) args '(()))   ; unify param patterns (fresh vars) vs arg dies AS-IS (a caller's rigid symbol is a constant here -- no capture)
+           s  (ov2-uall (map (ov2-term vm) params) args '(()))   ; unify param patterns (fresh vars) vs arg dies as-is (a caller's rigid symbol is a constant here -- no capture)
            (? (ufail? s) 'clash                                        ; args contradict the params: the one hard verdict
               (#args != #params) 'top                        ; partial/over-application: a closure/re-application, die unknown
               (: r (subst s (ov2-term vm result)) nf (dom 'norm) (lit? nf ? (nf r) r))))   ; reify + normalize (dependent index)
@@ -44,12 +44,12 @@
        (ov-zip ps ds)     (? (atom? ps) 0 ((<ps >< <ds) >< ov-zip >ps >ds))
        (ov-clash dom sigs env e) (? (atom? e) 0 (: d (ov-kindof dom sigs env e) sub (catmap (ov-clash dom sigs env) >e)
                                                     ((d !== 'clash) ? sub ((e . map (ov-kindof dom sigs env) >e) . sub))))   ; a clash site = (expr . operand-dies)
-                                                    ; ⚠ the ternary is PARENTHESIZED: bare in a `:`
+                                                    ; the ternary is parenthesized: bare in a `:`
                                                     ; element list it does not factor at all
        (ov-pairs (a . b . c)) ((a . b) . ov-pairs c)
        (ov2-okr dom bd decl) (: f (dom 'okr) (lit? f ? (f bd decl) (dom 'join bd decl = decl)))   ; result acceptable? domain `okr` (dependent = up to conv/norm), else structural join
        (ov-check1 dom sigs prog)
-          (catmap (p @ ((nm . ps) . body) \                          ; ⚠ PARENTHESIZE the `:`: it is
+          (catmap (p @ ((nm . ps) . body) \                          ; parenthesize the `:`: it is
                      (: sg (ov-sigof sigs nm)                       ; looser than `?`, so unwrapped it
                         (two? sg ?                                  ; eats `two? sg` as a second pair
                            (: env (ov-zip ps <>sg) cl (ov-clash dom sigs env body)
@@ -65,20 +65,20 @@
        (ov-reps ((aa . ua) . u)) (ov-report aa ua, ov-reps u)
        (ov-run dom sigs form)
         (form @ (': . _) (ov-check1 dom sigs form @ (r @ (_ . _)) (ov-reps r)))
-     [ov-run ov-check1])                           ; the run entry + the PURE checker (internals private)
+     [ov-run ov-check1])                           ; the run entry + the pure checker (internals private)
    ov-eng      <ov-both
-   ov-check    <>ov-both                           ; (ov-check dom sigs form) -> () clean | ((name . detail)..) -- the report as DATA (a gate's leg)
+   ov-check    <>ov-both                           ; (ov-check dom sigs form) -> () clean | ((name . detail)..) -- the report as data (a gate's leg)
    ov-slot     (tablet 0)                          ; install slot: peep 0 -> (DOM SIGS) or ()
    (overlay-set dom sigs) (pin ov-slot 0 [dom sigs])
    (overlay-off _) (pin ov-slot 0 ())
-   ; ov-hook: the ev WRAPPER MAKER. `ev` itself must rebind in ORTH (the whole
+   ; ov-hook: the ev wrapper maker. `ev` itself must rebind in orth (the whole
    ; point is that every later (ev 'ev ..) walks into it), and a module layer
-   ; cannot write there -- so the BOOT does it, at exactly this load's old seat
+   ; cannot write there -- so the boot does it, at exactly this load's old seat
    ; in the sequence: (: ev ((from 'overlay 'ov-hook) ev)). e0 = the ev the boot
-   ; hands in, CLOSURE-PRIVATE. (it was a global `ov-ev0` once; sweeping that
-   ; nom off the book broke the LOADED image -- parked in sigsuspend -- an
+   ; hands in, closure-private. (it was a global `ov-ev0` once; sweeping that
+   ; nom off the book broke the loaded image -- parked in sigsuspend -- an
    ; undiagnosed snapshot-codec edge, sidestepped by not having the name.)
-   ; ⚠ two params where the caller hands ONE: currying, so (ov-hook ev) is still the wrapper.
+   ; two params where the caller hands one: currying, so (ov-hook ev) is still the wrapper.
    (ov-hook e0 e)
      (: v (peep ov-slot 0 ()) (? (two? v) (: _ (ov-eng <v <>v e) (e0 e)) (e0 e))))
 

@@ -1,11 +1,11 @@
 ; property-based fuzzer built on the step-8 RNG (xoshiro256++ functional stream).
 ;
-; a GENERATOR is a function st -> (value . st'), the shape a curried (random st _) yields, so
+; a generator is a function st -> (value . st'), the shape a curried (random st _) yields, so
 ; generators thread the random state purely and compose by plumbing the returned
 ; st onward. fz-find drives a generator N times against a predicate from a fixed
 ; seed (so any failure is reproducible) and reports the first counterexample;
 ; fz-ok is the boolean wrapper the asserts use. The properties below are
-; invariants that must hold for EVERY draw -- algebraic laws of the numeric tower,
+; invariants that must hold for every draw -- algebraic laws of the numeric tower,
 ; list-combinator identities, the print->read round trip, and array broadcasting.
 ;
 ; fz-find returns (X 1 0) on success or (X 0 counterexample) on failure;
@@ -81,7 +81,7 @@
 
 ; ---- number-as-function application (Church numerals), deliberately bounded ----
 ; applying a fixnum n is Church-numeral application: a numeric operand m gives
-; m ** n, a function operand g gives g composed n times. The OPERATOR is always
+; m ** n, a function operand g gives g composed n times. The operator is always
 ; drawn as a small non-negative fixnum (fz-op, 0..6) so neither the exponent nor
 ; the composition depth can run away -- the fuzzer must never turn a random draw
 ; into a 2^160-sized exponent. With fz-op bounded, every result here stays tiny
@@ -100,7 +100,7 @@
  (fz-ok 300 20 fz-l (\ l (l = rev (rev l))))                          ; rev is involutive
  (fz-ok 300 21 fz-l (\ l (l = map id l)))                            ; map id = id
  (fz-ok 300 22 fz-l (\ l (l = foldr link () l)))                     ; foldr X () = id
- ; cat adds spine lengths, and the NET law holds exactly: $ of a cat is the
+ ; cat adds spine lengths, and the net law holds exactly: $ of a cat is the
  ; saturated sum of the two lists' element sums (one clamp, at the top)
  (fz-ok 300 23 (fz-pair2 fz-l fz-l)
    (\ v (: (ln x) (foldl (\ n _ (1 + n)) 0 x)
@@ -115,7 +115,7 @@
  (fz-ok 300 26 (fz-bind fz-l (\ l (fz-map (\ n [l n]) (fz-int 0 (+ 1 (foldl (\ n _ (1 + n)) 0 l))))))
    (\ v (<v = take <>v <v + drop <>v <v)))
  ; filter keeps only matching elements and never grows the spine (the clamped $
- ; can GROW under filter -- dropping a negative raises the net -- so fold)
+ ; can grow under filter -- dropping a negative raises the net -- so fold)
  (fz-ok 300 27 fz-l
    (\ l (: (ln x) (foldl (\ n _ (1 + n)) 0 x)
            p (\ x (0 = x % 2))
@@ -152,7 +152,7 @@
 
 ; ---- string operations: + / snip / string / get / print->read ----
 ; fz-str draws a random byte string (length 0..mx, any byte 0..255 -- show's
-; \xHH escaping round-trips them all). snip returns nil for an empty snip
+; \xhh escaping round-trips them all). snip returns nil for an empty snip
 ; (i==j), which + and the old scat treat as "" but `=` does not, so any comparison
 ; that can land on an empty snip routes through fz-norm (+ x "" coerces a
 ; nil/string to a string). fz-s2cl / fz-rd are the helpers from the round-trip
@@ -197,24 +197,24 @@
  ; print -> read round trip over arbitrary byte strings
  (fz-ok 250 64 fz-s (\ s (s = fz-rd s))))
 
-; ---- mixed-band + and *: associativity ACROSS the bands ----
-; rows 3/4 and 51 fuzz associativity WITHIN a band; these cross one. `+` holds
+; ---- mixed-band + and *: associativity across the bands ----
+; rows 3/4 and 51 fuzz associativity within a band; these cross one. `+` holds
 ; everywhere: a number arrives as the winning band's unit, and text contributes
-; its BYTES to a chain, so text and chain share one monoid. `*` on chains is the
+; its bytes to a chain, so text and chain share one monoid. `*` on chains is the
 ; cartesian product, which associates up to the canonical reassociation rather
 ; than on the nose -- fz-mul-skip names those shapes, and test/law.l's
 ; mul-reassoc / mul-count-out state what holds there instead.
 ;
-; the rows carry their own name, trial count and seed, so a red one says WHICH
+; the rows carry their own name, trial count and seed, so a red one says which
 ; property failed and prints the counterexample -- test/law.l's reporter, over a
 ; generator instead of a fixed corpus.
 (: fz-nomv (fz-elt '(sym alpha b))
-   ; * against a chain REPEATS it, so the count stays small here; rows 3/4 already
+   ; * against a chain repeats it, so the count stays small here; rows 3/4 already
    ; carry the numeric tower, and this lane is about crossing bands, not width.
    fz-small (fz-int -4 5)
    fz-mix  (fz-oneof [fz-small fz-s fz-nomv fz-l])
    fz-mix3 (fz-trip fz-mix fz-mix fz-mix)
-   (fz-txt? v) ((string? v || (? (id? v ()) 0 (nom? v))) ? 1 0)   ; a ?-name owes a BIT
+   (fz-txt? v) ((string? v || (? (id? v ()) 0 (nom? v))) ? 1 0)   ; a ?-name owes a bit
    (fz-ch? v)  (two? v ? 1 0)
    (fz-mul-skip a b c) (fz-ch? a && (fz-ch? b || fz-ch? c) && !(fz-txt? b) && !(fz-txt? c))
    (fz-add-assoc v)

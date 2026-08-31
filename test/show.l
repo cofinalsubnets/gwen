@@ -20,11 +20,11 @@
 
   ; interned symbols print as their name
   (= "foo" (show 'foo))
-  ; a mint prints (mint <serial>) -- the serial in decimal, the mint's identity. NOT an
-  ; exact round-trip: (mint <serial>) re-reads to a FRESH mint (mint ignores its arg),
+  ; a mint prints (mint <serial>) -- the serial in decimal, the mint's identity. not an
+  ; exact round-trip: (mint <serial>) re-reads to a fresh mint (mint ignores its arg),
   ; since identity is the mint's whole product and no spelling carries it -- the face only
   ; has to distinguish, which the serial does. the serial is non-deterministic, so we
-  ; assert the SHAPE: a leading "(mint ", stable, distinct.
+  ; assert the shape: a leading "(mint ", stable, distinct.
   (= "(mint " (snip (show (mint 0)) 0 6))
   (: m (mint 0) ((show m) = (show m)))             ; stable: same mint, same face
   (: a (mint 0) b (mint 0) !((show a) = (show b))) ; distinct mints, distinct faces

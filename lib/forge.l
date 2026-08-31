@@ -45,11 +45,11 @@
 ; twins and `forge-why` says `no-abi`.
 ;
 ; mkir is a thunk because a kernel's IR carries live addresses: `forge-trayk` and friends are
-; read out of this process with `apof`, and under ASLR they are a different number every run. so
+; read out of this process with `apof`, and under aslr they are a different number every run. so
 ; the IR is built at fit time, never earlier, and never kept.
 ;
 ; a native cell does not survive a bake, and it does not say so. the image codec reverts it to
-; its twin (src/love.c img_nif_interp) because the W^X mapping dies with the baking process, so
+; its twin (src/love.c img_nif_interp) because the w^x mapping dies with the baking process, so
 ; the bake succeeds, the value wakes, it answers correctly -- and it is the twin. measured on the
 ; 4096-cell battery: 4 ms native, 13 ms after a bake and a wake, which is the C nif's own 13.
 ; what bakes is the roster, thunks and twins being ordinary love data, so a woken image is correct
@@ -65,16 +65,16 @@
 (:
    ; --- the ABI kit -------------------------------------------------------------------
    ; the lvm calling convention, as holo's abstract registers:
-   ;   g=rdi(r6)  Ip=rsi(r5)  Hp=rdx(r2)  Sp=rcx(r1);  argument i arrives TAGGED on Sp[i]
+   ;   g=rdi(r6)  Ip=rsi(r5)  Hp=rdx(r2)  Sp=rcx(r1);  argument i arrives tagged on Sp[i]
    ; r0/r7/r8/r9/r10 are caller-saved and free; r3/r11-r14 are callee-saved and must be
    ; pushed. every guard jumps to the label `deopt`, which the epilogue below plants.
    ; guards come before any push, so the machine sp is balanced on the deopt path too.
    ;
-   ; ⚠ THAT BINDING IS AMD64'S, AND IT IS SPELLED, not derived. the lvm ABI is each
+   ; that binding is amd64'S, and it is spelled, not derived. the lvm ABI is each
    ; platform's own C convention, so the four roles land in different registers per
    ; target -- r1 is Sp here and Ip on arm64, and only Hp coincides. every guard,
    ; epilogue and deopt tail below names them by number, and holo lowers all of it on
-   ; any backend, so an off-x64 assemble SUCCEEDS and installs a kernel reading Ip
+   ; any backend, so an off-x64 assemble succeeds and installs a kernel reading Ip
    ; where it means Sp. what the roles need is a row per target -- love/scan.l has one
    ; -- and until they have it `forge-abi?` is what keeps the twins in force.
    forge-trayk (apof (iota 0))                      ; a tray's ap word, live in this process
@@ -85,12 +85,12 @@
    (forge-fixg i)                                   ; Sp[i] must be a fixnum
     [['ld 'r0 'r1 (8 * i)] '(test r0 1) '(br eq deopt)]
    ; the two epilogues, both answering in Sp[0] and stepping Ip past the interp slot to lvm_ret
-   ; (which pops the extra arguments). the kernel picks: `forge-epi` where r0 holds an UNTAGGED
-   ; number, `forge-epi-ptr` where it holds a heap pointer -- an even pointer IS the value, and
+   ; (which pops the extra arguments). the kernel picks: `forge-epi` where r0 holds an untagged
+   ; number, `forge-epi-ptr` where it holds a heap pointer -- an even pointer is the value, and
    ; tagging one answers a fixnum somewhere in the middle of the heap.
    forge-epi '((shl r0 1) (or r0 r0 1) (st r1 0 r0) (add r5 r5 16) (ld r7 r5 0) (jmpr r7))
    forge-epi-ptr '((st r1 0 r0) (add r5 r5 16) (ld r7 r5 0) (jmpr r7))
-   ; -- THE ROOM GUARD, and it is how a kernel allocates. a native body's registers are NOT GC
+   ; -- the room guard, and it is how a kernel allocates. a native body's registers are not GC
    ; roots (the collector walks g, Sp and Ip), so a collection fired mid-kernel leaves every
    ; pointer it is holding pointing into the old semispace. so a kernel never calls the
    ; collector: it proves the room first -- Sp - Hp >= b bytes -- and deopts to the twin when
@@ -192,7 +192,7 @@
              0 laid)))
 
    ; =======================================================================================
-   ; THE KERNELS
+   ; the kernels
    ; =======================================================================================
    ; (aall v) -- the conjunction reduction over a tray: no zero element. the native says the
    ; ai_Z lane and nothing else; a scalar, a float/complex/object tray and a fixnum all deopt.
@@ -275,9 +275,9 @@
      + (forge-restore + (forge-epi-ptr + forge-unwind)))))
    _ (forge-put 'outer 2 forge-outer-ir outer)
 
-   ; (inner a b) -- +.x over two ai_Z trays: contract a's LAST axis with b's FIRST (1D.1D a
+   ; (inner a b) -- +.x over two ai_Z trays: contract a's last axis with b's first (1D.1D a
    ; dot, 2D.2D a matmul). ikj order, the accumulator in memory, and the addressing carried
-   ; in WALKING POINTERS -- Arow by K*8, Brow by N*8, Crow by N*8 -- where the C recomputes
+   ; in walking pointers -- Arow by K*8, Brow by N*8, Crow by N*8 -- where the C recomputes
    ; i*N+j and l*N+j per element. that is the whole difference and it is worth 4.5x against
    ; the shipping compiler (see the header's table).
    ; regs: r11=Arow r13=Crow r14=N r3=K, r0/r7/r8/r9/r10/r12 scratch;

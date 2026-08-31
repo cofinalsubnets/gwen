@@ -1,27 +1,27 @@
-; arm64 -- the aarch64 BACKEND for the neutral assembler (crew/holo/holo.l), the second target. it shows
+; arm64 -- the aarch64 backend for the neutral assembler (crew/holo/holo.l), the second target. it shows
 ; the IR really is arch-neutral: the driver, the IR forms, the text front-end and the ELF linker are
 ; all untouched -- this file just pins a {lower,patch} pair under 'arm64. every word
 ; here was checked against llvm-mc (--show-encoding) and llvm-objdump.
 ;
 ; aarch64 is a joy to target: fixed 32-bit little-endian instructions, native three-address ALU, 31
-; GPRs. so the IR's (add d a b) maps ONE-TO-ONE -- no two-address dance like x86 needed. the register
+; gprs. so the IR's (add d a b) maps one-to-one -- no two-address dance like x86 needed. the register
 ; file is the obvious one: r0..r14 -> x0..x14, sp -> the stack pointer (encoding 31). the awkward bit
-; is branches: the pc-relative offset is a BITFIELD inside the instruction word, not a run of bytes,
-; so a fixup carries the base opcode word in its `aux` slot and `patch` ORs the offset in.
+; is branches: the pc-relative offset is a bitfield inside the instruction word, not a run of bytes,
+; so a fixup carries the base opcode word in its `aux` slot and `patch` ors the offset in.
 ;
 ; immediates: add/sub/cmp take a 12-bit immediate directly (a negative one flips the opcode). the
 ; logical ops (and/or/xor) and multiply have no simple immediate form (they need bitmask-immediate
-; encoding / a scratch register), so an immediate there RAISES rather than emit wrong bytes -- put
+; encoding / a scratch register), so an immediate there raises rather than emit wrong bytes -- put
 ; the value in a register. load after holo.l.
 
 (module 'holo
 (: ;; -- registers: r0..r14 -> x0..x14, sp -> 31 (the SP/XZR slot; we only use 31 as SP). x16 (IP0) is
-   ;;    an UNNAMED scratch the indexed stores borrow. `lr` (x30) and `fp` (x29) are exposed by name so
+   ;;    an unnamed scratch the indexed stores borrow. `lr` (x30) and `fp` (x29) are exposed by name so
    ;;    a callee that makes nested calls can spill its return address (BL clobbers x30) -- aarch64-only,
    ;;    no x86 analogue (CALL/RET there keep the return address on the stack implicitly). --
-   ;; abstract number = hardware x-number (identity). r19..r28 are the CALLEE-SAVED bank -- a glaze's
+   ;; abstract number = hardware x-number (identity). r19..r28 are the callee-saved bank -- a glaze's
    ;; args + OVF anchor live here so they survive nested `bl` (call) sites.
-   ;; ⚠ x16 (IP0) is BOTH nameable and BORROWED: the indexed stores and the far-memory lane
+   ;; x16 (IP0) is both nameable and borrowed: the indexed stores and the far-memory lane
    ;; materialize their address in it (arm64-far below), so it holds nothing across those. mooncc
    ;; never asks for it, which is why the borrow is invisible there -- a hand-written lay that names
    ;; r16 must keep its own value out of the way of an `stx`/`ldx` or a beyond-12-bit ld/st.
@@ -31,8 +31,8 @@
           ('r5 >< 5) ('r6 >< 6) ('r7 >< 7) ('r8 >< 8)  ('r9 >< 9)
           ('r10 >< 10) ('r11 >< 11) ('r12 >< 12) ('r13 >< 13) ('r14 >< 14) ('r15 >< 15)
            ; x16/x17 (the veneer scratch IP0/IP1) and x18 (the platform register)
-           ; are SAYABLE but never allocated -- mooncc names its own file (gen.l)
-           ; and asks for none of them. the kernel's IRQ path does: it saves
+           ; are sayable but never allocated -- mooncc names its own file (gen.l)
+           ; and asks for none of them. the kernel's irq path does: it saves
            ; x0..x18 because the interrupted code is compiler output free to hold
            ; a live value in any caller-saved register, this trio included.
           ('r16 >< 16) ('r17 >< 17) ('r18 >< 18)
@@ -44,14 +44,14 @@
    arm64-alu-rows
         [('add >< [0x8B000000 0x91000000]) ('sub >< [0xCB000000 0xD1000000])
           ('and >< [0x8A000000 0]) ('or >< [0xAA000000 0]) ('xor >< [0xCA000000 0])
-          ('adds >< [0xAB000000 0xB1000000]) ('subs >< [0xEB000000 0xF1000000])]      ; the S-variant: set NZCV
+          ('adds >< [0xAB000000 0xB1000000]) ('subs >< [0xEB000000 0xF1000000])]      ; the S-variant: set nzcv
    arm64-alu (tabof arm64-alu-rows)
 
-   ;; -- condition codes: IR name -> the A64 cond field (B.cond bits[3:0]). --
+   ;; -- condition codes: IR name -> the a64 cond field (B.cond bits[3:0]). --
    arm64-cc (tabof
         [('eq >< 0) ('ne >< 1) ('ae >< 2) ('below >< 3) ('s >< 4) ('ns >< 5)
           ('vs >< 6) ('vc >< 7)
-           ; p/np (x86 parity: ucomisd's unordered bit) alias VS/VC -- FCMP
+           ; p/np (x86 parity: ucomisd's unordered bit) alias vs/vc -- FCMP
            ; parks unordered in V, and nothing else here reads p/np
           ('p >< 6) ('np >< 7)
           ('above >< 8) ('be >< 9) ('ge >< 10) ('lt >< 11) ('gt >< 12) ('le >< 13)])
@@ -59,14 +59,14 @@
    (rn r) (look arm64-regs r 'badreg)
    (reg-eq a b) (rn a = rn b)       ; own the name: a free read here would leak onto x64's register file
 
-   ;; (li d imm): MOVZ the low 16 bits, then MOVK each higher nonzero 16-bit lane (hw = lane index). the
+   ;; (li d imm): movz the low 16 bits, then movk each higher nonzero 16-bit lane (hw = lane index). the
    ;; lane extract is //% not &/>> -- a movz constant can be a full 64-bit word >= 2^63 (a BIGNUM in love,
    ;; e.g. the map hash mult), on which `&` drops the high limb (cf. le64). negatives normalize into [0,2^64).
    (arm64-lane u k) ((u // k 65536) % 65536)                                     ; the k-th 16-bit lane (65536^k via (k 65536))
-   ;; ⚠ the immediate must BE a number. every other operand slot is a register
+   ;; the immediate must be a number. every other operand slot is a register
    ;; name and refuses a stranger through `rn` (badreg), but an immediate slot
    ;; takes arithmetic on whatever arrives -- and a symbol survives that
-   ;; arithmetic, so `(li r6 a-tbl)` in a QUOTED IR block (where the name never
+   ;; arithmetic, so `(li r6 a-tbl)` in a quoted IR block (where the name never
    ;; evaluated) assembled quietly to the wrong constant. one lit-check turns
    ;; the whole class into a scare at the instruction that has it.
    (arm64-li d imm)
@@ -79,7 +79,7 @@
            (? (l2 = 0) () (le32 (0xF2800000 | ((2 << 21) | ((l2 << 5) | dn)))))   ; movk d, l2, lsl 32
            (? (l3 = 0) () (le32 (0xF2800000 | ((3 << 21) | ((l3 << 5) | dn)))))]))  ; movk d, l3, lsl 48
 
-   ;; mov is ORR against XZR -- and encoding 31 in THAT form reads as the zero register, not the
+   ;; mov is ORR against XZR -- and encoding 31 in that form reads as the zero register, not the
    ;; stack pointer, so `(mov r9 sp)` would quietly assemble as `orr x9, xzr, xzr` (x9 <- 0). the
    ;; SP move is `add Xd, Xn, #0` instead, which is exactly `(lea d s 0)`; the guard sends you
    ;; there rather than emit the wrong register. (kernel code moves SP by name -- see spsel.)
@@ -88,10 +88,10 @@
       (le32 (0xAA0003E0 | ((sn << 16) | dn))))                                       ; orr d, xzr, s
 
    ;; ALU. register form is the native three-address; immediate is add/sub only.
-   ;; ⚠ the register form is the SHIFTED-register one, where encoding 31 is XZR in
+   ;; the register form is the shifted-register one, where encoding 31 is xzr in
    ;; every slot -- so `(sub sp sp r0)` assembles as `neg xzr, x0`: the stack pointer
-   ;; untouched, the answer discarded, in SILENCE. (the form that means SP is
-   ;; add/sub EXTENDED-register, which no IR op spells.) the mov guard's sibling, and
+   ;; untouched, the answer discarded, in silence. (the form that means SP is
+   ;; add/sub extended-register, which no IR op spells.) the mov guard's sibling, and
    ;; louder for it -- mov at least had nowhere else to go, this one lies. move sp
    ;; with `lea` (add #0) and do the arithmetic in a plain register: mksys's
    ;; __sigsetjmp and moon's VLA lane both stage that way.
@@ -111,7 +111,7 @@
                        (? ((pos % 4096) = 0) () (alu-rri base d d (pos % 4096)))])    ;  would read the tail's flags)
             (scare 'imm12-range imm)))
    ;; a logical (bitmask) immediate -> the N:immr:imms field packed at bits [22:10]. the full encoding
-   ;; admits any replicated rotated run of ones; we encode the case the glaze emits -- a BOTTOM-ALIGNED
+   ;; admits any replicated rotated run of ones; we encode the case the glaze emits -- a bottom-aligned
    ;; run (imm = 2^n - 1, the fixnum/gap low-bit masks): N=1, immr=0, imms=n-1. a rotated/replicated
    ;; pattern raises (materialize it into a register instead).
    (bitmask-field imm)
@@ -138,7 +138,7 @@
          (scare 'arm64-mul-imm ['imul d a b]))
 
    ;; loads/stores: LDR/STR scaled (offset a multiple of 8, unsigned) else LDUR/STUR unscaled (signed
-   ;; 9-bit) else the FAR lane -- the offset materializes in x16 (IP0, outside the IR file) and the
+   ;; 9-bit) else the far lane -- the offset materializes in x16 (IP0, outside the IR file) and the
    ;; access rides [x16, #0]; a C frame's slots run past +-256 routinely. lea is just add-immediate
    ;; (aarch64 has no lea).
    (arm64-far ubase dt bn off)                               ; x16 = bn +- |off|, then op Rt, [x16, #0]
@@ -152,7 +152,7 @@
            (? (l1 = 0) () (le32 (0xF2A00000 | ((l1 << 5) | 16))))                    ; movk x16, l1, lsl 16
            (le32 ((? (off < 0) 0xCB000000 0x8B000000) | ((16 << 16) | ((bn << 5) | 16))))    ; add/sub x16, base, x16
            (le32 (ubase | ((16 << 5) | dt)))]))                                      ; op Rt, [x16, #0]
-   ;; ONE memory core, encodings in hand: LDR/STR scaled imm12 (units = the access width)
+   ;; one memory core, encodings in hand: LDR/STR scaled imm12 (units = the access width)
    ;; else LDUR/STUR unscaled imm9 else the far x16 build. every face -- word, sized,
    ;; fp -- is a spelling of it.
    (arm64-mem-raw lbase ubase sc dt bn off)
@@ -201,38 +201,38 @@
    (arm64-dec d) (arm64-addsub-imm 'sub d d 1)
 
    ;; control: B/BL carry a 26-bit offset (bits[25:0]); B.cond a 19-bit one (bits[23:5]). the offset
-   ;; is pc-relative to the instruction's OWN address, in units of 4. the fix is the whole word.
+   ;; is pc-relative to the instruction's own address, in units of 4. the fix is the whole word.
    (arm64-jmp  label)    [(fix 4 'b26 label 0x14000000)]
    (arm64-call label)    [(fix 4 'b26 label 0x94000000)]
-   ;; la: ADRP + ADD -- the page-relative pair (+-4GB), one fixup each. ADR alone
+   ;; la: adrp + ADD -- the page-relative pair (+-4GB), one fixup each. adr alone
    ;; (+-1MB, and the patch masks silently) can't span love.c-scale images, and the
    ;; pair is what the ELF reloc vocabulary speaks (PG_HI21 + ABS_LO12_NC), so the
    ;; .o path rides the same lowering as the exe/native one.
    (arm64-la d label)    (: dn (rn d)
                             [(fix 4 'adrp21 label (0x90000000 | dn))
                               (fix 4 'addlo12 label (0x91000000 | ((dn << 5) | dn)))])
-   ;; lar: ADR -- a BYTE pc-relative address (+-1MB), one fixup, TRANSLATION-INVARIANT (imm = target-site,
-   ;; unlike la's page-relative ADRP which is only correct at a page-aligned load). the near-label choice for
-   ;; a code address inside a runtime-mmap'd W^X blob (the glaze's call-out resume point) -- a cask offset is
-   ;; word- not page-aligned, so ADRP+ADD would compute the wrong page. x86's la (rip-rel lea) is already this.
+   ;; lar: adr -- a BYTE pc-relative address (+-1MB), one fixup, translation-invariant (imm = target-site,
+   ;; unlike la's page-relative adrp which is only correct at a page-aligned load). the near-label choice for
+   ;; a code address inside a runtime-mmap'd w^x blob (the glaze's call-out resume point) -- a cask offset is
+   ;; word- not page-aligned, so adrp+ADD would compute the wrong page. x86's la (rip-rel lea) is already this.
    (arm64-lar d label)   (: dn (rn d) [(fix 4 'adr21 label (0x10000000 | dn))])
-   ;; lia: the label's ABSOLUTE (linked) address in d. la and lar both answer where
-   ;; the label IS RUNNING -- both are pc-relative, which is exactly right until the
-   ;; two disagree, and in the kernel's bring-up they do: the image is LINKED HIGH
-   ;; and RUNS LOW until the MMU comes on, so the hop into the high mapping needs
-   ;; the address the LINKER assigned, not the one the pc implies. that address is
+   ;; lia: the label's absolute (linked) address in d. la and lar both answer where
+   ;; the label is running -- both are pc-relative, which is exactly right until the
+   ;; two disagree, and in the kernel's bring-up they do: the image is linked high
+   ;; and runs low until the MMU comes on, so the hop into the high mapping needs
+   ;; the address the linker assigned, not the one the pc implies. that address is
    ;; a full 64-bit word, so it rides an inline literal (what `ldr xd, =sym`
    ;; assembles to) rather than an immediate:
    ;;   ldr xd, .+8    ; imm19 = 2, the literal two words ahead
    ;;   b   .+12       ; imm26 = 3, step over it
    ;;   .quad label    ; an abs64 fixup -- never resolvable in a .o, always a reloc
-   ;; the two offsets are CONSTANTS of the shape, so this needs no labels of its
+   ;; the two offsets are constants of the shape, so this needs no labels of its
    ;; own and no gensym. x86-64 says the same thing in one movabs.
-   ;; ⚠ PUT AN ('align 8) IN FRONT OF IT. the literal sits at site+8, so it is
-   ;; 8-byte aligned only when the SITE is, and an emitter cannot know its own
+   ;; put an ('align 8) in front of it. the literal sits at site+8, so it is
+   ;; 8-byte aligned only when the site is, and an emitter cannot know its own
    ;; address. a 4-mod-8 literal is an unaligned 8-byte load: permitted on Normal
-   ;; memory while SCTLR.A is clear, and an Alignment FAULT on Device memory
-   ;; whatever SCTLR says -- which is exactly what the world looks like before
+   ;; memory while sctlr.a is clear, and an Alignment fault on Device memory
+   ;; whatever sctlr says -- which is exactly what the world looks like before
    ;; the MMU comes on, where a boot stub is most likely to want this.
    (arm64-lia d label)   (: dn (rn d)
                             (le32 (0x58000040 | dn)         ; ldr xd, .+8
@@ -242,27 +242,27 @@
                             [(fix 4 'b19 label (0x54000000 | cc))])
    ;; jmpr: BR Xn -- branch to the address held in a register (the glaze's Continue / deopt tail).
    (arm64-jmpr d) (: dn (rn d) (le32 (0xD61F0000 | (dn << 5))))
-   ;; callr: BLR Xn -- call the address held in a register (a call through a function pointer),
+   ;; callr: blr Xn -- call the address held in a register (a call through a function pointer),
    ;; linking x30. same field as BR with bit 21 set.
    (arm64-callr d) (: dn (rn d) (le32 (0xD63F0000 | (dn << 5))))
-   ;; mulo: d <- a*b (low 64); branch to lbl on signed overflow. aarch64 has NO flag-setting multiply,
-   ;; so detect it directly: SMULH t,a,b is the high 64 bits of the signed product; the result fits a
-   ;; signed 64 iff that high half equals the sign-extension of the low half. so MUL d,a,b ; CMP t, d
-   ;; ASR #63 (== SUBS xzr, t, d, asr#63) ; B.NE lbl. SMULH runs FIRST (before MUL overwrites d), so
-   ;; the scratch `t` MUST differ from a, b, and d.
+   ;; mulo: d <- a*b (low 64); branch to lbl on signed overflow. aarch64 has no flag-setting multiply,
+   ;; so detect it directly: smulh t,a,b is the high 64 bits of the signed product; the result fits a
+   ;; signed 64 iff that high half equals the sign-extension of the low half. so mul d,a,b ; CMP t, d
+   ;; asr #63 (== SUBS xzr, t, d, asr#63) ; B.ne lbl. smulh runs first (before MUL overwrites d), so
+   ;; the scratch `t` must differ from a, b, and d.
    (arm64-mulo d a b t lbl)
       (: dn (rn d) an (rn a) bn (rn b) tn (rn t)
          (catall [(le32 (0x9B407C00 | ((bn << 16) | ((an << 5) | tn))))    ; smulh t, a, b   (high 64)
                    (le32 (0x9B007C00 | ((bn << 16) | ((an << 5) | dn))))    ; mul   d, a, b   (low 64)
                    (le32 (0xEB80FC1F | ((dn << 16) | (tn << 5))))           ; subs  xzr, t, d, asr #63  (cmp)
                    [(fix 4 'b19 lbl 0x54000001)]]))                        ; b.ne  lbl
-   ;; set: d <- (cond) ? 1 : 0  --  CSET Xd, cond = CSINC Xd, xzr, xzr, invert(cond); inverting a
+   ;; set: d <- (cond) ? 1 : 0  --  cset Xd, cond = csinc Xd, xzr, xzr, invert(cond); inverting a
    ;; cond is XOR 1 (the A64 cond encoding pairs eq/ne, vs/vc, lt/ge, gt/le on bit 0).
    (arm64-set cond d)
       (: cc (look arm64-cc cond 'badcc) dn (rn d)
          (le32 (0x9A9F07E0 | (((cc ^ 1) << 12) | dn))))
-   ;; shifts/rotates by an immediate (the tag math -- sar/shr by 1; the map hash's rol by 32). LSL/LSR
-   ;; are UBFM, ASR is SBFM, ROR is EXTR Xd,Xn,Xn,#c; ROL #c = ROR #(64-c) (aarch64 has no ROL).
+   ;; shifts/rotates by an immediate (the tag math -- sar/shr by 1; the map hash's rol by 32). LSL/lsr
+   ;; are ubfm, asr is sbfm, ror is extr Xd,Xn,Xn,#c; rol #c = ror #(64-c) (aarch64 has no ROL).
    (arm64-shift op d c)
       (: dn (rn d)
          (? (op = 'shl) (le32 (0xD3400000 | ((((64 - c) & 63) << 16) | (((63 - c) << 10) | ((dn << 5) | dn)))))   ; lsl = ubfm immr=(-c)&63, imms=63-c
@@ -272,12 +272,12 @@
             (op = 'rol) (le32 (0x93C00000 | ((dn << 16) | ((((64 - c) & 63) << 10) | ((dn << 5) | dn)))))          ; rol #c = ror #(64-c)
             (op = 'ror4) (le32 (0x13800000 | ((dn << 16) | ((c << 10) | ((dn << 5) | dn)))))                       ; the W form (sf=0 N=0): writes zero-extend
             (scare 'badshift op)))
-   ;; test a, b -> TST = ANDS XZR, a, b (set NZCV from a AND b). a register, or a bitmask immediate
+   ;; test a, b -> tst = ands XZR, a, b (set NZCV from a AND b). a register, or a bitmask immediate
    ;; (the map probe's `test r0 1` low-bit/gap check) via the bitmask encoder; Rd = xzr (31).
    (arm64-test a b)
       (? (reg? b) (: an (rn a) bn (rn b) (le32 (0xEA00001F | ((bn << 16) | (an << 5)))))
          (: an (rn a) (le32 (0xF200001F | (bitmask-field b | (an << 5))))))     ; ands xzr, a, #imm
-   ;; signed division: SDIV is clean three-address. remainder = a - (a/b)*b via MSUB and a scratch t
+   ;; signed division: sdiv is clean three-address. remainder = a - (a/b)*b via msub and a scratch t
    ;; (clobbered, != a, b -- SDIV writes t before MSUB re-reads a, b). caller guards b != 0.
    (arm64-div d a b)   (: dn (rn d) an (rn a) bn (rn b) (le32 (0x9AC00C00 | ((bn << 16) | ((an << 5) | dn)))))   ; sdiv d, a, b
    (arm64-rem d a b t)
@@ -289,16 +289,16 @@
       (: dn (rn d) an (rn a) bn (rn b) tn (rn t)
          (catall [(le32 (0x9AC00800 | ((bn << 16) | ((an << 5) | tn))))                    ; udiv t, a, b
                    (le32 (0x9B008000 | ((bn << 16) | ((an << 10) | ((tn << 5) | dn)))))]))   ; msub d, t, b, a
-   ;; -- the 128-bit pair kit (moon's i128/u128): a wide value rides hi x2 : lo x0, the LEFT operand
+   ;; -- the 128-bit pair kit (moon's i128/u128): a wide value rides hi x2 : lo x0, the left operand
    ;; of a binop staged in a 16-byte cell at [sp] lo / [sp+8] hi, or -- the r-twins -- in two pool
-   ;; registers. each op is ONE IR form, so no pass can part a carry pair: ADC/SBC read the flags the
+   ;; registers. each op is one IR form, so no pass can part a carry pair: adc/sbc read the flags the
    ;; instruction before them set. x16/x17 are the borrowed scratch, the contract the far-memory lane
    ;; already holds (mooncc allocates neither). aarch64's three-address ALU says all of this without
    ;; x86's two-address dance -- the awkward halves are the divide (there is no wide one) and the
    ;; variable shifts (a count reads MOD 64, so both bands compute and CSEL picks). --
-   arm64-wldp (le32 0xA94047F0)                                                 ; ldp x16, x17, [sp]: x16 = LEFT lo, x17 = LEFT hi
+   arm64-wldp (le32 0xA94047F0)                                                 ; ldp x16, x17, [sp]: x16 = left lo, x17 = left hi
    (arm64-w3 base d n m)    (le32 (base | ((m << 16) | ((n << 5) | d))))        ; op Xd, Xn, Xm
-   (arm64-w4 base d n m a)  (le32 (base | ((m << 16) | ((a << 10) | ((n << 5) | d)))))    ; madd/msub Xd,Xn,Xm,Xa -- EXTR's imms shares the Ra field
+   (arm64-w4 base d n m a)  (le32 (base | ((m << 16) | ((a << 10) | ((n << 5) | d)))))    ; madd/msub Xd,Xn,Xm,Xa -- extr's imms shares the Ra field
    (arm64-wsel d n m cond)  (: cc (look arm64-cc cond 'badcc)                   ; csel Xd, Xn, Xm, cond
                                (le32 (0x9A800000 | ((m << 16) | ((cc << 12) | ((n << 5) | d))))))
    (arm64-wmov d m)         (arm64-w3 0xAA000000 d 31 m)                        ; mov Xd, Xm (orr from xzr)
@@ -310,13 +310,13 @@
    (arm64-s128 sp9) (arm64-wldp + (arm64-w3 0xEB000000 0 16 0 + arm64-w3 0xDA000000 2 17 2))    ; subs x0,x16,x0; sbc x2,x17,x2
    (arm64-mw128 sp9) (le32 0xF94003F0                                           ; ldr x16,[sp] -- the widening product needs the low word alone
                       + (arm64-w3 0x9BC07C00 2 0 16 + arm64-w3 0x9B007C00 0 0 16))   ; umulh x2,x0,x16; mul x0,x0,x16
-   (arm64-m128 sp9)                                                             ; the low 128 of LEFT * RIGHT: both cross terms onto the widening product
+   (arm64-m128 sp9)                                                             ; the low 128 of left * right: both cross terms onto the widening product
       (arm64-wldp + (arm64-w3 0x9B007C00 17 17 0                                ; mul   x17, x17, x0        Lhi*Rlo
        + (arm64-w4 0x9B000000 17 16 2 17                                        ; madd  x17, x16, x2, x17    + Llo*Rhi
        + (arm64-w3 0x9BC07C00 2 16 0                                            ; umulh x2, x16, x0
        + (arm64-w3 0x8B000000 2 2 17 + arm64-w3 0x9B007C00 0 16 0)))))          ; add x2,x2,x17; mul x0,x16,x0
    ;; (c128 cond sp) / (c128r cond rl rh): 0/1 <- (LEFT cond RIGHT). eq/ne fold both halves through
-   ;; XOR; the ordered relations run the borrow chain and read NZCV off the high SBCS; gt/above/le/be
+   ;; XOR; the ordered relations run the borrow chain and read nzcv off the high sbcs; gt/above/le/be
    ;; reverse the subtraction and read the flipped relation.
    (arm64-w128cc cond chain rsub zch)
       (? (member? cond '(eq ne))       (zch + arm64-set cond 'r0)
@@ -333,9 +333,9 @@
          (arm64-w3 0xCA000000 16 16 0 + (arm64-w3 0xCA000000 17 17 2            ; eor x16,x16,x0; eor x17,x17,x2
           + (arm64-w3 0xAA000000 16 16 17 + arm64-cmp 'r16 0))))                ; orr x16,x16,x17; cmp x16,#0
    ;; the 128/64 divide pair (u128 numerator in the cell, u64 divisor on the protocol lo). aarch64
-   ;; has no wide divide, so the high half rides UDIV/MSUB -- leaving a remainder BELOW the divisor --
+   ;; has no wide divide, so the high half rides udiv/msub -- leaving a remainder below the divisor --
    ;; and the low half a 64-step restoring shift. the cell, spent by the ldp, parks the high quotient.
-   ;; CCMP carries the doubling's own carry-out into the comparison: a remainder under a divisor past
+   ;; ccmp carries the doubling's own carry-out into the comparison: a remainder under a divisor past
    ;; 2^63 still leaves 64 bits when it doubles. d = 0 answers all ones and does not trap (x86 faults);
    ;; C leaves it undefined either way.
    arm64-divloop
@@ -348,9 +348,9 @@
        + (le32 0xF90003E2 + (le32 0xD2800801 + arm64-divloop)))))               ; str x2,[sp] (park the high quotient); mov x1,#64
    (arm64-dv128 sp9) (arm64-divpre + (arm64-wmov 0 16 + le32 0xF94003E2))       ; the low quotient off x16, the high back off the cell
    (arm64-rm128 sp9) (arm64-divpre + (arm64-wmov 0 17 + arm64-wmov 2 31))       ; the remainder, high half 0 (rem < d)
-   ;; the pair shifts by a CONSTANT: EXTR is the funnel (x86's SHLD/SHRD). at 64 and past it the
-   ;; halves just move -- a shift by 0 IS that move -- and SAR floods the sign. c = 0 lays nothing:
-   ;; EXTR has no #64 field, and gen folds that count away before it reaches here.
+   ;; the pair shifts by a constant: extr is the funnel (x86's SHLD/SHRD). at 64 and past it the
+   ;; halves just move -- a shift by 0 is that move -- and sar floods the sign. c = 0 lays nothing:
+   ;; extr has no #64 field, and gen folds that count away before it reaches here.
    (arm64-shl128 c)
       (? (c = 0) ()
          (c < 64) (arm64-w4 0x93C00000 2 2 0 (64 - c) + arm64-wshi 'shl 0 0 c)  ; extr x2,x2,x0,#64-c; lsl x0,x0,#c
@@ -363,8 +363,8 @@
       (? (c = 0) ()
          (c < 64) (arm64-w4 0x93C00000 0 2 0 c + arm64-wshi 'sar 2 2 c)         ; extr x0,x2,x0,#c; asr x2,x2,#c
          (arm64-wshi 'sar 0 2 (c - 64) + arm64-wshi 'sar 2 2 63))               ; asr x0,x2,#c-64; the sign flood
-   ;; the pair shifts by a REGISTER count (x1, the IR's pinned count register; 0..127 exact). a
-   ;; variable shift reads its count MOD 64, so both bands compute and CSEL on hs picks the crossed
+   ;; the pair shifts by a register count (x1, the IR's pinned count register; 0..127 exact). a
+   ;; variable shift reads its count mod 64, so both bands compute and csel on hs picks the crossed
    ;; one. c = 0 needs its own guard: the co-shift by 64-c degenerates to a shift by 0, which keeps
    ;; the whole word where it should contribute none.
    arm64-shl128v
@@ -395,8 +395,8 @@
        + (arm64-cmp 'r1 64 + (arm64-wsel 0 16 17 'ae
        + (arm64-wshi 'sar 17 2 63 + (arm64-w3 0x9AC02800 2 2 1                  ; the sign flood, then asr x2,x2,x1
        + arm64-wsel 2 17 2 'ae))))))))))))                                       ; csel x2, x17, x2, hs
-   ;; the register twins: the LEFT pair rides two pool registers (rl lo : rh hi) instead of the cell,
-   ;; the RIGHT keeps the x2:x0 protocol -- one form each, so the carry pair still can't part. the
+   ;; the register twins: the left pair rides two pool registers (rl lo : rh hi) instead of the cell,
+   ;; the right keeps the x2:x0 protocol -- one form each, so the carry pair still can't part. the
    ;; answer lands on the protocol without touching rl/rh (x86's subtract has to go through them).
    (arm64-a128r rl rh) (: l (rn rl) h (rn rh)
       (arm64-w3 0xAB000000 0 0 l + arm64-w3 0x9A000000 2 2 h))                  ; adds x0,x0,rl; adc x2,x2,rh
@@ -433,7 +433,7 @@
       (catall [(arm64-addsh 16 (rn base) (rn index) (arm64-shiftamt scale))                ; add x16, base, index lsl #amt
                 (arm64-mem-r 0xF8000000 0xF9000000 (rn s) 16 disp)])                          ; str s, [x16, #disp]
    ;; byte indexed load/store (the string/cask/map byte lanes). LDRB zero-extends to W (clearing the top
-   ;; 32 of X, == x86 movzx); STRB stores the low byte. disp is a raw BYTE offset (no scaling), unsigned
+   ;; 32 of X, == x86 movzx); strb stores the low byte. disp is a raw BYTE offset (no scaling), unsigned
    ;; 12-bit. Same address synthesis as ldx/stx: ldxb borrows the dest as the address temp, stxb uses x16.
    (arm64-ldxb d base index scale disp)                                                       ; d = (byte)[base + index*scale + disp]
       (: dn (rn d) (catall [(arm64-addsh dn (rn base) (rn index) (arm64-shiftamt scale))     ; add Xd, base, index lsl #amt
@@ -442,8 +442,8 @@
       (catall [(arm64-addsh 16 (rn base) (rn index) (arm64-shiftamt scale))                  ; add x16, base, index lsl #amt
                 (le32 (0x39000000 | ((disp << 10) | ((16 << 5) | rn s))))])                    ; strb Ws, [x16, #disp]
 
-   ;; -- scalar-double FP (the float glaze lane). f0..f15 -> v0..v15 (d-register view), a SEPARATE file
-   ;;    from the GPRs. the IR carries the SSE mnemonics (addsd/movsd/...) two-address (d = op(d,s)); we
+   ;; -- scalar-double FP (the float glaze lane). f0..f15 -> v0..v15 (d-register view), a separate file
+   ;;    from the gprs. the IR carries the SSE mnemonics (addsd/movsd/...) two-address (d = op(d,s)); we
    ;;    map each to the arm64 scalar-double form, repeating d as the first source where arm64 is
    ;;    three-address. type=01 (double) throughout; every word was objdump-checked.
    arm64-fregs (fregs 32)                                                                      ; f0..f31 -> 0..31 (v16+ = the pure
@@ -452,31 +452,31 @@
    arm64-fp3 (tabof                                                                            ; SSE arith mnemonic -> the scalar-double base word (Dd = Dn OP Dm)
         [('addsd >< 0x1E602800) ('subsd >< 0x1E603800) ('mulsd >< 0x1E600800) ('divsd >< 0x1E601800)])
    (arm64-fp3op op d s) (: dn (frn d) sn (frn s) (le32 (peep arm64-fp3 op 0 | ((sn << 16) | ((dn << 5) | dn)))))     ; Dd = Dd OP Ds
-   (arm64-fmov  d s) (: dn (frn d) sn (frn s) (le32 (0x1E604000 | ((sn << 5) | dn))))           ; FMOV Dd, Ds
+   (arm64-fmov  d s) (: dn (frn d) sn (frn s) (le32 (0x1E604000 | ((sn << 5) | dn))))           ; fmov Dd, Ds
    (arm64-fcmp  a b) (: an (frn a) bn (frn b) (le32 (0x1E602000 | ((bn << 16) | (an << 5)))))   ; FCMP Da, Db (sets NZCV; unordered -> VS)
-   (arm64-scvtf d g) (: dn (frn d) gn (rn g) (le32 (0x9E620000 | ((gn << 5) | dn))))            ; SCVTF Dd, Xg  (signed int -> double)
-   (arm64-fcvtzs g d) (: gn (rn g) dn (frn d) (le32 (0x9E780000 | ((dn << 5) | gn))))           ; FCVTZS Xg, Dd  (double -> signed int, toward zero)
-   (arm64-fmovxr d g) (: dn (frn d) gn (rn g) (le32 (0x9E670000 | ((gn << 5) | dn))))           ; FMOV Dd, Xg   (gpr bits -> fpr)  == movqxr
-   (arm64-fmovrx g d) (: gn (rn g) dn (frn d) (le32 (0x9E660000 | ((dn << 5) | gn))))           ; FMOV Xg, Dd   (fpr -> gpr bits)  == movqrx
+   (arm64-scvtf d g) (: dn (frn d) gn (rn g) (le32 (0x9E620000 | ((gn << 5) | dn))))            ; scvtf Dd, Xg  (signed int -> double)
+   (arm64-fcvtzs g d) (: gn (rn g) dn (frn d) (le32 (0x9E780000 | ((dn << 5) | gn))))           ; fcvtzs Xg, Dd  (double -> signed int, toward zero)
+   (arm64-fmovxr d g) (: dn (frn d) gn (rn g) (le32 (0x9E670000 | ((gn << 5) | dn))))           ; fmov Dd, Xg   (gpr bits -> fpr)  == movqxr
+   (arm64-fmovrx g d) (: gn (rn g) dn (frn d) (le32 (0x9E660000 | ((dn << 5) | gn))))           ; fmov Xg, Dd   (fpr -> gpr bits)  == movqrx
    ;; fp memory takes the same three lanes as the integer ops -- arm64-mem-raw with the
    ;; V=1 base words.
    (arm64-fst base disp s) (arm64-mem-raw 0xFC000000 0xFD000000 8 (frn s) (rn base) disp)   ; STR/STUR Ds, [base, #disp]
    (arm64-fld d base disp) (arm64-mem-raw 0xFC400000 0xFD400000 8 (frn d) (rn base) disp)   ; LDR/LDUR Dd, [base, #disp]
-   ;; the 4-byte single lane (the C `float` slot): widen/narrow via FCVT, load/store an S-register (disp a multiple of 4).
-   (arm64-fcvt-widen  d s) (: dn (frn d) sn (frn s) (le32 (0x1E22C000 | ((sn << 5) | dn))))            ; FCVT Dd, Ss  (single -> double)  == cvtss2sd
-   (arm64-fcvt-narrow d s) (: dn (frn d) sn (frn s) (le32 (0x1E624000 | ((sn << 5) | dn))))            ; FCVT Sd, Ds  (double -> single)  == cvtsd2ss
+   ;; the 4-byte single lane (the C `float` slot): widen/narrow via fcvt, load/store an S-register (disp a multiple of 4).
+   (arm64-fcvt-widen  d s) (: dn (frn d) sn (frn s) (le32 (0x1E22C000 | ((sn << 5) | dn))))            ; fcvt Dd, Ss  (single -> double)  == cvtss2sd
+   (arm64-fcvt-narrow d s) (: dn (frn d) sn (frn s) (le32 (0x1E624000 | ((sn << 5) | dn))))            ; fcvt Sd, Ds  (double -> single)  == cvtsd2ss
    (arm64-fsts base disp s) (arm64-mem-raw 0xBC000000 0xBD000000 4 (frn s) (rn base) disp)  ; STR/STUR Ss, [base, #disp]
    (arm64-flds d base disp) (arm64-mem-raw 0xBC400000 0xBD400000 4 (frn d) (rn base) disp)  ; LDR/LDUR Sd, [base, #disp]
-   (arm64-xorpd d s) (: dn (frn d) sn (frn s) (le32 (0x2E201C00 | ((sn << 16) | ((dn << 5) | dn)))))   ; EOR Vd.8B, Vd.8B, Vs.8B (zero a double when d==s; the grid's fvar-init)
+   (arm64-xorpd d s) (: dn (frn d) sn (frn s) (le32 (0x2E201C00 | ((sn << 16) | ((dn << 5) | dn)))))   ; eor Vd.8B, Vd.8B, Vs.8B (zero a double when d==s; the grid's fvar-init)
 
-   ;; -- the SYSTEM lane: what a kernel says and a userland never does. every word below was
+   ;; -- the system lane: what a kernel says and a userland never does. every word below was
    ;; taken from `llvm-mc -triple=aarch64 --show-encoding`, and test/holo/golden.l keeps them there.
    ;;
-   ;; MRS/MSR and the SYS family (tlbi/ic/dc/at) are ONE encoding wearing four faces: the fixed
-   ;; head 1101010100, an L bit (1 = read), and a 16-bit selector op0:op1:CRn:CRm:op2 sitting at
-   ;; [20:5]. so `sreg` packs that selector once and everything below just ORs it in -- a system
-   ;; register is its selector with op0 = 2 or 3, a SYS operation the same shape with op0 = 1.
-   ;; the table is the ~score the kernel touches, and it GROWS: one row is one instruction.
+   ;; MRS/MSR and the sys family (tlbi/ic/dc/at) are one encoding wearing four faces: the fixed
+   ;; head 1101010100, an L bit (1 = read), and a 16-bit selector op0:op1:crn:crm:op2 sitting at
+   ;; [20:5]. so `sreg` packs that selector once and everything below just ors it in -- a system
+   ;; register is its selector with op0 = 2 or 3, a sys operation the same shape with op0 = 1.
+   ;; the table is the ~score the kernel touches, and it grows: one row is one instruction.
    (sreg o0 o1 cn cm o2) ((o0 << 19) | ((o1 << 16) | ((cn << 12) | ((cm << 8) | (o2 << 5)))))
    arm64-sysregs (tabof
         [('sctlr_el1 >< sreg 3 0 1 0 0) ('cpacr_el1 >< sreg 3 0 1 0 2)
@@ -494,8 +494,8 @@
    (arm64-mrs d nm) (le32 (0xD5200000 | (arm64-sysreg nm | rn d)))         ; MRS Xd, <reg>
    (arm64-msr nm s) (le32 (0xD5000000 | (arm64-sysreg nm | rn s)))         ; MSR <reg>, Xs
 
-   ;; MSR (immediate): a PSTATE FIELD, not a register -- op1/op2 name the field and the 4-bit
-   ;; immediate rides CRm. this is how interrupts mask (daifset/daifclr) and how the stack
+   ;; MSR (immediate): a pstate field, not a register -- op1/op2 name the field and the 4-bit
+   ;; immediate rides crm. this is how interrupts mask (daifset/daifclr) and how the stack
    ;; pointer is chosen (spsel).
    arm64-pstate (tabof [('spsel >< '(0 5)) ('daifset >< '(3 6)) ('daifclr >< '(3 7))])
    (arm64-msri fld imm)
@@ -504,7 +504,7 @@
          _ (? ((imm >= 0) && (imm <= 15)) 0 (scare 'arm64-pstate-imm imm))
          (le32 (0xD500401F | ((<r << 16) | ((imm << 8) | (<>r << 5))))))
 
-   ;; barriers. one option table (the shareability domain) under all three; ISB takes only SY,
+   ;; barriers. one option table (the shareability domain) under all three; isb takes only sy,
    ;; so it is nullary here.
    arm64-barrier-opts (tabof
         [('oshld >< 1) ('oshst >< 2) ('osh >< 3) ('nshld >< 5) ('nshst >< 6) ('nsh >< 7)
@@ -513,8 +513,8 @@
    (arm64-dsb opt) (arm64-barrier 0xD503309F opt)
    (arm64-dmb opt) (arm64-barrier 0xD50330BF opt)
 
-   ;; the SYS operations. one table per instruction, because the operand namespaces are only
-   ;; ALMOST disjoint (dc ivac vs ic ivau) and a silent cross-read would emit the wrong cache
+   ;; the sys operations. one table per instruction, because the operand namespaces are only
+   ;; almost disjoint (dc ivac vs ic ivau) and a silent cross-read would emit the wrong cache
    ;; op. the whole-system forms take no register: spell that operand `zr` (Rt = 31 = XZR).
    arm64-tlbi-ops (tabof
         [('vmalle1 >< sreg 1 0 8 7 0) ('vmalle1is >< sreg 1 0 8 3 0)
@@ -528,16 +528,16 @@
    (arm64-sysrt t) (? (id? t 'zr) 31 (rn t))
    (arm64-sys tab bad op t) (le32 (0xD5000000 | (look tab op bad | arm64-sysrt t)))
 
-   ;; exception generation: one shape, Dxxx | (imm16 << 5) | LL. `dbrk` is A64's HLT -- the
-   ;; DEBUGGER halt (hlt #0xf000 is the semihosting call), named apart from x86's `hlt`, which
-   ;; stops the core and is a different instruction entirely. UDF is the permanently-undefined
+   ;; exception generation: one shape, Dxxx | (imm16 << 5) | ll. `dbrk` is a64's hlt -- the
+   ;; debugger halt (hlt #0xf000 is the semihosting call), named apart from x86's `hlt`, which
+   ;; stops the core and is a different instruction entirely. udf is the permanently-undefined
    ;; word, all zeros, and takes no head at all.
    (arm64-exc base imm)
       (: _ (? ((imm >= 0) && (imm <= 65535)) 0 (scare 'arm64-exc-imm imm))
          (le32 (base | (imm << 5))))
    (arm64-udf imm) (: _ (? ((imm >= 0) && (imm <= 65535)) 0 (scare 'arm64-exc-imm imm)) (le32 imm))
 
-   ;; the dispatch: an EMITTER TABLET (shapes in holo.l's ir-arity), rows partial-applied,
+   ;; the dispatch: an emitter tablet (shapes in holo.l's ir-arity), rows partial-applied,
    ;; nullaries their words outright, `raw` the identity. the alu group pins off its rows.
    arm64-emitters (emsof
         [('li >< arm64-li) ('mov >< arm64-mov) ('cmp >< arm64-cmp) ('imul >< arm64-imul)
@@ -592,8 +592,8 @@
           ('eret >< le32 0xD69F03E0)
           ('ret >< le32 0xD65F03C0)                          ; ret x30
           ('sys >< le32 0xD4000001)                          ; svc #0
-           ; ⚠ svc WITH AN IMMEDIATE, which netbsd/aarch64 requires: it takes the
-           ; syscall number from the INSTRUCTION, not a register, and offers no
+           ; svc with an immediate, which netbsd/aarch64 requires: it takes the
+           ; syscall number from the instruction, not a register, and offers no
            ; indirect door (SYS_syscall and SYS___syscall both SIGSYS there). So
            ; a runtime number is only reachable through a table of these.
           ('svcn >< arm64-exc 0xD4000001)                    ; svc #imm
@@ -602,18 +602,18 @@
    _ (foldl (\ _ p (emrow arm64-emitters <p (arm64-aluop <p))) 0 arm64-alu-rows)
    (arm64-lower ins) (: f lower-via (? (lit? f) (f arm64-emitters ins) (scare 'holo-bake-stale 'lower-via)))
 
-   ;; a relocation: the offset is (target - site)/4, ORed into the base word `aux`.
+   ;; a relocation: the offset is (target - site)/4, ored into the base word `aux`.
    (arm64-patch kind target site width aux)
       (: rb (target - site)
          rel (rb // 4)
          (? (kind = 'b26) (le32 (aux | (rel & 67108863)))             ; 26-bit field, bits[25:0]
             (kind = 'b19) (le32 (aux | ((rel & 524287) << 5)))        ; 19-bit field, bits[23:5]
-            (kind = 'adrp21) (: pg ((target // 4096) - (site // 4096))   ; ADRP: PAGE delta, immlo[30:29] immhi[23:5]
+            (kind = 'adrp21) (: pg ((target // 4096) - (site // 4096))   ; adrp: page delta, immlo[30:29] immhi[23:5]
                                 (le32 (aux | (((pg & 3) << 29) | (((pg >> 2) & 524287) << 5)))))
             (kind = 'addlo12) (le32 (aux | ((target % 4096) << 10)))  ; ADD #imm12: the target's low 12 (site-free)
-            (kind = 'adr21) (: rb ((target - site) & 2097151)            ; ADR: BYTE pc-rel, low 21 bits (two's comp); immlo[30:29] immhi[23:5]
+            (kind = 'adr21) (: rb ((target - site) & 2097151)            ; adr: BYTE pc-rel, low 21 bits (two's comp); immlo[30:29] immhi[23:5]
                                (le32 (aux | (((rb & 3) << 29) | ((rb >> 2) << 5)))))
-            (kind = 'abs64) (le64 (target + aux))                    ; an 8-byte ABSOLUTE address; aux = the byte ADDEND (&arr[i] = label + offset)
+            (kind = 'abs64) (le64 (target + aux))                    ; an 8-byte absolute address; aux = the byte addend (&arr[i] = label + offset)
             (scare 'badfix kind)))
 
    arm64 (tablet 0)

@@ -12,7 +12,7 @@
 ; (landed? pid) -> 1 if (catch pid) would not yield (pid unknown, self, dormant),
 ;                  nil if pid refers to a runnable task.
 ; (scoop _)    -> (pid . retval) of one task that has finished, or () when none
-;                  have. no pid needed and it never yields; the PAIR carries the
+;                  have. no pid needed and it never yields; the pair carries the
 ;                  presence, since a retval of () is a perfectly ordinary answer.
 
 (assert
@@ -96,13 +96,13 @@
  (: p (twirl (\ _ 42) 0) _ (catch p) (= 1 (landed? p)))
 
  ; --- scoop: harvest one finished task, whichever it turns out to be ---
- ; `catch` names a pid and BLOCKS until that one is done; `scoop` names none and
- ; never waits. it answers (pid . retval) for ONE task that has finished, or ()
+ ; `catch` names a pid and blocks until that one is done; `scoop` names none and
+ ; never waits. it answers (pid . retval) for one task that has finished, or ()
  ; when none have -- the task-side twin of `glean`, which does this for a finished
  ; child process. a server twirling a task per client wants exactly this: without
  ; it, the only way to collect is to keep a roster of live pids and ask about each
  ; one, and since every ask is itself a ring search the two costs multiply.
- ; ⚠ every law here drains FIRST: the corpus runs concatenated in one scope, so a
+ ; every law here drains first: the corpus runs concatenated in one scope, so a
  ; task some earlier section left dormant is a task scoop would rightly hand back.
 
  ; an empty ring answers the zero point.
@@ -118,7 +118,7 @@
     s (scoop 0)
     (&& (= p (cap s)) (= 42 (cup s))))
 
- ; ⚠ PRESENCE RIDES THE PAIR, NEVER THE NET. a task run for its EFFECT answers ()
+ ; presence rides the pair, never the net. a task run for its effect answers ()
  ; -- most of them do -- and it is still handed back as a pair. a drain that tested
  ; the value rather than the shape would stop dead on the first such task and leave
  ; the ring full while reporting it empty.
@@ -129,7 +129,7 @@
     s (scoop 0)
     (&& (two? s) (&& (= p (cap s)) (nil? (cup s)))))
 
- ; scooping COLLECTS, exactly as catching does: the pid is gone afterwards.
+ ; scooping collects, exactly as catching does: the pid is gone afterwards.
  (: (drain _) (? (two? (scoop 0)) (drain ()) 0)
     _ (drain ())
     p (twirl (\ _ 42) ())
@@ -161,7 +161,7 @@
  (nil? (rest ()))
 
  ; sleep takes at least n ticks (g_clock ms on this frontend).
- ; allow generous slack for slow CI.
+ ; allow generous slack for slow ci.
  (: t0 (clock 0)
     _ (rest 30)
     elapsed (clock t0)
@@ -175,7 +175,7 @@
     elapsed (clock t0)
     (&& (>= elapsed 30) (< elapsed 60)))
 
- ; a peer waking mid-wait must NOT cut short main's longer sleep.
+ ; a peer waking mid-wait must not cut short main's longer sleep.
  ; (rest 0) forces peer to reach its (rest 30) before main starts its (rest 80),
  ; so main's yield_sw enters the deadline-coalesce wait with peer's 30 as min_wake.
  ; When peer wakes at ~30, main's pending wake_at must be preserved across the snapshot.
@@ -232,7 +232,7 @@
 
  ; --- yieldable bignum multiply ---
 
- ; A big bignum multiply can be long-running yet yields cooperatively: it does a
+ ; a big bignum multiply can be long-running yet yields cooperatively: it does a
  ; bounded slice of work per VM dispatch (a yield check per Karatsuba job for an
  ; equal-length product, per schoolbook chunk otherwise), so a peer task runs
  ; *during* the product. This is what lets the repl's Ctrl-C poller interrupt a
@@ -296,7 +296,7 @@
     _ (catch a) _ (catch b)
     (= 5 (peep t 'n 0)))
 
- ; --- what a task wears: in/out/err are NAMES, and each task seats its own ---
+ ; --- what a task wears: in/out/err are names, and each task seats its own ---
  ; (wear (i o e)) re-seats them for the running task, (wear ()) hands the console
  ; back, (worn ()) answers what is worn. an element that is not a port keeps the
  ; console, so a lone stdout re-seat says (() o ()).
@@ -314,7 +314,7 @@
     _ (wear ())
     ("hi!" = s))
 
- ; PER TASK, across a switch: two tasks wearing different jugs never cross, and
+ ; per task, across a switch: two tasks wearing different jugs never cross, and
  ; the main task keeps the console through both
  (: a (jug 0) b (jug 0)
     p (twirl (\ _ (: _ (wear [() a ()]) _ (puts "a1") _ (rest 0) _ (puts "a2") 1)) 0)
@@ -322,7 +322,7 @@
     _ (catch p) _ (catch q)
     (&& ("a1a2" = (slurp a)) ("b1b2" = (slurp b)) (nil? (worn ()))))
 
- ; INHERITED at spawn: a child says its piece into the jug its parent wears
+ ; inherited at spawn: a child says its piece into the jug its parent wears
  (: j (jug 0)
     _ (wear [() j ()])
     p (twirl (\ _ (: _ (puts "the child's") 0)) 0)

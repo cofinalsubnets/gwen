@@ -21,7 +21,7 @@
 ; stays where it is: nolibc is a libc, and a C program mooncc builds is entitled to
 ; getaddrinfo.
 ;
-; what it speaks, and what it does not: A records over UDP, /etc/hosts first,
+; what it speaks, and what it does not: a records over UDP, /etc/hosts first,
 ; /etc/resolv.conf's nameservers in order with the search domains appended on a miss.
 ; not AAAA and not the TCP fallback -- a truncated answer is a scare, never a silent
 ; partial, so the gap says so when something reaches it.
@@ -93,7 +93,7 @@
                           (string? r && (string l + snip h i j + r))))))
        (0 < n && go 0))
 
-   ; the query packet: header (RD set, one question), the name, QTYPE A QCLASS IN.
+   ; the query packet: header (RD set, one question), the name, QTYPE A QCLASS in.
    (dns-query id h)
     (: q (dns-labels h)
        (string? q &&
@@ -110,8 +110,8 @@
              (l & 192 = 192) (n < pos + 2 ? -1 (pos + 2))
              (dns-skip r (pos + l + 1) n))))
 
-   ; a response -> the A addresses in the server's order, () if it says no, or
-   ; 'torn when the TC bit says the answer did not fit. CNAMEs simply ride past:
+   ; a response -> the a addresses in the server's order, () if it says no, or
+   ; 'torn when the TC bit says the answer did not fit. cnames simply ride past:
    ; they are records of another type and the walk skips them.
    (dns-answers r id)
     (: n #r
@@ -160,7 +160,7 @@
 
    ; /etc/hosts: the first line whose address parses and one of whose names is an
    ; exact match -> a one-list of the address. no packet is sent at all, which is
-   ; what makes localhost and every LAN name free.
+   ; what makes localhost and every lan name free.
    (dns-hosts path h)
     (: (go (l . u))
      (: w (dns-words l)

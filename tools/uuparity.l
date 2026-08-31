@@ -8,7 +8,7 @@
 ;
 ;   out/host/love tools/uuparity.l          (exit 1 on impostors)
 ;
-; skips with a note when UniMath is absent. the scan is TEXTUAL on both sides
+; skips with a note when UniMath is absent. the scan is textual on both sides
 ; (a commented-out defn still counts), the shape of the python it replaced.
 (: unimath "/usr/lib/ocaml/coq/user-contrib/UniMath"
    uul "test/uu.l"
@@ -17,8 +17,8 @@
    (dir? p) (: st (stat p) (? !(two? st) 0 ((& 61440 <>>st) = 16384)))
    (sfx-v? s) (: n (tally s) ((2 < n) && (s (n - 2) = 46) && (s (n - 1) = 118)))
    (alnum? c) (((48 <= c) && (c <= 57)) || ((65 <= c) && (c <= 90)) || ((97 <= c) && (c <= 122)))
-   (vnamec? c) ((alnum? c) || (c = 95) || (c = 39))       ; [A-Za-z0-9_']
-   (unamec? c) ((alnum? c) || (c = 95) || (c = 45))       ; [A-Za-z0-9_-]
+   (vnamec? c) ((alnum? c) || (c = 95) || (c = 39))       ; [a-za-z0-9_']
+   (unamec? c) ((alnum? c) || (c = 95) || (c = 45))       ; [a-za-z0-9_-]
    (blank? c) ((c = 32) || (c = 9) || (c = 13))
 
    ; every *.v under p, then one flat sort so the visit order is the path order

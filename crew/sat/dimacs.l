@@ -1,10 +1,10 @@
-; dimacs -- a DIMACS CNF reader for the sat solver, built from the PARSER COMBINATORS in love/peg.l
+; dimacs -- a dimacs cnf reader for the sat solver, built from the parser combinators in love/peg.l
 ; (a parser is (\ s y n): a string s, a success continuation y = (rest payload), a failure
 ; continuation n = rest; payloads are lists that `seq` concatenates). peg shares that set
-; (eps/lit/span/alt/seq/seqs/skip/many/runp) with cook; here we add only a signed-int LEAF `pint` (love
+; (eps/lit/span/alt/seq/seqs/skip/many/runp) with cook; here we add only a signed-int leaf `pint` (love
 ; has no regex) and the grammar. `dimacs text` -> (formula . nvars): skip `c` comment lines, read the
 ; `p cnf N M` header for N, parse the body integers, split them into clauses at each terminating 0.
-; The self-tests below read `cdcl` for the parse->solve leg, so this file is run BEHIND the solver:
+; The self-tests below read `cdcl` for the parse->solve leg, so this file is run behind the solver:
 ; cat crew/sat/sat.l crew/sat/dimacs.l | out/host/love.
 ; the combinators (love/peg.l) -- its own top-level form; this reader is all lenient `runp`.
 (use 'peg)
@@ -13,7 +13,7 @@
    ; -- the parser combinators (eps/lit/span/alt/seq/seqs/skip/many + the lenient runner runp) come from
    ;    love/peg.l via the (use 'peg) above -- shared with cook, not re-derived here.
    ; -- character classes + the signed-integer leaf --
-   (ws? c)   (c @ (32 || 9 || 13 || 10) 1 0)     ; space/tab/CR/LF -- a ?-name owes a BIT
+   (ws? c)   (c @ (32 || 9 || 13 || 10) 1 0)     ; space/tab/cr/lf -- a ?-name owes a bit
    (dig? c)  (47 < c < 58)                 ; '0'..'9'
    (notnl? c) (c != 10)
    (str->nat ds) ((: (g i a) (i >= #ds ? a (g (i + 1) (a * 10 + ds i - 48)))) 0 0)
@@ -21,7 +21,7 @@
     (: t #s neg (0 < t && s 0 = 45) j0 ?neg
        j (: (g i) (i < t && dig? (s i) ? (g (i + 1)) i) (g j0))
      (j = j0 ? (n s) (: v (str->nat (snip s j0 j)) (y (snip s j t) [(neg ? -v v)]))))
-   ; -- the DIMACS grammar --
+   ; -- the dimacs grammar --
    ws        (skip (span ws?))                              ; a (possibly empty) whitespace run
    cline     (seq (lit "c") (span notnl?))                  ; a 'c' comment: 'c' + rest of line (the newline is ws)
    pre       (skip (many (seq ws cline)))                   ; leading comment lines
@@ -53,7 +53,7 @@ p cnf 3 3
     (: r (dimacs "p cnf 100 1
 	42	-99	0
 ")  ((= 100 >r) && (= '((42 -99)) <r))))
- ; -- integration self-test. `cdcl` is crew/sat/sat.l's, and this file is CATTED after it --
+ ; -- integration self-test. `cdcl` is crew/sat/sat.l's, and this file is catted after it --
  ; a name that is not there is missing at compile, so no predicate can stand in front of one.
  _ (assert
      (: r (dimacs "p cnf 3 3

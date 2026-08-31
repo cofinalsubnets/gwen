@@ -1,20 +1,20 @@
 ; tools/wm2uu.l -- stage 3 of the verified-lux ladder: the .l -> uu translator.
-; Reads crew/lux/core.l's zipper ops AS DATA and emits uu terms in the model's
-; vocabulary, KIND-DIRECTED by crew/lux/sigs.l (the overlay's boundary table is
+; Reads crew/lux/core.l's zipper ops as data and emits uu terms in the model's
+; vocabulary, kind-directed by crew/lux/sigs.l (the overlay's boundary table is
 ; the type oracle): a cap on a zipper is zfoc, on a row hd0; cap-of-cup is zup,
 ; cap-of-cup-of-cup is zdn (the glued <>z / <>>z factor to those chains);
 ; ></link and +/cat/rev are ncons/lapp/lrev; a two? test cases on a
-; row's length (nat_rect) or WITNESSES a zipper nonempty (the model's stk IS
+; row's length (nat_rect) or witnesses a zipper nonempty (the model's stk IS
 ; the nonempty zipper, so core.l's ()-lane erases -- zins's make-a-singleton
 ; else included); =/!= case through bool_rect on nateqb; local (: ..) chains
 ; become definitional lets; znub's filter shape is nfilt; zdel answers the
 ; model's Maybe (a zipper result wraps ii2, the bare () becomes ii1 tt).
 ; The output defn-certifies in the kernel (boot/overlay.l leg 6), answers the
-; seeded fuzz exactly as core.l does, and lands CONVERTIBLE with the hand
+; seeded fuzz exactly as core.l does, and lands convertible with the hand
 ; model -- stage 4's idpath bridges ride that. (wm2uu forms sigs) answers
 ; ((gen-name uu-type uu-term) ..) for the twelve ops in w2-want.
 ;
-; a body-LESS `:` -- the w2-* vocabulary leaks; none shadows a nif.
+; a body-less `:` -- the w2-* vocabulary leaks; none shadows a nif.
 (:
    (w2-nthl l n) (? (= n 0) (cap l) (w2-nthl (cup l) (- n 1)))
    (w2-sigof sigs nm) (? (! (two? sigs)) ()
@@ -23,7 +23,7 @@
    (w2-zip ps ks) (? (two? ps) (link [(cap ps) (cap ks)] (w2-zip (cup ps) (cup ks))) ())
    ; the list ctor: `list` is what [..] and the ` sigil read to.
    (w2-list? h) (id? h 'list)
-   ; ⚠ and so does negation: `!` is the SIGIL, `nil?` what opfix factors it to.
+   ; and so does negation: `!` is the sigil, `nil?` what opfix factors it to.
    ; the forms arrive factored, so match the core word and the surface one both.
    (w2-not? h) (|| (id? h '!) (id? h 'nil?))
    ; ..and the pair ops: >< is link, + is cat on a row. both spellings match.
@@ -37,10 +37,10 @@
    (w2-pi ps ks res) (? (two? ps) ['pi (cap ps) (w2-ty (cap ks)) (w2-pi (cup ps) (cup ks) res)] res)
    (w2-lams ps b) (? (two? ps) ['lam (cap ps) (w2-lams (cup ps) b)] b)
 
-   ; --- the wanted ops and their emitted names. zmk/zfoc are NOT wanted:
-   ;     they ARE the representation vocabulary the rules target (a generated
+   ; --- the wanted ops and their emitted names. zmk/zfoc are not wanted:
+   ;     they are the representation vocabulary the rules target (a generated
    ;     zfoc would be (lam z (zfoc z)), a self-reference) -- they live in
-   ;     test/uu.l's substrate. the name map is a SLOT so a driver can emit
+   ;     test/uu.l's substrate. the name map is a slot so a driver can emit
    ;     under gen-* names (the gate's bridges) or the model's own names
    ;     (stage 5's test/uuwm.l) ---
    w2-want '(zrow zrev zfocup zfocdn zswapup zswapdn zmaster zins znub zdel)
@@ -72,7 +72,7 @@
              (id? h 'filter) 'wrow (w2-list? h) 'zipper
              (: sg (w2-sigof sigs h) (? (two? sg) (w2-nthl sg 2) 'top)))))
 
-   ; --- the translation. rk = the RESULT kind at this position ---
+   ; --- the translation. rk = the result kind at this position ---
    (w2-nil rk) (? (id? rk 'mstk) '(ii1 tt) 'nnil)
    (w2-tx e env sigs rk)
     (? (nom? e) e
@@ -123,7 +123,7 @@
        (&& (two? t) (id? (cap t) 'two?))
          (: x (w2-nthl t 1)
             (? (id? (w2-kof x env sigs) 'zipper)
-               (w2-tx then-x env sigs rk)                ; nonempty BY KIND: the ()-lane erases
+               (w2-tx then-x env sigs rk)                ; nonempty by kind: the ()-lane erases
                ['nat_rect ['lam 'gq (w2-mty rk)]
                   (w2-tx else-x env sigs rk)
                   ['lam 'gk ['lam 'gr (w2-tx then-x env sigs rk)]]

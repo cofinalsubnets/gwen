@@ -1,6 +1,6 @@
 ; --- test/host/limn.l: the laws of lib/limn.l, the cell painter ---
-; NOT in the test/*.l corpus: `glass` and `unfold` are cb's nifs (crew/quay/nif.c)
-; and love0 links none of them. it needs the LOADER too, the way its neighbour
+; not in the test/*.l corpus: `glass` and `unfold` are cb's nifs (crew/quay/nif.c)
+; and love0 links none of them. it needs the loader too, the way its neighbour
 ; test/host/wharf.l does -- `use` finds lib/limn.l by the filesystem walk.
 ;
 ;   cat test/00-init.l test/host/limn.l | out/host/love   ; exits 1 on fail
@@ -10,7 +10,7 @@
 (use "lib/limn.l")
 
 ; `sub?` is each gate's own here (test/host/berth.l carries the same three lines) --
-; it SEARCHES from i; `at?` is the exact-position twin, which is what counting wants
+; it searches from i; `at?` is the exact-position twin, which is what counting wants
 (: (at? h n i) (&& ((i + tally n) <= tally h) (n = snip h i (i + tally n)))
    (sub? h n i) (? ((i + tally n) < (tally h + 1))
                    (? (at? h n i) 1 (sub? h n (i + 1)))
@@ -34,7 +34,7 @@
       (limn-down = limn-utf8 9474)
       (limn-across = limn-utf8 9472))
 
-; --- a glyph byte: ascii through, a high byte UNFOLDED, and the cache is
+; --- a glyph byte: ascii through, a high byte unfolded, and the cache is
 ;     transparent -- asking twice answers the same text ---
    _ (assert
       ("x" = limn-glyph 120)
@@ -50,14 +50,14 @@
       (sub? (limn-sgr (| 7 (<< 2 20))) ";4" 0)
       (sub? (limn-sgr (| 7 (<< 4 20))) ";7" 0))
 
-; --- THE LAW THAT MATTERS: every row is addressed at its OWN origin, which is
+; --- the law that matters: every row is addressed at its own origin, which is
 ;     the whole difference between painting a rectangle and painting full lines ---
    _ (: s (mkscr 3 4)
         _ (scribe s "ab")
         f (paint s 3 4 5 9)
         _ (assert
            (sub? f "\e[6;10H" 0)                      ; row 0 of the grid at (5,9)
-           (sub? f "\e[7;10H" 0)                      ; row 1 at the SAME column
+           (sub? f "\e[7;10H" 0)                      ; row 1 at the same column
            (sub? f "\e[8;10H" 0)                      ; row 2
            (sub? f "ab" 0)                            ; and the glyphs came through
            !(sub? f "\e[1;1H" 0)))                    ; never the home cell
@@ -69,8 +69,8 @@
         f (paint s 1 4 0 0)
         _ (assert (sub? f "z   " 0)))
 
-; --- the pen CARRY: limn-rows answers the pen it ended on, and a run of cells
-;     wearing one pen says its SGR ONCE ---
+; --- the pen carry: limn-rows answers the pen it ended on, and a run of cells
+;     wearing one pen says its SGR once ---
    _ (: s (mkscr 1 6)
         _ (scribe s "aaaaaa")
         j (jug 0)

@@ -71,7 +71,7 @@
  (1 = (fat-rm f "hello.txt"))
  !(fat-stat f "hello.txt"))
 
-; persistence is the point: a FRESH mount over the same bytes reads it all back
+; persistence is the point: a fresh mount over the same bytes reads it all back
 (: f2 (fat-mount dev))
 (assert
  (tablet? f2)

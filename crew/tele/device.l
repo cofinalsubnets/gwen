@@ -1,8 +1,8 @@
-; crew/tele/device.l -- a SIM backend for tele's device seam, plus a roofline meter.
+; crew/tele/device.l -- a sim backend for tele's device seam, plus a roofline meter.
 ;
 ; tele.l owns the seam (the { gemm ew reduce transp } record + tl-use/tl-gemm/...);
-; the DEFAULT backend `tl-cpu` is love's native array ops. this file adds `sim-dev`:
-; the exact same math, but every kernel METERS itself -- FLOPs done, bytes touched,
+; the default backend `tl-cpu` is love's native array ops. this file adds `sim-dev`:
+; the exact same math, but every kernel meters itself -- flops done, bytes touched,
 ; launches -- into `dv-stats`. `dv-roofline` then turns that tally into a time
 ; estimate for a named device (peak TFLOP/s + memory GB/s), so you can size the
 ; kernel decomposition (is this layer compute- or memory-bound?) before any silicon.
@@ -10,7 +10,7 @@
 ;   Run:  cat crew/tele/tele.l crew/tele/device.l | out/host/love      # then (tl-use sim-dev)
 ;
 ; a "kernel" here is coarse (one gemm / one elementwise / one reduce) -- roofline
-; granularity, the right altitude to answer "how big a GPU do I need" without a
+; granularity, the right altitude to answer "how big a gpu do I need" without a
 ; warp simulator.
 
 (: ;; -- shape helpers (shape is a LIST -- walk it with cap/cup, like tele does) --
@@ -28,7 +28,7 @@
     'byte   (b + peep dv-stats 'byte 0)
     'launch (1 + peep dv-stats 'launch 0))
 
-   ;; per-kernel FLOP / byte cost -- the roofline inputs.
+   ;; per-kernel flop / byte cost -- the roofline inputs.
    ;;   gemm (m,k)x(k,n): 2mkn flops; reads A+B, writes C
    ;;   ewise n cells    : n flops;    reads 2, writes 1
    ;;   reduce n cells   : n flops;    reads 1, writes ~0
@@ -39,7 +39,7 @@
    (dv-red-cost a)    (: n (dv-cells a) (n >< dv-elsz * n))
    (dv-tr-cost a)     (: n (dv-cells a) (0 >< dv-elsz * 2 * n))
 
-   ;; -- the SIM backend: tele's four kernels, native math WRAPPED in the meter.
+   ;; -- the sim backend: tele's four kernels, native math wrapped in the meter.
    ;; keys match tele's seam exactly (gemm/ew/reduce/transp); `ew` takes the op. --
    sim-dev {'name "sim"
             'gemm   (\ a b   (: c (dv-gemm-cost a b) _ (dv-bump <c >c) (inner a b)))
@@ -48,7 +48,7 @@
             'transp (\ m     (: c (dv-tr-cost m)     _ (dv-bump <c >c) (transp2 m)))}
 
    ;; -- the roofline: turn the meter into a time estimate for a named device.
-   ;; spec = { name tflops gbps }: peak compute (TFLOP/s) and memory BW (GB/s).
+   ;; spec = { name tflops gbps }: peak compute (TFLOP/s) and memory bw (GB/s).
    ;; time = max(flops/peak, bytes/bw); intensity = flops/byte (the roofline knee).
    (device name tflops gbps) (hash 'name name 'tflops tflops 'gbps gbps)
    (dv-roofline spec)

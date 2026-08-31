@@ -1,11 +1,11 @@
-; crew/sb/http.l -- the smallest HTTP/1.1 GET that can walk a store, over the
+; crew/sb/http.l -- the smallest HTTP/1.1 get that can walk a store, over the
 ; `connect` socket floor (src/sock.c, the same one tools/ain.l dials with).
 ;
-; it is a CLIENT only, and only GET: an sb remote needs nothing else. the store
-; is content-addressed and immutable, so every fetch is a plain cacheable GET on
+; it is a client only, and only get: an sb remote needs nothing else. the store
+; is content-addressed and immutable, so every fetch is a plain cacheable get on
 ; a name the client already knows, verified by sha256 on arrival -- there is no
 ; protocol to speak, no index to publish, and a hostile or broken mirror is
-; DETECTABLE rather than trusted. any static file server is a complete remote,
+; detectable rather than trusted. any static file server is a complete remote,
 ; kiosko included (`sb -s PORT` would serve .sb/ the way papel serves a site).
 ;
 ; we send `Connection: close` and read to EOF, which is what makes `slurp` safe
@@ -52,7 +52,7 @@
           port (? (c < 0) 80 (digits (snip auth (c + 1) a)))
           (? ((0 < tally host) && port) [host port path] ())))
 
-   ; one GET -> (status body) | (). () is a DEAD SOCKET or an unreadable
+   ; one get -> (status body) | (). () is a dead socket or an unreadable
    ; response; a 404 is a perfectly good answer and comes back as (404 ..), so
    ; the caller can tell "no such object" from "no such host".
    (http-get host port path)
@@ -72,7 +72,7 @@
                          code (? (sp < 0) () (digits (snip head (sp + 1) (sp + 4))))
                          (? code [code body] ()))))))))
 
-   ; GET a store object under a base url -> (1 body) | (). the PRESENCE WRAPPER,
+   ; get a store object under a base url -> (1 body) | (). the presence wrapper,
    ; not the bare body: a 0-byte blob is a legitimate object and `!""` is true,
    ; so a bare body would read as absence -- the same law the empty-file fix set
    ; down (presence is the wrapper, never the net). anything but 200 is absence,

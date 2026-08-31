@@ -1,35 +1,35 @@
-; test/uuval.l -- LOVE'S OWN VALUES, modelled in uu: the measure tower of
-; CLAUDE.md's lambda equations ($x = ceil (re (net x)), ?x = ($x > 0)) built as
-; a STACK OF RETRACTIONS, so the laws test/law.l can only refute become theorems
+; test/uuval.l -- love's own values, modelled in uu: the measure tower of
+; claude.md's lambda equations ($x = ceil (re (net x)), ?x = ($x > 0)) built as
+; a stack OF retractions, so the laws test/law.l can only refute become theorems
 ; (tools/law2uu.l compiles them off law.l's own rows into test/uuvallaw.l -- one
 ; spelling, both lanes). the value universe is a binary tree of measures -- love's
-; net sums over a compound's parts and reads nothing else, so a leaf IS its
+; net sums over a compound's parts and reads nothing else, so a leaf is its
 ; measure and no gem's value (hence no ieee) enters the model.
 ;
-; the tower, each rung a section/retraction pair whose round trip is DEFINITIONAL:
+; the tower, each rung a section/retraction pair whose round trip is definitional:
 ;
 ;   bool  --nbit-->  nat  --nzed-->  zed  --zrea-->  rea  --rmsr-->  msr  --vnum--> val
 ;         <-natbit-       <--zsat--       <-rceil--       <--mre---        <--vnet--
 ;
-; a real is a HALF-INTEGER (z, plus a bit for +1/2): the smallest carrier closed
+; a real is a half-integer (z, plus a bit for +1/2): the smallest carrier closed
 ; under addition on which ceil is not the identity, which is all the tower's shape
 ; asks of it -- 2.5 ceils to 3 and -2.5 to -2 here, exactly as love answers.
 ;
 ; a leaf is not quite its measure: () and 0 net the same, read nil the same, and
-; are still two values, so the leaf carries a TAG (atm) and = reads it. that one
+; are still two values, so the leaf carries a tag (atm) and = reads it. that one
 ; bit is what a whole layer of the model needed and nothing else in it uses.
-; the equality itself is an EQUIVALENCE here -- reflexive, and transitive off the
+; the equality itself is an equivalence here -- reflexive, and transitive off the
 ; reflection of each rung's decidable equality into a path -- which is what lets
 ; a link's two limbs be compared through the heights neither of them spells.
-; and beside it sits the PINNED carrier, the same trees with the index tied to
+; and beside it sits the pinned carrier, the same trees with the index tied to
 ; the height, where the spelling is unique and `paths` is the equality. the two
 ; are bridged both ways: veq answers true exactly when the two values pin to the
 ; same one, so love's = is a decision procedure for paths and every law can be
 ; read either way. the laws below are given in both.
-; above the tower sits the CHARM CEILING, the only rung with a width -- zsat is
+; above the tower sits the charm ceiling, the only rung with a width -- zsat is
 ; the retraction and stays unbounded, zsatc is what the word can hold -- and
-; beside it the COLOURS, the sign structure ?x = ($x > 0) actually rests on.
-; the laws HERE are about idempotence and factorisation, so a wrong zadd cannot
+; beside it the colours, the sign structure ?x = ($x > 0) actually rests on.
+; the laws here are about idempotence and factorisation, so a wrong zadd cannot
 ; fake one; the algebra of + and * is test/uuvalband.l's, and what gates the
 ; arithmetic in both is the differential in test/uuvaldiff.l, which runs love's
 ; own saturate beside this model's vsat over test/law.l's corpus.
@@ -41,7 +41,7 @@
 ; --- zed: the integers, ceil's codomain. ii1 n is n, ii2 n is -(succ n) ---
 (assert
  (defn zed UU (coprod nat nat))
- (defn nzed (pi n nat zed) (lam n (ii1 n)))                 ; the section: a nat IS an integer
+ (defn nzed (pi n nat zed) (lam n (ii1 n)))                 ; the section: a nat is an integer
  (defn zneg (pi n nat zed) (lam n (ii2 n)))                 ; -(n+1)
  (defn zzero zed (ii1 0))
  (defn zsucc (pi z zed zed)
@@ -52,14 +52,14 @@
  ; the truncation to nat -- max(0,.) -- and its round trip
  (defn zsat (pi z zed nat)
    (lam z (coprod_rect (lam w nat) (lam n n) (lam n 0) z)))
- ; ..and the CHARM CEILING above it. a charm is the word minus its tag bits, so
+ ; ..and the charm ceiling above it. a charm is the word minus its tag bits, so
  ; a net that will not fit lands on the edge rather than wrapping or widening
  ; (love.c's ai_saturate). the width is a parameter and the laws below are
  ; stated against chmax, holding at any width -- only the literal moves; a small
  ; one keeps the ceiling in reach of a demo. zsat is the tower's retraction and
- ; stays unbounded: the round trip is a fact about the MEASURE, the ceiling a
+ ; stays unbounded: the round trip is a fact about the measure, the ceiling a
  ; fact about the word it is read into, and only the second has a width.
- ; the step CASES on b rather than folding it: conv is eager, so a nat_rect
+ ; the step cases on b rather than folding it: conv is eager, so a nat_rect
  ; over b would evaluate the step at every level below it and cost b^a
  (defn nmin (pi a nat (pi b nat nat))
    (lam a (nat_rect (lam q (pi b nat nat))
@@ -74,7 +74,7 @@
              (lam n (nat_rect (lam q zed) (ii2 0) (lam k (lam r (ii1 k))) n))
              (lam n (ii2 (succ n)))
              z)))
- ; addition by ITERATION -- b counts the steps, each one zsucc or zpred. the
+ ; addition by iteration -- b counts the steps, each one zsucc or zpred. the
  ; truncated-subtraction spelling computes the same sums and proves nothing:
  ; every law of + below reads off these four definitional equations, and
  ; natminus has none to give.
@@ -97,7 +97,7 @@
 (assert
  (defn rea UU (total2 z zed bool))
  (defn rmk (pi z zed (pi h bool rea)) (lam z (lam h (tpair z h))))
- (defn zrea (pi z zed rea) (lam z (tpair z false)))         ; the section: an integer IS a real
+ (defn zrea (pi z zed rea) (lam z (tpair z false)))         ; the section: an integer is a real
  (defn rceil (pi r rea zed)
    (lam r (bool_rect (lam x zed) (zsucc (pr1 r)) (pr1 r) (pr2 r))))
  (defn rzero rea (zrea zzero))
@@ -110,35 +110,35 @@
  (= (vof 0 '(ii2 1)) (vof 0 '(rceil (rmk (ii2 2) true))))  ; ceil -2.5 = -2
  (= (vof 0 '(rmk (ii1 3) false)) (vof 0 '(radd (rmk (ii1 1) true) (rmk (ii1 1) true)))))
 
-; --- msr: the measure is COMPLEX, and re is the rung love's ceil reads ---
+; --- msr: the measure is complex, and re is the rung love's ceil reads ---
 (assert
  (defn msr UU (total2 r rea rea))
  (defn mre (pi m msr rea) (lam m (pr1 m)))
- (defn rmsr (pi r rea msr) (lam r (tpair r rzero)))         ; the section: a real IS a measure
+ (defn rmsr (pi r rea msr) (lam r (tpair r rzero)))         ; the section: a real is a measure
  (defn mzero msr (rmsr rzero))
  (defn madd (pi a msr (pi b msr msr))
    (lam a (lam b (tpair (radd (pr1 a) (pr1 b)) (radd (pr2 a) (pr2 b)))))))
 
-; --- atm: what a LEAF carries. () and 0 net the same and both read nil, and
+; --- atm: what a leaf carries. () and 0 net the same and both read nil, and
 ; --- they are still not one value -- love keeps "" and () and 0 apart, and
-; --- (= () 0) is false -- so a leaf carries a TAG and not just its measure ---
+; --- (= () 0) is false -- so a leaf carries a tag and not just its measure ---
 (assert
  (defn atm UU (coprod unit msr))
  (defn aunit atm (ii1 tt))                                  ; ()
- (defn anum (pi m msr atm) (lam m (ii2 m)))                 ; a number IS its measure
+ (defn anum (pi m msr atm) (lam m (ii2 m)))                 ; a number is its measure
  (defn anet (pi a atm msr)
    (lam a (coprod_rect (lam w msr) (lam u mzero) (lam m m) a))))
 
 ; --- val: a value is a binary tree of measures, depth-indexed (nlist's trick).
-; --- at every level a node is a LEAF (ii1, carrying its measure) or a PAIR of
-; --- the level below (ii2) -- love's link. so the depth is a HEIGHT BOUND and
+; --- at every level a node is a leaf (ii1, carrying its measure) or a pair of
+; --- the level below (ii2) -- love's link. so the depth is a height bound and
 ; --- not a shape: a leaf spells the same at every depth, which is what makes a
 ; --- node's head unambiguous and lets cap/cup/two? read it without recursing.
 ; --- net folds the tree ---
 (assert
  (defn vtre (pi d nat UU)
    (lam d (nat_rect (lam q UU) atm (lam k (lam T (coprod atm (total2 x T T)))) d)))
- ; the two limbs of a link, NAMED. bare pr1/pr2 would do it here, but the Rocq
+ ; the two limbs of a link, named. bare pr1/pr2 would do it here, but the Rocq
  ; export elaborates a sum_rect's branches before it unifies the scrutinee's
  ; type, so the pair's family is still a metavariable when pr2 asks for it and
  ; the unification goes higher-order. a named projection pins it from its own
@@ -171,9 +171,9 @@
  (defn vsatc (pi v val nat)  (lam v (zsatc (vceil v))))     ; ..as it lands in a charm
  (defn vbit  (pi v val bool) (lam v (natbit (vsat v))))     ; love's bit, ?x
  (defn vnil  (pi v val bool) (lam v (negb (vbit v))))       ; love's nil?, !x
- ; --- the COLOURS, read off the SIGN of the measure's real part. green is the
+ ; --- the colours, read off the sign of the measure's real part. green is the
  ; --- kept band (what $ keeps), red the clamped half below the floor, blue the
- ; --- floor itself. green and blue are DUAL and not disjoint: 0 is green by
+ ; --- floor itself. green and blue are dual and not disjoint: 0 is green by
  ; --- sign and blue by measure, the overlap where green meets nothing ---
  (defn zgreen (pi z zed bool)
    (lam z (coprod_rect (lam w bool) (lam n true) (lam n false) z)))
@@ -196,10 +196,10 @@
    (lam b (bool_rect (lam x (paths bool (natbit (nbit x)) x))
             (idpath true) (idpath false) b))))
 
-; --- THE CHARM CEILING, the one rung with a WIDTH. $ is non-negative by its
+; --- the charm ceiling, the one rung with a width. $ is non-negative by its
 ; --- type; what is left to state is that it keeps a net that fits, clamps the
 ; --- negative half to 0, and lands on the edge past chmax. stated hypothesis-
-; --- free -- (nmin chmax n) IS a net that fits and (add chmax n) one that does
+; --- free -- (nmin chmax n) is a net that fits and (add chmax n) one that does
 ; --- not -- so nothing rests on a decision procedure for the bound ---
 (assert
  (defq uv-nmin-idem (pi a nat (pi b nat (paths nat (nmin a (nmin a b)) (nmin a b))))
@@ -229,11 +229,11 @@
  ; ..and takes the whole negative half to 0
  (defq uv-satc-clamps (pi n nat (paths nat (zsatc (zneg n)) 0))
    (lam n (idpath 0)))
- ; the agreement: below the ceiling the clamped $ IS the tower's
+ ; the agreement: below the ceiling the clamped $ is the tower's
  (defq uv-satc-below (pi v val (paths nat (vsatc v) (nmin chmax (vsat v))))
    (lam v (idpath (nmin chmax (vsat v))))))
 
-; --- net is a HOMOMORPHISM: a leaf nets its measure at whatever height it sits
+; --- net is a homomorphism: a leaf nets its measure at whatever height it sits
 ; --- at, and a link sums ---
 (assert
  (defq uv-net-leaf
@@ -244,12 +244,12 @@
      (paths msr (netd (succ d) (ii2 (tpair a b))) (madd (netd d a) (netd d b))))))
    (lam d (lam a (lam b (idpath (madd (netd d a) (netd d b))))))))
 
-; --- STRUCTURAL EQUALITY. the depth is a height BOUND, so one value has many
+; --- structural equality. the depth is a height bound, so one value has many
 ; --- spellings -- a leaf sits at any depth, a link pads its shallow limb -- and
-; --- `paths` is finer than love's `=`. veq compares what a node OBSERVES: is it
-; --- a pair, its cap, its cup, its measure. the recursion is on the LEFT value's
+; --- `paths` is finer than love's `=`. veq compares what a node observes: is it
+; --- a pair, its cap, its cup, its measure. the recursion is on the left value's
 ; --- index alone and the right rides along, read one observation at a time --
-; --- which is what lets three of these compose, where a fuel derived from a PAIR
+; --- which is what lets three of these compose, where a fuel derived from a pair
 ; --- of heights gives the three sides of a transitivity three different ones.
 ; --- first the measure's own equality, and the andb plumbing the proofs lean on ---
 (assert
@@ -264,7 +264,7 @@
    (lam a (lam b (andb (zeqb (pr1 a) (pr1 b)) (beqb (pr2 a) (pr2 b))))))
  (defn meqb (pi a msr (pi b msr bool))
    (lam a (lam b (andb (reqb (pr1 a) (pr1 b)) (reqb (pr2 a) (pr2 b))))))
- ; the leaf's equality reads the TAG first: () meets only (), and that is the
+ ; the leaf's equality reads the tag first: () meets only (), and that is the
  ; one place love's = is finer than the measure it would otherwise be read by
  (defn aeqb (pi a atm (pi b atm bool))
    (lam a (lam b (coprod_rect (lam w bool)
@@ -282,7 +282,7 @@
    (lam a (lam b (lam p (maponpaths bool bool (lam z (orb z b)) a true p)))))
  (defq uv-orbr (pi a bool (pi b bool (pi q (paths bool b true) (paths bool (orb a b) true))))
    (lam a (lam b (lam q (bool_rect (lam x (paths bool (orb x b) true)) (idpath true) q a)))))
- ; reflexivity, rung by rung. nateqb (succ k) (succ k) IS nateqb k k, so the
+ ; reflexivity, rung by rung. nateqb (succ k) (succ k) is nateqb k k, so the
  ; induction step is its own hypothesis
  (defq uv-nateqb-refl (pi n nat (paths bool (nateqb n n) true))
    (lam n (nat_rect (lam q (paths bool (nateqb q q) true))
@@ -302,7 +302,7 @@
    (lam a (coprod_rect (lam w (paths bool (aeqb w w) true))
              (lam u (idpath true)) (lam m (uv-meqb-refl m)) a))))
 
-; --- ..and each of them REFLECTS: an equality that answers true hands back the
+; --- ..and each of them reflects: an equality that answers true hands back the
 ; --- path. reflexivity alone would give a preorder; this is what makes = an
 ; --- equivalence, and every rung has to give it up before the tree's can ---
 (assert
@@ -442,7 +442,7 @@
  (defn vleaf (pi v val atm)  (lam v (vleafd (pr1 v) (pr2 v))))
  (defn vcap  (pi v val val)  (lam v (vcapd (pr1 v) (pr2 v))))
  (defn vcup  (pi v val val)  (lam v (vcupd (pr1 v) (pr2 v))))
- ; a leaf answers the right value's HEAD and its atom; a pair asks the right for
+ ; a leaf answers the right value's head and its atom; a pair asks the right for
  ; a cap and a cup and descends. the index falls by one each step and the right
  ; value never has to be indexed at all
  (defn veqd (pi d nat (pi t (vtre d) (pi w val bool)))
@@ -457,8 +457,8 @@
              d)))
  (defn veq (pi u val (pi w val bool)) (lam u (lam w (veqd (pr1 u) (pr2 u) w)))))
 
-; --- LINK, and the padding it costs. two values meet at the taller height, so
-; --- the shallow limb is raised -- and BOTH limbs are raised STRUCTURALLY, the
+; --- link, and the padding it costs. two values meet at the taller height, so
+; --- the shallow limb is raised -- and both limbs are raised structurally, the
 ; --- recursion following the tree and never stacking levels on top of a neutral
 ; --- depth. that is what mx2 buys: (mx2 0 b) is b and (mx2 (succ j) 0) is
 ; --- (succ j) definitionally, so a pad lands on one index from either side.
@@ -504,7 +504,7 @@
                         (ii2 (tpair (padl (pr1 u) (pr1 w) (pr2 u))
                                     (padr (pr1 u) (pr1 w) (pr2 w)))))))))
 
-; --- veq is REFLEXIVE: at a leaf the right value shows no head and the same
+; --- veq is reflexive: at a leaf the right value shows no head and the same
 ; --- atom, at a pair it shows both limbs one level down ---
 (assert
  (defq uv-veq-refl (pi v val (paths bool (veq v v) true))
@@ -520,10 +520,10 @@
                    t))))
              (pr1 v)) (pr2 v)))))
 
-; --- ..and TRANSITIVE, which reflexivity alone would not give: with the fuel
+; --- ..and transitive, which reflexivity alone would not give: with the fuel
 ; --- gone the three sides of a composition recurse on their own left index and
 ; --- the middle value is just a value, so the induction is the plain one. what
-; --- it costs is that the middle's SHAPE has to be read -- veqd only reduces on
+; --- it costs is that the middle's shape has to be read -- veqd only reduces on
 ; --- a head -- so each arm cases on the middle's index and tree, and the two
 ; --- arms where the middle shows a head the left does not are ex falso ---
 (assert
@@ -635,7 +635,7 @@
       (pi h2 (paths bool (veq v w) true) (paths bool (veq u w) true))))))
    (lam u (lam v (lam w (uv-veqd-trans (pr1 u) (pr2 u) (pr1 v) (pr2 v) w))))))
 
-; --- THE PADDING IS INVISIBLE. this is the theorem the depth index owes: a
+; --- the padding is invisible. this is the theorem the depth index owes: a
 ; --- value and its padded self answer veq alike, so the height a link meets at
 ; --- is bookkeeping and nothing observable rests on it. the induction is on the
 ; --- pad's own index a -- what makes mx2 and padl reduce -- and the case on b
@@ -755,7 +755,7 @@
                    b))))
              a))))
 
-; --- THE CONGRUENCE, which is what transitivity was for: two links whose limbs
+; --- the congruence, which is what transitivity was for: two links whose limbs
 ; --- answer alike answer alike. each limb meets the other at a height neither
 ; --- spells, so the proof goes down through the pad, across by the hypothesis,
 ; --- and back up the other pad -- three steps that only compose because veq
@@ -795,15 +795,15 @@
                   (pr1 b) (pr2 b) d (uv-padr-bwd (pr1 a) (pr1 b) (pr2 b)) hb)
                (uv-padr-fwd (pr1 c) (pr1 d) (pr2 d)))))))))))))
 
-; --- THE PINNED CARRIER, and the bridge to veq. everything above reads the
-; --- depth as a BOUND, which is why the equality is veq and not paths: one
+; --- the pinned carrier, and the bridge to veq. everything above reads the
+; --- depth as a bound, which is why the equality is veq and not paths: one
 ; --- value has many spellings and paths tells them apart. pin the index to the
-; --- height a tree actually HAS and the spelling is unique -- within one index
+; --- height a tree actually has and the spelling is unique -- within one index
 ; --- it always was, a node showing a leaf tag or a pair with nothing to choose,
 ; --- so the whole multiplicity was the choice of d. what that buys is `paths`
 ; --- as the equality, and paths is a congruence for every function for free.
 ; --- the tightness is a path in nat, hence a proposition, hence invisible to
-; --- equality; the tree family, mx2 and both pads carry over UNCHANGED ---
+; --- equality; the tree family, mx2 and both pads carry over unchanged ---
 (assert
  (defn pht (pi d nat (pi t (vtre d) nat))
    (lam d (nat_rect (lam q (pi t (vtre q) nat))
@@ -891,7 +891,7 @@
                    b))))
              a))))
 
-; --- and so the link, carrying its own tightness. this is the SAME vlink one
+; --- and so the link, carrying its own tightness. this is the same vlink one
 ; --- level down -- the pinned link is a wrapper, not a second construction ---
 (assert
  (defq uv-ptight-link
@@ -915,8 +915,8 @@
                                         (pr2 (pr1 u)) (pr2 (pr1 w))
                                         (pr2 u) (pr2 w)))))))
 
-; --- the tightness is a PROP, so two pinned values agree as soon as their trees
-; --- do -- and THAT is what makes paths the right equality here. the payoff is
+; --- the tightness is a prop, so two pinned values agree as soon as their trees
+; --- do -- and that is what makes paths the right equality here. the payoff is
 ; --- the next two: uv-veq-link is thirty lines down through one pad, across by
 ; --- the hypothesis and back up the other, standing on transitivity; here the
 ; --- congruence is two maponpaths, and the same shape gives it for net, and for
@@ -948,7 +948,7 @@
    (pi u pval (pi w pval (pi p (paths pval u w) (paths msr (pnet u) (pnet w)))))
    (lam u (lam w (lam p (maponpaths pval msr pnet u w p))))))
 
-; --- PIN: read a value at its own height. the recursion is through plink
+; --- pin: read a value at its own height. the recursion is through plink
 ; --- itself, so nothing here has to tighten a tree by hand ---
 (assert
  (defn ppin (pi d nat (pi t (vtre d) pval))
@@ -1011,7 +1011,7 @@
                     t))))
               (pr1 w)) (pr2 w)))))
 
-; --- THE BRIDGE. veq was DEFINED, not derived: nothing above says it is the
+; --- the bridge. veq was defined, not derived: nothing above says it is the
 ; --- right relation. this says it -- love's = on values answers true exactly
 ; --- when the two pin to the same value -- so veq is a decision procedure for
 ; --- paths on the pinned carrier, sound and complete, and every law stated with
@@ -1165,11 +1165,11 @@
    (lam v (uv-pinback-fwd (pr1 v) (pr2 v))))
  (defq uv-pin-veq (pi v val (paths bool (veq (pr1 (pin v)) v) true))
    (lam v (uv-pinback-bwd (pr1 v) (pr2 v))))
- ; SOUND: what veq accepts, paths accepts
+ ; sound: what veq accepts, paths accepts
  (defq uv-veq-paths
    (pi u val (pi w val (pi h (paths bool (veq u w) true) (paths pval (pin u) (pin w)))))
    (lam u (lam w (uv-veqd-pin (pr1 u) (pr2 u) w))))
- ; COMPLETE: what paths accepts, veq accepts
+ ; complete: what paths accepts, veq accepts
  (defq uv-paths-veq
    (pi u val (pi w val (pi h (paths pval (pin u) (pin w)) (paths bool (veq u w) true))))
    (lam u (lam w (lam h
@@ -1181,8 +1181,8 @@
             (uv-pin-veq w))))))))
 
 ; --- ..and the colours over it. the first three are the sign's own shape; the
-; --- fourth is CLAUDE.md's own lambda equation read as a colour -- truth is
-; --- POSITIVE GREEN, above the blue floor -- and it is the one that needs the
+; --- fourth is claude.md's own lambda equation read as a colour -- truth is
+; --- positive green, above the blue floor -- and it is the one that needs the
 ; --- half bit, since a measure at 0 with its half up already ceils to 1 ---
 (assert
  (defq uv-blue-green (pi v val (paths bool (orb (negb (vblue v)) (vgreen v)) true))
@@ -1226,7 +1226,7 @@
    (lam v (uv-colq (pr1 (vre v)) (pr2 (vre v))))))
 
 ; --- and the laws the equality unlocks. each is stated as test/law.l states it,
-; --- and tools/law2uu.l picks these up BY NAME -- so if a row moves and the
+; --- and tools/law2uu.l picks these up by NAME -- so if a row moves and the
 ; --- obligation with it, the lemma stops applying and the gate says so ---
 (assert
  (defq uv-cap-total-d
@@ -1284,7 +1284,7 @@
  (defq uv-link-back
    (pi v val (paths bool (orb (negb (vtwo v)) (veq v (vlink (vcap v) (vcup v)))) true))
    (lam v (uv-link-back-d (pr1 v) (pr2 v))))
- ; link-apart takes no induction at all: cap and cup of (link v v) ARE the two
+ ; link-apart takes no induction at all: cap and cup of (link v v) are the two
  ; pads of v, and the padding lemmas answer both
  (defq uv-link-apart
    (pi v val (paths bool (andb (veq (vcap (vlink v v)) v) (veq (vcup (vlink v v)) v)) true))
@@ -1300,9 +1300,9 @@
  ; ..and = is total, answering the charm 1 on every value
  (defq uv-eq-total (pi v val (paths nat (nbit (veq v v)) 1))
    (lam v (maponpaths bool nat (lam z (nbit z)) (veq v v) true (uv-veq-refl v)))))
-; --- PIN IS A HOMOMORPHISM, which is what lets a law cross the bridge without
-; --- being re-proved: the pinned link of two pinned values IS the pin of their
-; --- link, the two leaf constructors pin on the nose, and the NET is untouched
+; --- pin is a homomorphism, which is what lets a law cross the bridge without
+; --- being re-proved: the pinned link of two pinned values is the pin of their
+; --- link, the two leaf constructors pin on the nose, and the net is untouched
 ; --- -- so pinning is a change of spelling and not of meaning ---
 (assert
  (defq uv-madd2
@@ -1473,8 +1473,8 @@
 
 ; --- and the six laws again, over paths. each is the bridge applied to the veq
 ; --- law above it -- one line, because the bridge is where the work went. the
-; --- SHAPES change: an orb that carried a side condition becomes the side
-; --- condition itself, and totality becomes the statement that veq DECIDES the
+; --- shapes change: an orb that carried a side condition becomes the side
+; --- condition itself, and totality becomes the statement that veq decides the
 ; --- equality. that is what a law reads like once its equality is an equality
 ; --- and not a decision procedure ---
 (assert
@@ -1485,7 +1485,7 @@
       (pathscomp0 bool b (orb a b) true
          (pathsinv0 bool (orb a b) b (maponpaths bool bool (lam z (orb z b)) a false h))
          g))))))
- ; an atom IS its own cap
+ ; an atom is its own cap
  (defq uv-pcap-total
    (pi v val (pi h (paths bool (vtwo v) false) (paths pval (pin v) (pin (vcap v)))))
    (lam v (lam h (uv-veq-paths v (vcap v)
@@ -1512,19 +1512,19 @@
  ; id? is finer than =, never the converse: where id? holds, = does -- and over
  ; paths that is reflexivity, with nothing left to decide
  (defq uv-pidq-finer (pi x pval (paths pval x x)) (lam x (idpath x)))
- ; ..and = is TOTAL: it answers the charm 1 on every pair the paths agree on,
+ ; ..and = is total: it answers the charm 1 on every pair the paths agree on,
  ; which is the completeness half of the bridge worn as a law
  (defq uv-peq-total
    (pi u val (pi w val (pi h (paths pval (pin u) (pin w)) (paths nat (nbit (veq u w)) 1))))
    (lam u (lam w (lam h (maponpaths bool nat (lam z (nbit z)) (veq u w) true
                            (uv-paths-veq u w h)))))))
 
-; --- CLAUDE.md's laws themselves are not spelled here: tools/law2uu.l compiles
-; --- them straight off test/law.l's rows into test/uuvallaw.l, so each law has ONE
+; --- claude.md's laws themselves are not spelled here: tools/law2uu.l compiles
+; --- them straight off test/law.l's rows into test/uuvallaw.l, so each law has one
 ; --- spelling and both lanes read it. sat-green and bit-bool need no proof at
-; --- all: they are the TYPES -- vsat lands in nat and vbit in bool, so "a
+; --- all: they are the types -- vsat lands in nat and vbit in bool, so "a
 ; --- non-negative charm" and "0 or 1" are read off the ladder rather than
-; --- checked. the demos: the tower COMPUTES ---
+; --- checked. the demos: the tower computes ---
 (assert
  (= (vof 0 '(ii1 3))  (vof 0 '(vceil (rval (rmk (ii1 2) true)))))   ; ceil 2.5 = 3
  (= (vof 0 '3)        (vof 0 '(vsat  (rval (rmk (ii1 2) true)))))   ; $2.5 = 3
@@ -1536,14 +1536,14 @@
  (= (vof 0 '3)
       (vof 0 '(vsat (tpair 1 (ii2 (tpair (anum (rmsr (zrea (nzed 1))))
                                          (anum (rmsr (zrea (nzed 2))))))))))
- ; (-2 1) nets -1, so it saturates to 0 and reads NIL -- the sign is the whole story
+ ; (-2 1) nets -1, so it saturates to 0 and reads nil -- the sign is the whole story
  (= (vof 0 '0)
       (vof 0 '(vsat (tpair 1 (ii2 (tpair (anum (rmsr (zrea (zneg 1))))
                                          (anum (rmsr (zrea (nzed 1))))))))))
  ; a twin: (3 ~ 4) ceils to 3 -- re drops the imaginary rung
  (= (vof 0 '(ii1 3))
       (vof 0 '(vceil (vnum (tpair (zrea (nzed 3)) (zrea (nzed 4)))))))
- ; --- and veq DISCRIMINATES, which is what keeps its laws from being vacuous:
+ ; --- and veq discriminates, which is what keeps its laws from being vacuous:
  ; --- a constant-true equality would prove every one of them ---
  (= (vof 0 'true)  (vof 0 '(veq (nval 2) (nval 2))))
  (= (vof 0 'false) (vof 0 '(veq (nval 2) (nval 3))))
@@ -1559,7 +1559,7 @@
  ; an atom is its own cap; its cup is ()
  (= (vof 0 'true)  (vof 0 '(veq (vcap (nval 7)) (nval 7))))
  (= (vof 0 'true)  (vof 0 '(veq (vcup (nval 7)) vnilv)))
- ; --- and veq COMPOSES: a value, its padded self, and the same value read back
+ ; --- and veq composes: a value, its padded self, and the same value read back
  ; --- out of a deeper link are three spellings, and the chain closes ---
  (= (vof 0 'true)
       (vof 0 '(veq (vcap (vlink (vcap (vlink (nval 1) (nval 2))) (nval 3))) (nval 1))))
@@ -1569,7 +1569,7 @@
  ; ..and the congruence discriminates: one limb agreeing is not enough
  (= (vof 0 'false)
       (vof 0 '(veq (vlink (nval 1) (nval 2)) (vlink (nval 1) (nval 3)))))
- ; --- and the PINNED carrier: the index a value carries is the height it has,
+ ; --- and the pinned carrier: the index a value carries is the height it has,
  ; --- where the unpinned one carries whatever height it was met at ---
  (= (vof 0 '0) (vof 0 '(pr1 (pr1 (pin (nval 7))))))
  (= (vof 0 '1) (vof 0 '(pr1 (pr1 (pin (vlink (nval 1) (nval 2)))))))
@@ -1587,13 +1587,13 @@
  (= (vof 0 '(pin (nval 3)))
       (vof 0 '(pin (vcup (vlink (vlink (nval 1) (nval 2)) (nval 3)))))))
 
-; --- the planted faults: a proof term that type-checks WHATEVER it says proves
+; --- the planted faults: a proof term that type-checks whatever it says proves
 ; --- nothing, so each load-bearing claim gets its false twin, and the kernel
 ; --- must refuse that one. every negative takes its positive (test/uu.l's rule:
 ; --- a term rejected for the wrong reason is not evidence). ---
 (hear (\ p e (: h (peep HELPC () 0) (? h (h p e) 0))))
 (assert
- ; ceil is NOT the identity on the integer part -- the rung that makes the
+ ; ceil is not the identity on the integer part -- the rung that makes the
  ; tower more than five copies of one retraction
  (id? 'accepted (rejects (\ z (defn uv-ok-ceil
     (paths zed (rceil (rmk (ii1 2) true)) (ii1 3)) (idpath (ii1 3))))))
@@ -1602,7 +1602,7 @@
  ; the clamp bites at 0, and takes the whole negative half with it
  (id? 'accepted (rejects (\ z (defn uv-ok-clamp (paths nat (zsat (zneg 4)) 0) (idpath 0)))))
  (id? 'rejected (rejects (\ z (defn uv-bad-clamp (paths nat (zsat (zneg 4)) 5) (idpath 5)))))
- ; net SUMS over a link; it does not read the head alone
+ ; net sums over a link; it does not read the head alone
  (id? 'rejected (rejects (\ z (defq uv-bad-link
     (pi d nat (pi a (vtre d) (pi b (vtre d)
       (paths msr (netd (succ d) (ii2 (tpair a b))) (netd d a)))))
@@ -1611,7 +1611,7 @@
  (id? 'rejected (rejects (\ z (defq uv-bad-satidem
     (pi v val (paths nat (vsat (nval (succ (vsat v)))) (vsat v)))
     (lam v (idpath (vsat v)))))))
- ; the TAG on the leaf: () and 0 net the same and are not the same value
+ ; the tag on the leaf: () and 0 net the same and are not the same value
  (id? 'accepted (rejects (\ z (defn uv-ok-tag
     (paths bool (veq vnilv (nval 0)) false) (idpath false)))))
  (id? 'rejected (rejects (\ z (defn uv-bad-tag
@@ -1624,11 +1624,11 @@
     (paths nat (zsatc (nzed (add chmax 3))) chmax) (idpath chmax)))))
  (id? 'rejected (rejects (\ z (defn uv-bad-ceiling
     (paths nat (zsatc (nzed (add chmax 3))) (add chmax 3)) (idpath (add chmax 3))))))
- ; and truth is green ABOVE the floor, not green alone -- 0 is both
+ ; and truth is green above the floor, not green alone -- 0 is both
  (id? 'rejected (rejects (\ z (defq uv-bad-green
     (pi v val (paths bool (beqb (vbit v) (vgreen v)) true))
     (lam v (uv-colq (pr1 (vre v)) (pr2 (vre v))))))))
- ; transitivity takes BOTH sides -- the left one alone says nothing about the right
+ ; transitivity takes both sides -- the left one alone says nothing about the right
  (id? 'accepted (rejects (\ z (defq uv-ok-trans
     (pi u val (pi v val (pi w val (pi h1 (paths bool (veq u v) true)
        (pi h2 (paths bool (veq v w) true) (paths bool (veq u w) true))))))
@@ -1642,13 +1642,13 @@
     (pi a val (pi b val (pi c val (pi d val (pi ha (paths bool (veq a c) true)
        (paths bool (veq (vlink a b) (vlink c d)) true))))))
     (lam a (lam b (lam c (lam d (lam ha (uv-veq-refl (vlink a b)))))))))))
- ; the PIN does not move the net: a normaliser that did would be worthless, and
+ ; the pin does not move the net: a normaliser that did would be worthless, and
  ; every law crossing the bridge would be crossing to a different carrier
  (id? 'accepted (rejects (\ z (defq uv-ok-pinnet
     (pi v val (paths msr (pnet (pin v)) (vnet v))) uv-pin-net))))
  (id? 'rejected (rejects (\ z (defq uv-bad-pinnet
     (pi v val (paths msr (pnet (pin v)) mzero)) uv-pin-net))))
- ; ..and the bridge goes BOTH ways: soundness alone leaves veq free to accept
+ ; ..and the bridge goes both ways: soundness alone leaves veq free to accept
  ; more than paths does, which is exactly the thing a decision procedure owes
  (id? 'accepted (rejects (\ z (defq uv-ok-bridge
     (pi u val (pi w val (pi h (paths pval (pin u) (pin w)) (paths bool (veq u w) true))))

@@ -1,5 +1,5 @@
 ; --- lush 🐚 the grammar -- tokens to the AST ---
-; NO BRACKETS HERE: the runtime supplies the layer (see job.l for the cat law).
+; no brackets here: the runtime supplies the layer (see job.l for the cat law).
 ;
 ; (sh-parse tokens) -> ('ok . ast) | ('more . why) | ('err . msg) -- 'more is
 ; the parse-level PS2 protocol: a dangling && || |, or a compound still open
@@ -12,7 +12,7 @@
 ;   ('for name words body)  words absent -> the one word $@
 ;   ('case word items)      items ((patterns . body)..), patterns word-segs
 ;   ('group body) ('subsh body) ('fun name body) ('rdr ast redirs)
-; reserved words live only at COMMAND POSITION: pcomm answers ('stop . ts) for
+; reserved words live only at command position: pcomm answers ('stop . ts) for
 ; a closer (then/fi/do/done/esac/else/elif/}), and the list machinery lifts it
 ; into "the list so far ends here" -- the compound parsers then expect their
 ; own closer by name. an empty rest where a compound needs more is 'more.
@@ -44,7 +44,7 @@
                  >r ('err . "trailing tokens")
                  ('ok . <r)))))
 
-   ; list: & backgrounds ONLY its own and_or; seq folds right by recursion
+   ; list: & backgrounds only its own and_or; seq folds right by recursion
    (plist ts) (: r (pao ts) (? (bad? r) r (plrest <r >r)))
    (plrest a ts)
      (? !(two? ts) (a . ())

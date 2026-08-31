@@ -2,24 +2,24 @@
 ; against an expression, act on what matches. a toolbox file, no seat -- kore
 ; (crew/kore/kore.l) is its door. it rides the u-floor (udie, ubase, uatoi) and
 ; lush's fnmatch (`sh-match`, crew/lush/glob.l) for -name and -path, which is why
-; it loads LATE in the cat: a body captures its free names at its define, so the
+; it loads late in the cat: a body captures its free names at its define, so the
 ; matcher has to be there first.
 ;
 ; the surface:
 ;   find [PATH..] [EXPR]        PATH defaults to .
-;   primaries  -name PAT  -path PAT  -type f|d|l  -print  -prune  -exec CMD.. ;
+;   primaries  -name pat  -path pat  -type f|d|l  -print  -prune  -exec CMD.. ;
 ;              -true  -false  -maxdepth N  -mindepth N
 ;   operators  ( )  ! / -not  -a / -and (implicit between two primaries)  -o / -or
 ; an expression naming no action gets -print, exactly as GNU does; -a binds tighter
 ; than -o and both short-circuit.
 ;
-; ⚠ THE WALK SORTS EACH DIRECTORY. GNU hands out readdir order, which is the file
+; the walk sorts each directory. GNU hands out readdir order, which is the file
 ; system's business and not a promise anyone can repeat -- so `find | sort` is the
 ; only honest way to smoke us against it, and that is what test/gate/kore.sh does.
 ; sorted is also what a build wants: the same tree cuts the same image twice.
 ;
-; ⚠ SYMLINKS ARE NOT FOLLOWED (GNU's -P, the default). the `stat` nif follows, so
-; the type read asks `readlink` FIRST -- a link answers l, whatever it points at,
+; symlinks are not followed (GNU's -P, the default). the `stat` nif follows, so
+; the type read asks `readlink` first -- a link answers l, whatever it points at,
 ; and the walk does not descend through it. a dangling link is still visited.
 (module 'kore
 (use 'lush) ; -name/-path ride lush's fnmatch (sh-match), captured at the define below
@@ -83,7 +83,7 @@
                     (? (two? r2) (go ['or n <r2] <>r2) ()))
                  [n m])
              (go <r <>r))))
-   ; -maxdepth/-mindepth are GLOBAL wherever they sit (GNU's reading too), so they
+   ; -maxdepth/-mindepth are global wherever they sit (GNU's reading too), so they
    ; come out of the word list before the grammar ever sees them
    (fi-depths ws maxd mind acc)
     (? !(two? ws) [(rev acc) maxd mind]

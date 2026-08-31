@@ -1,5 +1,5 @@
 ; comment syntax: `;` runs to end of line; `#!` is a shebang line comment.
-; there are NO block comments -- every comment ends at the newline.
+; there are no block comments -- every comment ends at the newline.
 ; a plain `;` line comment (this line) is skipped.
 ;; two semicolons: still just a line comment.
 ;;; three semicolons: also just a line comment now (the old block form is gone).

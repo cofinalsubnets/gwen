@@ -1,20 +1,20 @@
 ; --- test/host/kiosko.l: the newsstand, over a real socket ---
-; NOT in the test/*.l corpus: the socket nifs live in src/sock.c, which love0 does not
+; not in the test/*.l corpus: the socket nifs live in src/sock.c, which love0 does not
 ; link, and this loads a crew file and splices its module.
 ;
-; the whole thing runs in ONE process, the way test/host/net.l does: a server task
+; the whole thing runs in one process, the way test/host/net.l does: a server task
 ; twirled onto a listener, the client in the main task, the two interleaving through the
 ; cooperative scheduler. so these are real HTTP responses off a real socket, not a call
 ; to `serve1` with a pretend port.
 ;
 ; what is asserted is kiosko's whole contract, and the security half of it first:
-;   GUARD    a `..` SEGMENT is 403 -- percent-encoded too, which is the form that
-;            actually gets tried. a file honestly named `a..b` is NOT an escape and is
+;   guard    a `..` segment is 403 -- percent-encoded too, which is the form that
+;            actually gets tried. a file honestly named `a..b` is not an escape and is
 ;            served, so the guard is a segment test and not a substring test.
-;   METHOD   GET and HEAD; a HEAD carries the length of the body it does not send.
-;   PATHS    a query string is cut, a percent-escape is decoded, a directory redirects
+;   method   get and head; a head carries the length of the body it does not send.
+;   paths    a query string is cut, a percent-escape is decoded, a directory redirects
 ;            to its slashed form and then answers index.html, or a listing without one.
-;   TYPES    the extension picks the Content-Type; an unknown one is octet-stream.
+;   types    the extension picks the Content-Type; an unknown one is octet-stream.
 ;   404      a missing file, and nothing else, is 404.
 ;
 ; run:  cat test/00-init.l test/host/kiosko.l | out/host/love
@@ -41,7 +41,7 @@
    _ (put-file "blob.zzz" "unknown")
    _ (put-file "sub/index.html" "<h1>sub</h1>")
    _ (put-file "bare/one.txt" "listed")
-   ; a file BIGGER THAN ONE CHUNK. kiosko reads in 64K gulps off `swig`, and every way
+   ; a file bigger than one chunk. kiosko reads in 64K gulps off `swig`, and every way
    ; that can go wrong -- a dropped tail, a doubled chunk, a byte lost at the seam where
    ; swig answers 0 and a single `see` carries the next byte -- shows up only past the
    ; first buffer. the body is checked whole, not just its length, so a reordering counts.
@@ -66,8 +66,8 @@
              ())
    srv (twirl (\ _ ((: (g k) (: _ (await l)
                                 c (accept l)
-                                ; the MAKER hook: it claims /made and says "not mine" for
-                                ; everything else, including a path that IS a file on disk
+                                ; the maker hook: it claims /made and says "not mine" for
+                                ; everything else, including a path that is a file on disk
                                 _ (? c (: _ (serve1 dir mk c) _ (seal c 1) (close c)) 0)
                                 (? (peep stop 0 0) 1 (g (k + 1))))) 0)) 0)
    (ask req) (: c (connect "127.0.0.1" port)
@@ -81,8 +81,8 @@
    (sub? s t) (: n (tally s) m (tally t)
                  ((: (g i) (? ((i + m) <= n) (? ((snip s i (i + m)) = t) 1 (g (i + 1))) 0)) 0))
 
-   ; --- the MAKER hook -------------------------------------------------------------------
-   ; ⚠ it is asked FIRST, before the file on disk, which is the whole point: `love serve`
+   ; --- the maker hook -------------------------------------------------------------------
+   ; it is asked first, before the file on disk, which is the whole point: `love serve`
    ; paints a .l that is sitting right there. a hook that answers () is the ordinary
    ; static server, and every case below proves that half.
    _ (assert
@@ -91,13 +91,13 @@
       (sub? (get "/a.txt") "the hook wins over the file")     ; ..even when the file exists
       ("404" = (code (get "/nope"))))                         ; ..and () is still a 404
 
-   ; --- THE GUARD, first ------------------------------------------------------------------
+   ; --- the guard, first ------------------------------------------------------------------
    _ (assert
       ((code (get "/../../etc/passwd")) = "403")
       ((code (get "/sub/../../etc/passwd")) = "403")
       ((code (get "/%2e%2e/%2e%2e/etc/passwd")) = "403")   ; ..the form that is actually tried
       ((code (get "..")) = "403")                          ; unrooted
-      ; and it is a SEGMENT test: a file whose name merely contains .. is ordinary
+      ; and it is a segment test: a file whose name merely contains .. is ordinary
       ((code (get "/a..b")) = "200")
       (sub? (get "/a..b") "not an escape"))
 
@@ -106,18 +106,18 @@
    _ (assert
       ((code (get "/index.html")) = "200")
       ((code hd) = "200")
-      (sub? hd "Content-Length: 13")     ; HEAD reports the body it does not send
+      (sub? hd "Content-Length: 13")     ; head reports the body it does not send
       (! (sub? hd "<h1>root</h1>"))
       ((code (ask "PUT / HTTP/1.1\r\nHost: x\r\n\r\n")) = "405")
       ((code (ask "DELETE / HTTP/1.1\r\nHost: x\r\n\r\n")) = "405"))
 
-   ; --- how the request ARRIVES -------------------------------------------------------------
+   ; --- how the request arrives -------------------------------------------------------------
    ; the head is taken in one `swig` gulp now, not a character at a time, and that puts two
    ; new ways to hang in the read: a client whose blank line has no carriage returns, and a
-   ; request that arrives in PIECES (swig answers 0 mid-request and only a `see` can park
+   ; request that arrives in pieces (swig answers 0 mid-request and only a `see` can park
    ; for the rest). both would wedge the connection rather than fail an assert, so they are
    ; here -- a hang is the failure mode, and the gate has to be the thing that finds it.
-   _ (assert ((code (ask "GET /index.html HTTP/1.1\nHost: x\n\n")) = "200"))     ; LF only
+   _ (assert ((code (ask "GET /index.html HTTP/1.1\nHost: x\n\n")) = "200"))     ; lf only
    split (: c (connect "127.0.0.1" port)
             _ (say c "GET /index.htm")
             _ (flush c)
@@ -149,14 +149,14 @@
                   ((tally body) = (tally big))
                   (body = big)))                               ; ..and byte-for-byte, not just as long
 
-   ; --- the LANE BOUNDARY in the read -------------------------------------------------
-   ; `gulp` picks its lane by size: at or above the caskfloor it hands back the CASK it
+   ; --- the lane boundary in the read -------------------------------------------------
+   ; `gulp` picks its lane by size: at or above the caskfloor it hands back the cask it
    ; read into (zero copies, end-of-file proven by a one-byte probe), below it copies out
    ; (one copy, end-of-file proven by a short read). so the answer is a cask on one side
    ; of the floor and a string on the other -- fine downstream, since `say` writes either
    ; and `tally` measures either, but it is exactly the kind of seam that serves right on
    ; one side and wrong on the other. one file each side of the line, byte for byte.
-   ; ⚠ the floor is kiosko's and it MOVED (8192 -> 131072 when `snip` learned to read a
+   ; the floor is kiosko's and it moved (8192 -> 131072 when `snip` learned to read a
    ; cask), so these two follow it -- read `caskfloor` before touching the sizes.
    (dbl s n) (? (n <= tally s) (snip s 0 n) (dbl (s + s) n))     ; O(n), not (s + rep ..)
    under (dbl "abcdefgh" 131064)
@@ -173,13 +173,13 @@
                 (sub? u "Content-Length: 131064")
                 (sub? o "Content-Length: 131080")))
 
-   ; --- the read's SLOW lane, which no served file reaches any more --------------------
-   ; `gulp` proves it has the whole file from a SHORT READ: the buffer is one byte larger
+   ; --- the read's slow lane, which no served file reaches any more --------------------
+   ; `gulp` proves it has the whole file from a short read: the buffer is one byte larger
    ; than stat said, and on a regular file read comes up short only at the end. that means
    ; no ordinary file goes round the loop now -- so the loop needs a test of its own, or it
    ; rots as the fallback nobody runs. and it is a real fallback: the proof says nothing
    ; when stat's size was 0, because a procfs file is generated on demand and answers short
-   ; reads that are NOT the end. /proc/cpuinfo handed back 3288 of its 26322 bytes the one
+   ; reads that are not the end. /proc/cpuinfo handed back 3288 of its 26322 bytes the one
    ; time the fast path was let near it. /proc/self/environ is stable, and on most machines
    ; larger than the 4096 fallback buffer, so it also crosses a chunk boundary.
    _ (: e (gulp "/proc/self/environ")

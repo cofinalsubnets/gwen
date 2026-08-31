@@ -1,5 +1,5 @@
 ; crew/lux/law.l -- xmonad's QuickCheck properties for crew/lux/core.l, in exact arithmetic,
-; plus a seeded fuzz. Reads the LEAKED globals from crew/lux/core.l (concatenate them:
+; plus a seeded fuzz. Reads the leaked globals from crew/lux/core.l (concatenate them:
 ; `cat test/00-init.l crew/lux/core.l crew/lux/law.l | love`, the `make test_lux` gate). Split
 ; into small independent top-level `:` forms -- each self-contained, nothing new
 ; leaks, and no single form grows big enough to stress the whole-form compiler.
@@ -12,7 +12,7 @@
       (zfocdn (zfocup z3) = z3) (zfocup (zfocdn z3) = z3)                        ; motions are inverses
       (zfoc (zfocup z3) = 1) (zfoc (zfocdn z3) = 3)
       (zfoc (zfocup (zfocup z3)) = 3)                                            ; wrap past the top -> the bottom
-      (((3 zfocup) z3) = z3) (((3 zfocdn) z3) = z3)                              ; the church numeral IS the cycle law
+      (((3 zfocup) z3) = z3) (((3 zfocdn) z3) = z3)                              ; the church numeral is the cycle law
       (zfocup (zmk 7 () ()) = zmk 7 () ())                                       ; a singleton is a fixed point
       (zswapdn (zswapup z3) = z3) (zswapup (zswapdn z3) = z3)                    ; swaps are inverses
       (zfoc (zswapup z3) = 2) (zrow (zswapup z3) = '(2 1 3))
@@ -46,7 +46,7 @@
       (rnext '(1 2 3) 2 1 = 3) (rnext '(1 2 3) 2 -1 = 1)
       (rnext '(1 2 3) 3 1 = 1) (rnext '(1 2 3) 1 -1 = 3)                        ; wraps at either end
       (rnext '(1 2 3) 9 1 = 1) !(rnext () 9 1)                                  ; absent -> the head; an empty ring -> ()
-      (wsring s2 = '(30 20 10))))                                               ; no floats: the ring IS the tiled row
+      (wsring s2 = '(30 20 10))))                                               ; no floats: the ring is the tiled row
 
 ; --- the floating half (W.float / W.sink) ---
 (: s2 (admit (admit (admit (sheaf '(1 2 3)) 10) 20) 30) r99 '(20 20 200 100)
@@ -58,7 +58,7 @@
       !(any (x \ x = 20) (wstiled f2))                                         ; float removed 20 from the tiled stack
       (sameset? (wswins f2) (wswins s2))                                         ; float moves it between sets, not out
       !(wsfloating? (wssink f2 20) 20) (sameset? (wswins (wssink f2 20)) (wswins s2))        ; sink is float's inverse
-      ; --- the HOME TAG: a float lives on ONE workspace (xmonad's model) ---
+      ; --- the HOME tag: a float lives on one workspace (xmonad's model) ---
       (1 = wsftag f2 20)                                                         ; floated while viewing tag 1: home is 1
       (1 = wsftag (wsview f2 2) 20)                                              ; viewing elsewhere doesn't move it
       (two? (wsvisfl f2)) !(two? (wsvisfl (wsview f2 2)))                        ; visible at home, hidden abroad
@@ -112,7 +112,7 @@
       ((lay-msg L1 'dec-master z3) 1 = 1)
       ; Full places only the focus, whole rect
       (: f <(lay-tile full r z3) ((#f = 1) && (<f = '(10 0 0 800 600))))
-      ; MirrorShrink shrinks the FOCUSED slave (focus 20, the first slave)
+      ; MirrorShrink shrinks the focused slave (focus 20, the first slave)
       (: zs (zfocdn z3) M (lay-msg L1 'mirror-shrink zs) h20 (<><(lay-tile M r zs) 4)
          ((h20 < 300) && h20 > 250))
       ; ||| holds the layouts; NextLayout cycles the index (tall -> full -> tall)
@@ -123,9 +123,9 @@
       ; a message ||| doesn't know (shrink) delegates to the active sublayout
       ((ch-cur (lay-msg (choice [L1 full]) 'shrink z3)) 2 = 0.48)))
 
-; --- the tiling LEDGER (rtwinsrow, test/uulay.l: proved of the model in uu,
+; --- the tiling ledger (rtwinsrow, test/uulay.l: proved of the model in uu,
 ; --- certified by Rocq + Lean; here the same law watched on the metal):
-; --- rt-tile's placements name the row EXACTLY -- every window placed once,
+; --- rt-tile's placements name the row exactly -- every window placed once,
 ; --- none invented, row order kept -- whatever the master count ---
 (: (wincol ps) (two? ps ? (<<ps >< wincol >ps) ())
    r (rct 0 0 800 600) ws '(10 20 30 40 50) z (zfrom ws)
@@ -143,10 +143,10 @@
    base (choice [L1 (dwindle 1.618)])
    stk (minimize (smart-borders (toggle-full (mirror base))))                    ; the config's t (l1 ||| l2) shape
    (assert
-      ; MIRROR transposes: master moves to the TOP, the partition is preserved
-      (: m (lay-msg (mirror L1) 'mirror z3) p <(lay-tile m r z3)                 ; toggle MIRROR on
+      ; mirror transposes: master moves to the top, the partition is preserved
+      (: m (lay-msg (mirror L1) 'mirror z3) p <(lay-tile m r z3)                 ; toggle mirror on
          ((<p = '(10 0 0 800 300)) && (sumarea p = 480000)))                      ; master owns the top strip
-      (lay-tile (mirror L1) r z3 = [<(lay-tile L1 r z3) (mirror L1)])            ; MIRROR off is a pass-through
+      (lay-tile (mirror L1) r z3 = [<(lay-tile L1 r z3) (mirror L1)])            ; mirror off is a pass-through
       ; Dwindle is a golden spiral: the focus takes phi/(1+phi) of the width, still a partition
       (: p <(lay-tile (dwindle 1.618) r z3)
          ((<p 3 = int ((1.618 / 2.618) * 800)) && (sumarea p = 480000) && (#p = 3)))
@@ -165,12 +165,12 @@
       (: pls <(lay-tile L1 r z3)
          ((nav-target pls 10 'right = 20) && !(nav-target pls 10 'left)         ; master: right -> a slave, nothing left
           && (nav-target pls 20 'left = 10) && (nav-target pls 20 'down = 30)))     ; slave: left -> master, down -> the other slave
-      ; the WHOLE config stack composes: message pass-through reaches the base, partition holds
+      ; the whole config stack composes: message pass-through reaches the base, partition holds
       (sumarea <(lay-tile stk r z3) = 480000)
       (#<(lay-tile (lay-msg stk 'next-layout z3) r z3) = 3)                 ; next-layout reaches the ||| at the bottom
       (: q <(lay-tile (lay-msg stk 'toggle-layout z3) r z3) ((#q = 1) && (<q 5 = 0)))))                 ; toggle-full through the stack -> fullscreen, borderless
 
-; --- the OPEN dispatch lane: a layout whose head is a CLOSURE answers the
+; --- the open dispatch lane: a layout whose head is a closure answers the
 ; --- 'tile/'msg protocol itself -- user layouts enter as plain data, no table
 ; --- edit (the lux repl's live-layout hook), and modifiers wrap them like
 ; --- any builtin ---
@@ -188,7 +188,7 @@
          ((#p = 1) && (#<p = 6)))
       (((lay-msg (smart-borders Q) 'grow z3) 1) 1 = 60)))              ; ... and a delegated message threads the closure's new state
 
-; --- the manageHook DSL (crew/lux/manage.l rung 5): combinators + float actions ---
+; --- the manageHook dsl (crew/lux/manage.l rung 5): combinators + float actions ---
 (: s0 (admit (admit (sheaf '(1 2 3)) 10) 20)                                     ; ws1 tiled (20 10); we manage 20
    c (mg-ctx 0 20 (rct 0 0 800 600) (rct 100 100 300 200))                      ; socket 0 (unused: pure actions/mocks), win 20, screen, geom
    yes (c \ 1) no (c \ 0)                                                        ; mock predicates
@@ -199,7 +199,7 @@
       (: f (do-float c s0) (wsrect f 20 = '(100 100 300 200)))                  ; do-float keeps the window's own geometry
       (: f (do-center-float c s0) (wsrect f 20 = '(250 200 300 200)))           ; centered: (800-300)/2=250, (600-200)/2=200
       (do-ignore c s0 = evict s0 20)                                            ; ignore un-manages entirely
-      ; <||> is predicate OR, and it reads as one: `p <||> q`
+      ; <||> is predicate or, and it reads as one: `p <||> q`
       ((yes <||> no) c) !((no <||> no) c) ((no <||> yes) c)
       ((no <||> no <||> yes) c)                                                  ; and chains right, so a run of alternatives is one rule
       ; -?> fires the action iff the predicate matches (a 1-list = matched, () = not)
@@ -207,7 +207,7 @@
       !((no -?> tag 'a) c s0)
       ; the two bind so a rule needs no inner parens: `p <||> q -?> act`
       (((no <||> yes -?> (tag 'a)) c s0) = [('a >< s0)])
-      ; compose-one takes the FIRST matching rule; none -> the sheaf unchanged
+      ; compose-one takes the first matching rule; none -> the sheaf unchanged
       (((compose-one [(no -?> tag 'a) (yes -?> tag 'b) (yes -?> tag 'c)]) c s0) = ('b >< s0))
       (((compose-one [(no -?> tag 'a) (no -?> tag 'b)]) c s0) = s0)
       ; compose-all threads every hook (a plain hook, so wrap or use identity)
@@ -218,7 +218,7 @@
 ; --- the Go/Swap zipper halves (crew/lux/core.l rung 6): focus/swap by NAME ---
 (: z3 (zmk 2 '(1) '(3))                                                          ; row (1 2 3), 2 focused
    (assert
-      (zfoc (zfocto 3 z3) = 3) (zrow (zfocto 3 z3) = '(1 2 3))                   ; zfocto moves ONLY the focus
+      (zfoc (zfocto 3 z3) = 3) (zrow (zfocto 3 z3) = '(1 2 3))                   ; zfocto moves only the focus
       (zfocto 2 z3 = z3) (zfocto 9 z3 = z3)                                      ; to self / to absent: no-ops
       (zrow (zswapw 1 3 z3) = '(3 2 1)) (zfoc (zswapw 1 3 z3) = 2)               ; zswapw exchanges positions, focus keeps its window
       (zrow (zswapw 2 3 z3) = '(1 3 2)) (zfoc (zswapw 2 3 z3) = 2)               ; ... even when the focus is a swap party
@@ -244,7 +244,7 @@
       (keys-find the-keys supm 49 = '(view 1))                                   ; the digit rows
       (keys-find the-keys (supm | shiftm) 57 = '(shift 9))
       !(keys-find the-keys supm 999)                                             ; an unbound chord reads ()
-      ; nextMatch's MRU pick: forward = most recent other, backward = oldest
+      ; nextMatch's mru pick: forward = most recent other, backward = oldest
       (nm-pick '(10 20 30) 10 '(10 20 30) 1 = 20)
       (nm-pick '(10 20 30) 10 '(10 20 30) 0 = 30)
       (nm-pick '(10 20 30) 10 '(10) 1 = 20)                                      ; never-focused windows count as oldest
@@ -253,7 +253,7 @@
 
 ; --- EWMH + docks (crew/lux/ewmh.l rung 7): strut arithmetic + wire encodings ---
 (: (assert
-      ; _NET_WM_STRUT_PARTIAL's 12 values: the strut is the first 4; short = none
+      ; _net_wm_strut_partial's 12 values: the strut is the first 4; short = none
       (strut-parse '(0 0 30 0 0 0 0 0 0 0 400 800) = '(0 0 30 0))
       !(strut-parse '(1 2))
       ; struts clamp the rect off each edge; a swallowed axis floors at 0
@@ -276,7 +276,7 @@
 
 (: j (jug 0) _ (x-chprop8 j 5 6 7 "AB") b (slurp j)
    (assert (#b = 28) (b 0 = 18) (b 2 = 7)                                   ; len 6 + 1 (2 chars + pad)
-           (b 16 = 8) (b 20 = 2) (b 24 = 65) (b 25 = 66) (b 26 = 0)))            ; format 8, n=2, "AB\0\0"
+           (b 16 = 8) (b 20 = 2) (b 24 = 65) (b 25 = 66) (b 26 = 0)))            ; format 8, n=2, "ab\0\0"
 
 (: j (jug 0) _ (x-mkwin j 42 7) b (slurp j)
    (assert (#b = 32) (b 0 = 1) (b 4 = 42) (b 8 = 7)                         ; CreateWindow, wid, parent
@@ -288,7 +288,7 @@
            (ewmh-cm-d0 pk = 2) (ewmh-cm-d1 pk = 7) (ewmh-cm-d2 pk = 8)))
 
 ; --- the config (crew/lux/config.l rung 8): the transliteration's shape.
-;     ⚠ EVERY law here reads an EMPTY tablet, never lux-conf: this gate must mean
+;     every law here reads an empty tablet, never lux-conf: this gate must mean
 ;     the same thing on a machine that has written ~/.love/etc/lux.l. ---
 (: c0 (tablet 0)
    lay0 (foldr lux-wrap-of (choice (filter two? (map lux-lay-of (conf-roster c0 'layout '((rtall 1 0.02 0.5) (dwindle phi))))))
@@ -305,9 +305,9 @@
       (#(keys-build supm 20 9 () ()) = 70) (lit? (manage-for '("a") '("b") ()))
       (<<(conf-roster c0 'startup '(("setxkbmap"))) = "setxkbmap")))
 
-; --- the config DOOR (lib/salt.l): every setting overrides, and its ABSENCE is
+; --- the config door (lib/salt.l): every setting overrides, and its absence is
 ;     the value that used to be hardcoded. the tablet is built by hand -- salt
-;     pins a setting's whole TAIL under its head, which is what salt-file writes. ---
+;     pins a setting's whole tail under its head, which is what salt-file writes. ---
 (: (st l) (foldl (\ t p (pin t <p >p)) (tablet 0) l)                             ; a settings roster -> the tablet salt would answer
    c1 (st '((border 5) (mod alt) (tags 4) (nudge 7)
             (layout (dwindle 2.0)) (layout-wrap smart)
@@ -321,17 +321,17 @@
       (<lay1 = 'smart) (<(lay1 1) = 'choice)                                ; layout-wrap replaces the whole stack
       (#((lay1 1) 2) = 1)                                         ; one ||| member, the config's dwindle
       (<<((lay1 1) 2) = 'dwindle)
-      !(conf-roster c1 'center-class ())                                         ; `(k ())` IS the empty roster...
+      !(conf-roster c1 'center-class ())                                         ; `(k ())` is the empty roster...
       (#(conf-roster c1 'float-class '("x")) = 2)                           ; ...and a named one lands whole
       !(conf-roster c1 'startup '(("setxkbmap")))                                ; so a config can spawn nothing at all
-      (#(conf-roster c1 'ignore-class '("k")) = 1)                          ; an ABSENT roster keeps the default
+      (#(conf-roster c1 'ignore-class '("k")) = 1)                          ; an absent roster keeps the default
       (keys-find km altm 120 = '(kill))                                          ; the whole table moved to the new mod...
       !(keys-find km supm 120)                                                   ; ...and left sup behind
       (keys-find km altm 104 = '(go left (-7 0)))                                ; nudge feeds the directional deltas
       (keys-find km altm 52 = '(view 4)) !(keys-find km altm 53)                 ; digit rows stop at the tag count
-      (two? lux-tags) (two? lux-keymap) (lit? lux-manage) (two? lux-layout)))    ; and the LIVE ones built, whatever this machine's file says
+      (two? lux-tags) (two? lux-keymap) (lit? lux-manage) (two? lux-layout)))    ; and the live ones built, whatever this machine's file says
 
-; --- key SPECS (crew/lux/keys.l): the surface a config writes chords in ---
+; --- key specs (crew/lux/keys.l): the surface a config writes chords in ---
 (: c2 (foldl (\ t p (pin t <p >p)) (tablet 0)
              '((bind ((sup Return) (spawn "alacritty" "-e" "tmux"))
                      ((sup shift F1) (view 1))
@@ -341,21 +341,21 @@
                (unbind (sup p) (sup z) (sup bogus))))
    km (keys-build supm 20 9 (conf-roster c2 'bind ()) (conf-roster c2 'unbind ()))
    (assert
-      (kspec supm '(sup e) = '(64 101))                                          ; a one-char key IS its ascii keysym
-      (kspec supm '(sup shift Return) = '(65 65293))                             ; masks OR together, names come off the table
+      (kspec supm '(sup e) = '(64 101))                                          ; a one-char key is its ascii keysym
+      (kspec supm '(sup shift Return) = '(65 65293))                             ; masks or together, names come off the table
       (kspec altm '(mod Tab) = '(8 65289))                                       ; `mod` follows the configured modifier
-      (kspec supm '(F7) = '(0 65476))                                            ; ⚠ no modifier is a mask of 0, not a failure
-      (kspec supm '(sup ",") = '(64 44))                                         ; a one-char STRING is that character, punctuation and all
+      (kspec supm '(F7) = '(0 65476))                                            ; no modifier is a mask of 0, not a failure
+      (kspec supm '(sup ",") = '(64 44))                                         ; a one-char string is that character, punctuation and all
       (kspec supm '(sup "1") = '(64 49))                                         ; ... digits the same way
-      (kspec supm '(sup 65027) = '(64 65027))                                    ; a bare charm IS the keysym: the table is no ceiling
-      !(kspec supm '(sup 1)) !(kspec supm '(sup 0))                              ; ⚠ but not below 32 -- `1` is the digit's trap, not its keysym
+      (kspec supm '(sup 65027) = '(64 65027))                                    ; a bare charm is the keysym: the table is no ceiling
+      !(kspec supm '(sup 1)) !(kspec supm '(sup 0))                              ; but not below 32 -- `1` is the digit's trap, not its keysym
       !(kspec supm '(sup nosuchkey)) !(kspec supm '(bogus e))                    ; an unknown field kills the whole spec
-      !(kspec supm 'sup+e) !(kspec supm ())                                      ; a spec is a LIST; a bare name is not one
-      (keys-find km supm xk-ret = '(spawn ("alacritty" "-e" "tmux")))            ; a config's argv rides in FLAT and lands nested
+      !(kspec supm 'sup+e) !(kspec supm ())                                      ; a spec is a list; a bare name is not one
+      (keys-find km supm xk-ret = '(spawn ("alacritty" "-e" "tmux")))            ; a config's argv rides in flat and lands nested
       (keys-find km (supm | shiftm) 65470 = '(view 1))
       (keys-find km supm 269025042 = '(spawn ("amixer" "set" "Master" "toggle")))
       (keys-find km supm 65027 = '(kill))                                        ; the raw-keysym chord grabs like any other
-      !(keys-find km supm 112) !(keys-find km supm 122)                          ; unbind cuts, and cuts LAST
+      !(keys-find km supm 112) !(keys-find km supm 122)                          ; unbind cuts, and cuts last
       (keys-find km supm 120 = '(kill))                                          ; ... only what it names
       (#km = 71)))                                                          ; 70 stock, +3 new rows, -2 unbound (1 bind + 1 unbind unreadable)
 
@@ -371,13 +371,13 @@
       !(xauth-parse "" "0")))
 
 ; --- the rung-8 wire encodings, byte-exact into a jug ---
-(: j (jug 0) _ (x-borderpix j 5 77) b (slurp j)                                  ; CWA CWBorderPixel
+(: j (jug 0) _ (x-borderpix j 5 77) b (slurp j)                                  ; cwa cwborderPixel
    (assert (#b = 16) (b 0 = 2) (b 4 = 5) (b 8 = 8) (b 12 = 77)))
-(: j (jug 0) _ (x-cursor j 9 41 42) b (slurp j)                                  ; OpenFont + CreateGlyphCursor + CloseFont + CWA CWCursor
+(: j (jug 0) _ (x-cursor j 9 41 42) b (slurp j)                                  ; OpenFont + CreateGlyphCursor + CloseFont + cwa cwcursor
    (assert (#b = 76)
            (b 0 = 45) (b 2 = 5) (b 4 = 41) (b 12 = 99)                           ; OpenFont len 5, fid, "cursor"[0]='c'
            (b 20 = 94) (b 24 = 42) (b 36 = 68)                                   ; CreateGlyphCursor, cid, glyph 68
-           (b 52 = 46) (b 60 = 2) (b 68 = 0) (b 69 = 64) (b 72 = 42)))           ; CloseFont; CWA mask 0x4000, value cid
+           (b 52 = 46) (b 60 = 2) (b 68 = 0) (b 69 = 64) (b 72 = 42)))           ; CloseFont; cwa mask 0x4000, value cid
 
 ; --- minimize's targeted restore (a taskbar activate; crew/lux/layout.l rung 8) ---
 (: z3 (zfrom '(10 20 30)) r (rct 0 0 800 600)
@@ -387,6 +387,6 @@
       (#<(lay-tile (lay-msg M '(restore-window 20) z3) r z3) = 3)           ; named restore brings it back
       !(lay-msg M '(restore-window 30) z3)))                                     ; not minimized -> unhandled ()
 
-(test_fin ())                                        ; ⚠ no zz-fin here: quit before claiming ok
+(test_fin ())                                        ; no zz-fin here: quit before claiming ok
 (say err "crew/lux/law: StackSet zipper + sheaf + floating + layout + modifier + manage + keymap + ewmh + config laws ok
 ")

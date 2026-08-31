@@ -1,16 +1,16 @@
 ; tools/fatpack.l -- lay the fat container: one file, every text
 ; (doc/misc/plan/seed-universal.md rung U1).
 ;
-;   love tools/fatpack.l OUT ARCH FILE [ARCH FILE ..]
+;   love tools/fatpack.l out arch file [arch file ..]
 ;
-; ARCH is uname -m's spelling (x86_64, aarch64, ..). the members land at
+; arch is uname -m's spelling (x86_64, aarch64, ..). the members land at
 ; page-aligned block offsets behind a one-block #!/bin/sh prefix that picks
-; the machine's member, lays it under ~/.love/fat ONCE (content-named: the
+; the machine's member, lays it under ~/.love/fat once (content-named: the
 ; sha of the members rides the cache name, so a new fat lands a new cache),
 ; and execs it. deterministic: same members in, same bytes out -- the id is
 ; the members' own sha and nothing here reads a clock.
 ;
-; ⚠ the container never runs native; the EXTRACTION does. the distributed
+; the container never runs native; the extraction does. the distributed
 ; bytes stay immutable -- a bake belongs to the extraction (rung U1.2).
 
 (: (fp-die m) (: _ (say err ("fatpack: " + m + "\n")) (quit 1))

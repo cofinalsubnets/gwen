@@ -1,5 +1,5 @@
-; crew/kore/asbook.l -- make sure the assembler module is REGISTERED for the cat:
-; the wrapped crew/holo files (backends, elf/obj/link, copy) REOPEN module 'holo,
+; crew/kore/asbook.l -- make sure the assembler module is registered for the cat:
+; the wrapped crew/holo files (backends, elf/obj/link, copy) reopen module 'holo,
 ; and holo's readers say (use 'holo) scoped or probe (from 'holo ..) -- nothing
 ; reads it off an ambient splice anymore. the load rides an anonymous module
 ; layer -- registered nowhere, so use's splice is popped and nothing lands in

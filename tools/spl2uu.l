@@ -1,14 +1,14 @@
-; tools/spl2uu.l -- EMIT test/uusplgen.l: doc/misc/proto/spl.l's three call-site
+; tools/spl2uu.l -- emit test/uusplgen.l: doc/misc/proto/spl.l's three call-site
 ; compilers (ecall the convention, ebind the binding splice, esubst the
 ; substitution splice) run on spl.l's own samples, the threads lifted to uu
-; nlist terms so test/uuspllaw.l can prove the splice license OF THE EMISSIONS
+; nlist terms so test/uuspllaw.l can prove the splice license OF the emissions
 ; (substrate: test/uuhom.l's stack machine). Run on the host binary:
 ;
 ;   love tools/spl2uu.l > test/uusplgen.l        (or: make uusplgen)
 ;
-; the lift: 2 nats per op (op x), operands RAW (each op knows its operand's
+; the lift: 2 nats per op (op x), operands raw (each op knows its operand's
 ; kind); opcodes pushk0 pusha1 pushl2 pushs3 setl4 sets5 add6 emit7. spl.l's
-; samples leak from its body-less binder, so the roster below IS the model's;
+; samples leak from its body-less binder, so the roster below is the model's;
 ; its own asserts gate the load. untrusted like every translator here: a wrong
 ; lift can miss a law, never fake one, and each source op prints over its term.
 (: j (jug 0) _ (wear [in j err])

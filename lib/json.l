@@ -59,7 +59,7 @@
                 (string (240 + (u // 262144)) + string (128 + ((u // 4096) % 64))
                     + string (128 + ((u // 64) % 64)) + string (128 + (u % 64))))
 
-   ; \uXXXX, with the surrogate pair rejoined. a lone or unpaired surrogate is passed
+   ; \uxxxx, with the surrogate pair rejoined. a lone or unpaired surrogate is passed
    ; through as itself rather than refused -- the text is still json, and refusing a whole
    ; document over one bad code unit helps nobody.
    (juni s i n)

@@ -1,9 +1,9 @@
-; test/uulay.l -- the LAYOUT LEDGER: crew/lux/layout.l's rt-tile, mirrored in
-; uu at the window level, and THE TILING THEOREM proved of it -- rt-tile places
-; every window in the row EXACTLY ONCE, in row order (xmonad's prop_tiling).
+; test/uulay.l -- the layout ledger: crew/lux/layout.l's rt-tile, mirrored in
+; uu at the window level, and the tiling theorem proved of it -- rt-tile places
+; every window in the row exactly once, in row order (xmonad's prop_tiling).
 ; Geometry is erased to an opaque rect token (the nat-only model can't carry
 ; floats or pixel arithmetic -- the exact pixel partition stays natively
-; asserted in crew/lux/law.l); what survives erasure is the LEDGER: which
+; asserted in crew/lux/law.l); what survives erasure is the ledger: which
 ; windows get placed, how many strips each split yields, how take/drop/zip
 ; move the row. Substrate: test/uu.l (this file loads after it by sort order).
 
@@ -40,7 +40,7 @@
  ((vof 0 '(ncons 7 nnil)) = (vof 0 '(lzipl (ncons 7 (ncons 9 nnil)) (ncons 1 nnil)))))
 
 ; --- the splits, ledger face: splitv-eq's loop yields one strip per master,
-; --- splitv-w one per frac, padfr a length-ns frac list -- only the COUNTS
+; --- splitv-w one per frac, padfr a length-ns frac list -- only the counts
 ; --- survive the geometry erasure, and the counts are what the theorem eats ---
 (assert
  (defn msplitveq (pi n nat (pi r nat nlist))
@@ -72,19 +72,19 @@
             (lzipl row (msplitveq n r))
             (natgtb n nm))
           (niszero n))))))))
- ; the ledger COMPUTES: split branch (nm 1, row (10 20 30)) and master branch
+ ; the ledger computes: split branch (nm 1, row (10 20 30)) and master branch
  ((vof 0 '(ncons 10 (ncons 20 (ncons 30 nnil))))
   = (vof 0 '(rtwins 1 nnil 0 (ncons 10 (ncons 20 (ncons 30 nnil))))))
  ((vof 0 '(ncons 10 (ncons 20 nnil)))
   = (vof 0 '(rtwins 5 nnil 0 (ncons 10 (ncons 20 nnil)))))
  ((vof 0 'nnil) = (vof 0 '(rtwins 1 nnil 0 nnil))))
 
-; --- the lemma stack. lnil0: a length-0 list IS nnil (unit-eta through
+; --- the lemma stack. lnil0: a length-0 list is nnil (unit-eta through
 ; --- maponpaths). ldroplen: drop's length is truncated subtraction --
 ; --- double rect down natminus's own shape, every corner definitional but
 ; --- k=0 (natminusn0). lzipltake / lziplveq / lziplpadvw: zip-with-enough-
 ; --- strips keeps the whole left column -- each split's strip count is
-; --- DEFINITIONALLY in lockstep with the row it zips (msplitveq peels with
+; --- definitionally in lockstep with the row it zips (msplitveq peels with
 ; --- take, mpadfr's succ head feeds msplitvw one strip per window), so each
 ; --- is one induction whose steps are conversions under a maponpaths.
 ; --- lapptakedrop: take ++ drop = the row, the classic, by rect on k with
@@ -165,15 +165,15 @@
          (pr2 l)))))
       k)))))
 
-; --- THE TILING THEOREM: rtwins hands the row back -- every window placed,
-; --- none invented, row order kept -- for EVERY master count, frac list and
+; --- the tiling theorem: rtwins hands the row back -- every window placed,
+; --- none invented, row order kept -- for every master count, frac list and
 ; --- rect. By rect on the row: the empty row is unit-eta; a nonempty row
 ; --- splits on natgtb (the master-count test) with a dependent bool_rect --
 ; --- the fits-the-masters branch is lziplveq, the split branch rewrites the
 ; --- slave count ns = n - nm into drop's length (ldroplen backwards), peels
 ; --- both zips (lziplpadvw, lzipltake), and closes with take ++ drop = row.
 ; --- rtwinsane rides it: a duplicate-free row tiles duplicate-free -- with
-; --- zsane, every window is placed EXACTLY once ---
+; --- zsane, every window is placed exactly once ---
 (assert
  (defq rtwinsrow
    (pi nm nat (pi fr nlist (pi r nat (pi row nlist (paths nlist (rtwins nm fr r row) row)))))

@@ -3,22 +3,22 @@
 ; front end lives; clay itself arrives by (use 'clay), a module, so none of its
 ; helper names touch the compiler's book.
 ;
-; the comparison is STRUCTURAL, on the reparsed AST, and never a string compare of
+; the comparison is structural, on the reparsed AST, and never a string compare of
 ; the C text -- twice now the printer has been the thing standing
-; in front of the bug. so this proves the SHOWER and the PARSER agree about what a
+; in front of the bug. so this proves the shower and the parser agree about what a
 ; tree means; it deliberately proves nothing about the text resembling its original.
 ;
-; ⚠ THE PARTITION IS THE POINT. cparse cannot keep a typedef, a struct definition or
+; the partition is the point. cparse cannot keep a typedef, a struct definition or
 ; a _Static_assert -- all four land as the empty marker (tdef), which carries nothing
-; and which clay-show REFUSES rather than papering over with a `;`. those files are
-; counted as INEXPRESSIBLE and named, never skipped in silence. that count is the
+; and which clay-show refuses rather than papering over with a `;`. those files are
+; counted as inexpressible and named, never skipped in silence. that count is the
 ; live measure of the gap between "moon can parse this C" and "clay can say it back",
-; and the way to make it fall is to teach parse.l to FILL the marker -- (tdef name ty)
+; and the way to make it fall is to teach parse.l to fill the marker -- (tdef name ty)
 ; is already in clay's grammar waiting for it.
 ;
-; the gate FAILS on a round-trip difference or a shower crash. it does not fail on an
+; the gate fails on a round-trip difference or a shower crash. it does not fail on an
 ; inexpressible file, and it does not fail on a file the parser itself refuses (a few
-; in test/cc/ are there to BE refused).
+; in test/cc/ are there to be refused).
 (:
    _ (use "crew/moon/clay.l")
    _ (use 'moon)                       ; the front end (clex/cpp/cparse-t) is module 'moon
@@ -66,7 +66,7 @@
                             (<>b = a) 'ok
                             'diff))))))))
 
-   ; the tally, and the NAMES of everything that is not plain ok -- a count alone
+   ; the tally, and the names of everything that is not plain ok -- a count alone
    ; would let a regression hide inside a category.
    (go l ok df ix np rp bs bad)
     (? (! (two? l)) [ok df ix np rp bs (rev bad)]
@@ -84,9 +84,9 @@
    _ (each bad (\ b (say1 ("clay-g1: " + (string <b) + " " + (el b 1)))))
    _ (say1 ("clay-g1: " + (show ok) + " round-trip, " + (show ix) + " inexpressible, "
             + (show np) + " unparsed, " + (show (tally files)) + " files"))
-   ; ⚠ A VACUOUS PASS IS A FAIL. this file lived under test/ for one commit's worth
+   ; a vacuous pass is a fail. this file lived under test/ for one commit's worth
    ; of minutes, where the corpus glob swept it into a run with no compiler in scope:
-   ; every file "unparsed", nothing checked, and it printed PASS. so the floor is
+   ; every file "unparsed", nothing checked, and it printed pass. so the floor is
    ; explicit -- most of test/cc/ must actually round-trip, or the front end is not
    ; there and the gate is measuring nothing.
    floor 50
@@ -94,7 +94,7 @@
         (: _ (say1 ("clay-g1: FAIL -- only " + (show ok) + " files round-tripped, under the "
                     + (show floor) + " floor: the front end is not in scope"))
            (quit 1)) 0)
-   ; the failures: a tree that came back DIFFERENT, C the parser could not read back,
+   ; the failures: a tree that came back different, C the parser could not read back,
    ; or a tree clay-ok? rejected. an inexpressible file is a measured gap, not a red.
    (? (! (df + rp + bs)) (: _ (say1 "clay-g1: pass") (quit 0))
       (: _ (say1 ("clay-g1: FAIL -- " + (show df) + " diff, " + (show rp)

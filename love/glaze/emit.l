@@ -2,12 +2,12 @@
 ; installed as a transparent applicable value. "ev but faster": the result applies
 ; by juxtaposition, is =/show identical to its source, and deopts to the interpreter
 ; on any surprise, so native is never wrong, only faster. the C seam is `nat`
-; (love.c): it W^X-installs the bytes and wraps them in a closure cell
+; (love.c): it w^x-installs the bytes and wraps them in a closure cell
 ; [code, src, code, interp, lvm_ret, 0], value[-1]=src (=/show) and value[1]=interp.
 ;
 ; every lane below lays neutral crew/holo/ IR and assembles it per target, so the
 ; roles are named through `greg`: x86 lands g/Ip/Hp/Sp in rdi/rsi/rdx/rcx, aarch64
-; in x0..x3. putfix is `adds A A A` then `or A A 1` -- the overflow flag IS the
+; in x0..x3. putfix is `adds A A A` then `or A A 1` -- the overflow flag is the
 ; 62-bit fixnum boundary, which is what every arith result gates on.
 
 ; nif/nifx -- the C install seam (love.c). the book loses them on every boot
@@ -93,7 +93,7 @@
               body (filter (k \ suse? body (fp k)) (rangeL 0 #fp))))                        ; seed acc = the direct peep/tally params
    (sm-size smap) (foldl (\ a e (a + #>e)) 0 smap)                                          ; total mask width, the ascending measure
    (smfix info smap) (monofix smap (st \ map (f \ <f . fnsm (f 1) (f 2) st) info) sm-size)
-   ; the counted fold loop: ACC = the fold of body(CV) over CV < N, N the tagged Sp[0], cmp the
+   ; the counted fold loop: acc = the fold of body(CV) over cv < N, N the tagged Sp[0], cmp the
    ; test the loop runs while.
    (foldinit op)  (op = '* ? 1 0)                                 ; * folds from 1, + from 0
    ; loopregs: N / counter / accumulator, caller-saved on both targets so they survive the body's
@@ -105,14 +105,14 @@
    (exitcc cmp) (cmp @ '< 'ge  '<= 'gt  '> 'le  '>= 'lt  '= 'ne  ())   ; exit on the inverse of the continue-comparison
    (loopcode body cv op cmp tgt)
     (: rs (loopregs tgt) N (rs 0) CV (rs 1) ACC (rs 2) A (greg tgt 'acc) S (greg tgt 'sp)
-       bodyir (cgvir tgt (\ e d (e = cv && [['mov A CV]])) body 0)      ; body -> acc; the counter is read from CV
-       accir  (op @ '+ ([['adds ACC ACC A]] + (ldeopt tgt 0))                                  ; ACC += acc ; overflow -> inline deopt
-                  '* (: dl (mint 0) ok (mint 0)                                                ; ACC *= acc ; mulo sets no arm64 flag, so it branches
+       bodyir (cgvir tgt (\ e d (e = cv && [['mov A CV]])) body 0)      ; body -> acc; the counter is read from cv
+       accir  (op @ '+ ([['adds ACC ACC A]] + (ldeopt tgt 0))                                  ; acc += acc ; overflow -> inline deopt
+                  '* (: dl (mint 0) ok (mint 0)                                                ; acc *= acc ; mulo sets no arm64 flag, so it branches
                        ([['mulo ACC ACC A (greg tgt 'scratch) dl]] + [['jmp ok] ['label dl]] + (deoptbody tgt 0) + [['label ok]]))
                   ())
-       pre  [['ld N S 0] ['sar N 1] ['li CV 0] ['li ACC (foldinit op)]]   ; N = Sp[0]>>1 (assumed fixnum) ; CV = 0 ; ACC = init
-       (asmt tgt (pre + ['(label top) ['cmp CV N] ['br (exitcc cmp) 'end]]   ; cmp CV,N ; exit when (cmp CV N) false
-              + bodyir + accir + [['inc CV] '(jmp top) '(label end) ['mov A ACC]] + (loopepi tgt))))   ; CV++ ; loop ; acc <- ACC ; putfix + Continue
+       pre  [['ld N S 0] ['sar N 1] ['li CV 0] ['li ACC (foldinit op)]]   ; N = Sp[0]>>1 (assumed fixnum) ; cv = 0 ; acc = init
+       (asmt tgt (pre + ['(label top) ['cmp CV N] ['br (exitcc cmp) 'end]]   ; cmp cv,N ; exit when (cmp CV N) false
+              + bodyir + accir + [['inc CV] '(jmp top) '(label end) ['mov A ACC]] + (loopepi tgt))))   ; cv++ ; loop ; acc <- acc ; putfix + Continue
    ; (jitsum body) -- compile (\ n (sum_{i<n} body(i))) to a native counted loop (x86 self-test helper).
    (jitsum body)
     (: src ['\ 'n [[': ['go 'i 'a] ['? ['< 'i 'n] ['go ['+ 'i 1] ['+ 'a body]] 'a]] 0 0]]
@@ -121,32 +121,32 @@
    ; a counted loop over (clos i) that calls out without a re-entrant C frame: the blob builds
    ; the frame on Sp, points Ip at callout_drive (love.c, {lvm_ap, lvm_ret0}) and tail-jumps, and
    ; the result lands back at the blob's own resume label bb. `lar` materializes bb's address
-   ; pc-relatively (rip-lea / ADR) -- la's page-relative ADRP would mis-page in the word-aligned
+   ; pc-relatively (rip-lea / ADR) -- la's page-relative adrp would mis-page in the word-aligned
    ; mmap blob. so the callee runs entirely on the VM stack: it grows Sp, never the C stack.
    ; the loop state is 6 reserved Sp slots, a GC root, so a callee GC relocates it for free:
-   ;   R[0]=SA sum  R[1]=SC counter  R[2]=SN bound  R[3]=Sclos closure  R[4]=Sbase blob base
+   ;   R[0]=sa sum  R[1]=SC counter  R[2]=sn bound  R[3]=Sclos closure  R[4]=Sbase blob base
    ;   R[5]=Stwin the interp twin ; the arg n rides at R[6], the caller continuation at R[7].
    ; two inline gates deopt to that twin, so the native answer is exact or absent: the resume
-   ; untags the callout result, so an even (heap) result deopts; and the SA fold is adds + br vc,
+   ; untags the callout result, so an even (heap) result deopts; and the sa fold is adds + br vc,
    ; so an out-of-range sum re-runs in interp and promotes to a bignum.
-   ; value[1] is the PLAIN twin -- the image-dump revert reads it as-is, and a pack chain there
+   ; value[1] is the plain twin -- the image-dump revert reads it as-is, and a pack chain there
    ; data-applies. `codeopt` restores Sp to entry (Sp[0] = the original tagged n) and continues
-   ; into the twin, discarding the native partial SA as any loop deopt does.
+   ; into the twin, discarding the native partial sa as any loop deopt does.
    ; jitcalloutx stamps the caller's src at value[-1] for =/show; post-egg has no `poke`.
    ; the Sp offsets are VM words, the same on both targets -- slotsz only matters for push/pop,
    ; which the callout never uses.
-   ; coacc / coend fold the callout result (tagged at Sp[0], Sp = R-8 at bb) into SA @ Sp[8]:
-   ; `+` keeps SA tagged from init tag(0)=1 and adds the even 2r; `*` keeps it raw from 1 and
+   ; coacc / coend fold the callout result (tagged at Sp[0], Sp = R-8 at bb) into sa @ Sp[8]:
+   ; `+` keeps sa tagged from init tag(0)=1 and adds the even 2r; `*` keeps it raw from 1 and
    ; retags in coend. both deopt to codeopt, which wants Sp = R-8, so coend's `*` path subs 8.
    (coacc tgt op) (: A (greg tgt 'acc) SP (greg tgt 'sp) T (greg tgt 'tmp) SC (greg tgt 'scratch)
-      (id? op '* ? [['sar A 1] ['ld T SP 8] ['mulo T T A SC 'codeopt] ['st SP 8 T]]                        ; SA(raw) *= untag(r) ; overflow -> deopt
-         [['sub A A 1] ['ld T SP 8] ['adds T T A] ['br 'vc 'sok] ['jmp 'codeopt] ['label 'sok] ['st SP 8 T]]))  ; SA(tagged) += 2r ; overflow -> deopt
+      (id? op '* ? [['sar A 1] ['ld T SP 8] ['mulo T T A SC 'codeopt] ['st SP 8 T]]                        ; sa(raw) *= untag(r) ; overflow -> deopt
+         [['sub A A 1] ['ld T SP 8] ['adds T T A] ['br 'vc 'sok] ['jmp 'codeopt] ['label 'sok] ['st SP 8 T]]))  ; sa(tagged) += 2r ; overflow -> deopt
    (coend tgt op) (: A (greg tgt 'acc) SP (greg tgt 'sp)
-      (id? op '* ? [['ld A SP 0] ['adds A A A] ['br 'vc 'etag] ['sub SP SP 8] ['jmp 'codeopt] ['label 'etag] ['or A A 1]]  ; SA raw -> tag(SA) ; overflow -> deopt (Sp R -> R-8 first)
-         [['ld A SP 0]]))                                                                                       ; SA already tagged
-   ; a computed call-out arg: the per-step term is (F ARG), ARG an expr over the counter rather than
-   ; the bare counter. caargir lowers ARG to acc RAW -- exprp guarantees the counter is the only
-   ; variable, so a name IS the counter and wants no fixnum guard. guards and overflow branch to the
+      (id? op '* ? [['ld A SP 0] ['adds A A A] ['br 'vc 'etag] ['sub SP SP 8] ['jmp 'codeopt] ['label 'etag] ['or A A 1]]  ; sa raw -> tag(SA) ; overflow -> deopt (Sp R -> R-8 first)
+         [['ld A SP 0]]))                                                                                       ; sa already tagged
+   ; a computed call-out arg: the per-step term is (F ARG), arg an expr over the counter rather than
+   ; the bare counter. caargir lowers arg to acc raw -- exprp guarantees the counter is the only
+   ; variable, so a name is the counter and wants no fixnum guard. guards and overflow branch to the
    ; callout's own `deopt`, which unwinds to codeopt and the interp twin; nesting rides the machine
    ; stack, independent of VM Sp, so coff is constant across sub-exprs.
    (caargir tgt e coff)
@@ -169,7 +169,7 @@
    (caarg tgt arg) (: A (greg tgt 'acc) SP (greg tgt 'sp) T (greg tgt 'tmp) AN (greg tgt 'anchor)
       (name? arg ? [['ld T SP 8] ['leax T T T 1 1] ['st SP -32 T]]                                         ; bare counter: F[0] = tag(i)
          ([['lea AN 'sp 0]]                                                                                     ; anchor the machine sp for the arg-expr deopt unwind
-          + (caargir tgt arg 8)                                                                                   ; A = ARG(counter) raw ; guards/overflow -> deopt
+          + (caargir tgt arg 8)                                                                                   ; A = arg(counter) raw ; guards/overflow -> deopt
           + [['adds A A A] ['br 'vs 'deopt] ['or A A 1] ['st SP -32 A]])))                                   ; F[0] = tag(ARG) ; tag overflow -> deopt
    ; caargdeopt: restore the machine sp from the anchor (dropping any pending arg-expr pushes), bring
    ; VM Sp from R to R-8, and fall into codeopt. appended only when the arg is computed.
@@ -181,8 +181,8 @@
           ['sub SP SP 48]                                     ; reserve 6 loop-state slots (Sp = R)
           ['ld U IP 32] ['st SP 24 U]                        ; Sclos = the nifx extras slot = clos     -> R[3]  (IP still &value[0])
           ['ld U IP 8]  ['st SP 40 U]                         ; Stwin = value[1] = twin (interp)        -> R[5]
-          ['ld T SP 48] ['sar T 1] ['st SP 16 T]            ; SN = untag(arg @ R[6])                  -> R[2]
-          ['li T 1] ['st SP 0 T] ['li T 0] ['st SP 8 T]   ; SA = tag(0)=1, tagged so gate 2 checks the fixnum boundary ; SC = 0   -> R[0] R[1]
+          ['ld T SP 48] ['sar T 1] ['st SP 16 T]            ; sn = untag(arg @ R[6])                  -> R[2]
+          ['li T 1] ['st SP 0 T] ['li T 0] ['st SP 8 T]   ; sa = tag(0)=1, tagged so gate 2 checks the fixnum boundary ; SC = 0   -> R[0] R[1]
           ['lar T 'entry0] ['st SP 32 T]]                     ; Sbase = the blob base (out-of-pool W^X; lar = ADR on arm64)  -> R[4]
         + ['(label top)
            ['ld T SP 8] ['ld U SP 16] ['cmp T U] ['br 'ge 'end]]   ; i >= n -> end
@@ -196,11 +196,11 @@
         + ['(label bb)
            ['ld A SP 0]                                        ; A = result (Sp[0] on resume, Sp = R-8 -- same landing as the retired retB path)
            ['test A 1] ['br 'eq 'codeopt]]                    ; gate 1: non-fixnum (even) result -> deopt
-        + (coacc tgt op)                                        ; gate 2: fold the result into SA @ Sp[8] (overflow -> deopt)
+        + (coacc tgt op)                                        ; gate 2: fold the result into sa @ Sp[8] (overflow -> deopt)
         + [['ld T SP 16] ['add T T 1] ['st SP 16 T]         ; SC += 1
            ['add SP SP 8] ['jmp 'top]]                        ; Sp = R ; next iteration
         + ['(label end)]
-        + (coend tgt op)                                        ; A = SA tagged (`*` retags here, overflow -> deopt)
+        + (coend tgt op)                                        ; A = sa tagged (`*` retags here, overflow -> deopt)
         + [['add SP SP 48] ['st SP 0 A]                      ; Sp = entry ; result into arg slot
            ['ld IP SP 8] ['st SP 8 A] ['add SP SP 8]         ; inline ret0: Ip=caller-cont; Sp[1]=result; Sp++
            ['ld T IP 0] ['jmpr T]]                            ; Continue -> caller
@@ -208,13 +208,13 @@
            ['ld A SP 48]                                       ; A = Stwin (R[5] @ Sp+48) -- before restoring Sp
            ['add SP SP 56]                                     ; Sp = entry (R+48); Sp[0] = the original tagged n
            ['mov IP A] ['ld A IP 0] ['jmpr A]]               ; Continue into twin, applied to Sp[0] = n
-        + (name? arg ? () (caargdeopt tgt))))                  ; the computed-arg `deopt` label, only when ARG is an expr
+        + (name? arg ? () (caargdeopt tgt))))                  ; the computed-arg `deopt` label, only when arg is an expr
    (jitcalloutsum clos) (jitcalloutx clos ['\ 'n 0] '+ 'i 'i 'amd64)
    (jitcalloutx clos src op iv arg tgt)
     (: fop (id? op '* ? (*) (+))  a0 (foldinit op)                             ; the fold op as a value -- a bare `* +` mid-list mis-factors -- and its identity
-       argfn (name? arg ? 0 (ev ['\ iv arg]))                               ; a computed ARG -> a closure (\ counter ARG); a bare one needs none
+       argfn (name? arg ? 0 (ev ['\ iv arg]))                               ; a computed arg -> a closure (\ counter ARG); a bare one needs none
        twin (name? arg ? (n \ (: (go i a) (i < n ? (go (i + 1) (fop a (clos i))) a)) 0 a0)            ; bare: clos applied to the counter
-                         (n \ (: (go i a) (i < n ? (go (i + 1) (fop a (clos (argfn i)))) a)) 0 a0))   ; computed: clos applied to ARG(counter)
+                         (n \ (: (go i a) (i < n ? (go (i + 1) (fop a (clos (argfn i)))) a)) 0 a0))   ; computed: clos applied to arg(counter)
        (nifx (emit (asmt tgt (calloutir tgt op arg))) twin src 1 clos))   ; value[1] = the twin (image-revert-clean); clos = the extras slot; value[-1]=src
    ; --- the captured / multi-arg call-out ------------------------------------------------------
    ; the same stackless sum over (F i), but F and the bound N are frame params -- a captured import
@@ -225,7 +225,7 @@
    ; deopts to value[1]=e, the bytecode twin ala built -- it captures F, so it recomputes right.
    ; a>=2 here (a=1 no-imports is the global lane), so e is an lvm_cur cell: enter its body at
    ; e+16 with the saturated frame on Sp. the 6 reserved slots (Sp=R) are
-   ;   R[0]=SA  R[1]=SC  R[2]=SN  R[3]=SF  R[4]=Sbase  R[5]=Se(=e), the frame above at E=R+48.
+   ;   R[0]=sa  R[1]=SC  R[2]=sn  R[3]=sf  R[4]=Sbase  R[5]=Se(=e), the frame above at E=R+48.
    (calloutframeir tgt Fidx Nidx a op arg)
     (: A (greg tgt 'acc)  IP (greg tgt 'ip)  SP (greg tgt 'sp)  T (greg tgt 'tmp)  U (greg tgt 'scratch)
        (['(label entry0)                                      ; the resume-offset anchor
@@ -235,13 +235,13 @@
         + ['(label ngood) ['sar A 1]                          ; A = N untagged
            ['ld T IP 8]                                        ; T = e (deopt twin = value[1], IP+8 at body entry)
            ['sub SP SP 48]                                     ; reserve 6 slots; Sp = R
-           ['st SP 24 U] ['st SP 16 A] ['st SP 40 T]         ; SF = F ; SN = N ; Se = e
-           ['li T 1] ['st SP 0 T] ['li T 0] ['st SP 8 T]   ; SA = tag(0)=1, kept tagged so gate 2 checks the fixnum boundary ; SC = 0
+           ['st SP 24 U] ['st SP 16 A] ['st SP 40 T]         ; sf = F ; sn = N ; Se = e
+           ['li T 1] ['st SP 0 T] ['li T 0] ['st SP 8 T]   ; sa = tag(0)=1, kept tagged so gate 2 checks the fixnum boundary ; SC = 0
            ['lar T 'entry0] ['st SP 32 T]]                     ; Sbase = the blob base (out-of-pool W^X)
         + ['(label top)
-           ['ld T SP 8] ['ld U SP 16] ['cmp T U] ['br 'ge 'end]]   ; SC >= SN -> end
+           ['ld T SP 8] ['ld U SP 16] ['cmp T U] ['br 'ge 'end]]   ; SC >= sn -> end
         + (caarg tgt arg)                                       ; F[0] = tag(ARG(counter)) -- bare SC, or a computed expr (deopts to `deopt`)
-        + [['ld T SP 24] ['st SP -24 T]                      ; F[1] = SF (clos)
+        + [['ld T SP 24] ['st SP -24 T]                      ; F[1] = sf (clos)
            ['lar T 'bb] ['ld U SP 32] ['subs T T U]          ; F[2] = tag(&bb - base)
            ['leax T T T 1 1] ['st SP -16 T]
            ['st SP -8 U]                                       ; F[3] = base
@@ -249,11 +249,11 @@
            ['ld T IP 0] ['jmpr T]]                            ; Continue -> lvm_ap -> F -> lvm_resume -> bb
         + ['(label bb)
            ['ld A SP 0] ['test A 1] ['br 'eq 'codeopt]]      ; gate 1: a non-fixnum result -> deopt
-        + (coacc tgt op)                                        ; gate 2: fold the result into SA @ Sp[8] (overflow -> deopt)
+        + (coacc tgt op)                                        ; gate 2: fold the result into sa @ Sp[8] (overflow -> deopt)
         + [['ld T SP 16] ['add T T 1] ['st SP 16 T]         ; SC += 1
            ['add SP SP 8] ['jmp 'top]]                        ; Sp = R ; next iteration
         + ['(label end)]
-        + (coend tgt op)                                        ; A = SA tagged (`*` retags here, overflow -> deopt)
+        + (coend tgt op)                                        ; A = sa tagged (`*` retags here, overflow -> deopt)
         + [['add SP SP 48] ['st SP 0 A]                      ; Sp = E (frame) ; result into Sp[0]
            ['ld IP SP (8 * a)] ['st SP (8 * a) A] ['add SP SP (8 * a)]   ; hand-rolled lvm_ret(n=a): cont@Sp[a] ; deliver ; pop a
            ['ld T IP 0] ['jmpr T]]                            ; Continue -> caller
@@ -261,25 +261,25 @@
            ['ld T SP 48]                                       ; T = Se (= e, R[5] @ Sp+48) -- before restoring Sp
            ['add SP SP 56]                                     ; Sp = E (frame intact for e's body)
            ['lea IP T 16] ['ld T IP 0] ['jmpr T]]            ; enter e's body (a>=2: e+16), saturated frame on Sp
-        + (name? arg ? () (caargdeopt tgt))))                 ; the computed-arg `deopt` label, only when ARG is an expr
+        + (name? arg ? () (caargdeopt tgt))))                 ; the computed-arg `deopt` label, only when arg is an expr
    (njit-calloutframe src Fidx Nidx a e op arg tgt)
     (nif (emit (asmt tgt (calloutframeir tgt Fidx Nidx a op arg))) e src a)   ; value[1] = e (the bytecode twin, deopt target -- source-shaped, so op- AND arg-correct); arity a ; src for =/show
    ; --- amble: the boring-tier translator ------------------------------------------------------
    ; the last natjit lane: a closure every other lane declined gets a per-op native translation.
-   ; values stay TAGGED, so heap refs ride whole and there are no result gates; every temporary
-   ; lives in a reserved VM-Sp slot, a GC root, so a callee GC relocates mid-expression state for
+   ; values stay tagged, so heap refs ride whole and there are no result gates; every temporary
+   ; lives in a reserved vm-sp slot, a GC root, so a callee GC relocates mid-expression state for
    ; free; the machine stack is never used. calls leave via the stackless callout_drive and resume
    ; at a lar label, so any callee value works (lvm_ap is total -- data self-applies) and a
-   ; multi-arg call chains 1-arg drives, since application IS currying.
+   ; multi-arg call chains 1-arg drives, since application is currying.
    ; every runtime surprise -- a non-fixnum under arith/cmp, a heap value under ?, overflow, a
-   ; full heap under link -- deopts by RESTART: the twin comes from its reserved slot (a call
+   ; full heap under link -- deopts by restart: the twin comes from its reserved slot (a call
    ; clobbers Ip, so the epilogue hand-rolls lvm_ret and the deopt never reads Ip-relative), Sp
-   ; is restored, and e re-runs from the restart point. a restart REPEATS any call-out already
+   ; is restored, and e re-runs from the restart point. a restart repeats any call-out already
    ; made from that point, which only a pure callee survives -- so asafe (njit-amble) declines a
    ; body where a deopting op sits after a call, and the grammar's calls stay ones no restart can
    ; reach.
    ; amble-ok? below is the grammar. strings, floats and global reads in operand position decline.
-   ; a global callee resolves via gv at COMPILE -- redefinition-stale, the callout lanes' bet --
+   ; a global callee resolves via gv at compile -- redefinition-stale, the callout lanes' bet --
    ; and never through a farq name, whose book entry is at best a stale namesake.
    ; a ? over a heap test value, bare (? l ..) on a list, deopts every call: correct, and a small
    ; entry tax over pure bytecode.
@@ -288,14 +288,14 @@
    (amax a b) (a < b ? b a)
    (adistinct l) (l @ (a . u) (!(member? a u) && adistinct u) 1)
    ; a constant rides as the immediate tag(e) = 2e+1, so only one that fits the machine word
-   ; can: a big literal (or one folding left behind) would be laid TRUNCATED, silently.
+   ; can: a big literal (or one folding left behind) would be laid truncated, silently.
    (afix? e) (whole? e && (-4611686018427387904 <= e <= 4611686018427387903))
    (aconst? e) (afix? e || id? e amble-nil)
    (aop2? op) (member? op '(+ - * // % & | ^ < <= > >= = id? link))
    (acmp? op) (member? op '(< <= > >= =))
    (aquote? e) (two? e && id? <e '\ && 2 = #e)            ; the reader's quote: (\ X) at exactly two -- a datum constant
    (aqnom? e) (aquote? e && name? <>e)                          ; a quoted nom: a point, so (a = 'sym) is raw identity
-   (amemq x l) (atom? l ? 0  (id? x <l) 1  (amemq x >l))     ; id?-membership: interp's quote answers the source NODE, so two
+   (amemq x l) (atom? l ? 0  (id? x <l) 1  (amemq x >l))     ; id?-membership: interp's quote answers the source node, so two
    (aposq x l i) (id? x <l ? i (aposq x >l (i + 1)))         ; =-equal quote nodes stay distinct slots
    (aq e acc) (? (aquote? e) (amemq e acc ? acc (e . acc))          ; collect quote nodes; never walk into quoted data
                  (two? e) (foldl (\ ac x (aq x ac)) acc e)
@@ -371,7 +371,7 @@
    ; amble-loop: match the named-let body, both def sugars x both spellings --
    ;   applied:  ((: (go v..) GB) i..)  |  ((: go (\ v.. GB)) i..)
    ;   trigger:  (: (go v..) GB (go i..))  |  (: go (\ v.. GB) (go i..))   the body-having let
-   ; whose result IS the fired loop, moon's lexer spelling.  -> (go vars GB inits) | 0
+   ; whose result is the fired loop, moon's lexer spelling.  -> (go vars GB inits) | 0
    (amble-let1 S inits)
     (S @ (': D1 D2)
          (? (two? D1 && name? <D1 && all name? >D1 && 0 < #>D1)
@@ -383,7 +383,7 @@
    (amble-loop M)
     (? (atom? M) 0
        (two? <M) (amble-let1 <M >M)                        ; applied
-       (M @ (': DEF GB trg)                                ; trigger: the let's result IS the fired loop
+       (M @ (': DEF GB trg)                                ; trigger: the let's result is the fired loop
             (: r (amble-let1 [': DEF GB] ())
                (r && two? trg && id? <trg <r ?              ; the trigger fires the same name; its args are the inits
                   [<r <>r <>>r >trg]                        ; amble-ok? gates their content -- a (go ..) inside one declines
@@ -395,7 +395,7 @@
    ; read the params, the body the renamed vars, and one flat env serves both.
    (asub old new e) (? (id? e old) new  (aquote? e) e  (two? e) (map (x \ asub old new x) e)  e)   ; quoted data is inert -- never rename inside it
    (afresh v avoid) (: c (intern ((string v) + "~")) (member? c avoid ? (afresh c avoid) c))
-   ; aopv: a macro expansion splices op VALUES, not noms -- the list/backtick macro emits the link
+   ; aopv: a macro expansion splices op values, not noms -- the list/backtick macro emits the link
    ; nif as a head, and show prints that as `link`, invisibly. normalize a value head back to its
    ; nom, id?-keyed, and only when the nom is not env-shadowed: a param named link must win, as it
    ; does in bytecode. a miss falls through to `opnom`, the glued lane's own value -> word map
@@ -409,7 +409,7 @@
    ; so every infix-written body wears these singletons -- a value head is its nom, (list a..) is
    ; nested links, and (&& a..) is nested (? a .. ()), short-circuit included, since && answers
    ; its last value or the unit. env-shadowed names stay calls and quoted data stays inert.
-   ; (|| ..) is NOT rewritten: its value is the first truthy arg, so a rewrite would double-eval.
+   ; (|| ..) is not rewritten: its value is the first truthy arg, so a rewrite would double-eval.
    ; aor emits it.
    (adesug env ti ta e)
     (? (aquote? e) e
@@ -423,7 +423,7 @@
                       (: vn (aopn <>e aopv)
                          (vn && !(member? vn env) ? (adesug env ti ta (vn . >>e)) e))
                       e)
-       ; the (X) singleton, by EMPTINESS and never nil?: a tail of nameless mints (bsub's fresh
+       ; the (X) singleton, by emptiness and never nil?: a tail of nameless mints (bsub's fresh
        ; binders) nets to 0, and the net test unwraps (\ m1 m2 m2) to a bare \, a quote-shaped
        ; wreck amble would then compile as the constant \
        (atom? >e) (adesug env ti ta <e)
@@ -524,7 +524,7 @@
        nin  #ins
        ; self: the letrec name this closure is being bound to (ala's nm; 0 when anonymous).
        ; a saturated tail self-call jumps the body top on a rewritten frame, so the recursion
-       ; becomes a loop; any other self-call drives the blob's OWN cell, read off Ip at the
+       ; becomes a loop; any other self-call drives the blob's own cell, read off Ip at the
        ; prologue -- early-bound, exactly the wire's backpatched site. a shadowed name declines.
        sc   (assoc nm lams)                                  ; the self lams cell: its kept import row names the frame's leading slots,
        scc  (two? sc ? (peep >sc 0 0) 0)                     ; so a self-call re-supplies the imports the way the wire's site does
@@ -546,11 +546,11 @@
        ; the free-head seams: loop bodies, and drok bodies that drive a param or themselves --
        ; the shapes that amortize the call and compile taxes. a one-shot wrapper whose only
        ; calls go to globals, (\ t k (peep t k ())) and kin, stays bytecode.
-       ; a free head that is not farq resolves via gv at COMPILE and rides an extras slot,
+       ; a free head that is not farq resolves via gv at compile and rides an extras slot,
        ; redefinition-stale, exactly the callout lanes' bet. a farq name -- a letrec local the
        ; weave re-analysis dropped from the import row -- must never gv-resolve: the book holds
        ; at best a stale namesake.
-       ; a farq name that lamq DOES resolve is a woven lambda sibling of this very let, and its
+       ; a farq name that lamq does resolve is a woven lambda sibling of this very let, and its
        ; (entry . import-names) is the same pair lz freezes into a bytecode reference site, so
        ; amble compiles the identical application with no staleness bet: the entry rides an
        ; extras slot and the call curries entry(imports.. args..). fixcaps' pour guarantees the
@@ -582,8 +582,8 @@
        kn   (sfq ? (self . (gn + cn)) (gn + cn))         ; every resolvable free head + the self name (amble-ok?'s membership test)
        lpok (lp ? ((all name? vars) && (adistinct vars) && (k = #inits)
                    && !(member? go vars) && !(member? go ps)) 1)
-       ; the restart law. a deopt RESTARTS: Sp goes back and the twin re-runs from the restart
-       ; point, so every call-out the native already made is made AGAIN -- faithful only where
+       ; the restart law. a deopt restarts: Sp goes back and the twin re-runs from the restart
+       ; point, so every call-out the native already made is made again -- faithful only where
        ; the callee is pure, which the grammar cannot ask. so no deopting op may sit after a
        ; call. asafe walks acg's own evaluation order carrying "a call has run", answering that
        ; flag onward or 'bad where a guard follows one. the restart point is the arg slots: a
@@ -638,13 +638,13 @@
              ino (eqo + (8 * (lit? eqv ? 1 0)))                    ; the inner entries' slots (past =)
              lto (8 * (k + 3 + ng + nd))                    ; the let region, past the spills
              (lvo v) (lto + (8 * (posof v lts 0)))
-             (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T and A fixnum, else lbl
+             (fx2 lbl) [['mov X T] ['and X X A] ['test X 1] ['br 'eq lbl]]    ; both T and a fixnum, else lbl
              (abin sa sb d fin) ((acg sa d) + [['st SP (spill d) A]] + (acg sb (d + 1)) + [['ld T SP (spill d)]] + fin)   ; T = a, A = b
              (aar op sa sb d)
               (abin sa sb d
                (op @ '+ ((fx2 'deopt) + [['sub A A 1] ['adds A A T] ['br 'vs 'deopt]])         ; 2y + (2x+1) = tag(x+y)
                     '- ((fx2 'deopt) + [['subs T T A] ['br 'vs 'deopt] ['lea A T 1]])          ; 2(x-y) then tag
-                    ((fx2 'deopt) + [['sar A 1] ['sub T T 1] ['mulo A A T SC 'deopt] ['or A A 1]])))   ; y * 2x = 2xy, where mulo IS the tag-range gate, then tag
+                    ((fx2 'deopt) + [['sar A 1] ['sub T T 1] ['mulo A A T SC 'deopt] ['or A A 1]])))   ; y * 2x = 2xy, where mulo is the tag-range gate, then tag
              (acmp2 op sa sb d) (abin sa sb d ((fx2 'deopt) + [['cmp T A] ['set (ccof op) A] ['leax A A A 1 1]]))
              (adm op sa sb d) (abin sa sb d                                                        ; // %: untag, /-by-0 -> twin, divir (trunc toward zero), retag
               ((fx2 'deopt) + [['sar T 1] ['sar A 1] ['test A A] ['br 'eq 'deopt]]                 ; (the adds gate catches most-negative // -1)
@@ -766,8 +766,8 @@
                                    + (goj (j + 1) (spill d)))
                                   ()) (goj 0 cso))
                + [['label dn]]))
-             ; a 1-arg frame callee can be a STRING at run time (the lexer class), so the string
-             ; fast lane rides LOOPING bodies only -- named-let or self-call, the same cost gate as
+             ; a 1-arg frame callee can be a string at run time (the lexer class), so the string
+             ; fast lane rides looping bodies only -- named-let or self-call, the same cost gate as
              ; gn -- since on a one-shot recursion wrapper it taxed every drive. a gn or sibling
              ; callee is never a string (lit?-gated, or a woven entry), so those keep the bare drive.
              (acall f as d)
@@ -877,7 +877,7 @@
           0))
    ; --- the general tail-recursive counted loop, n loop vars ------------------------------------
    ; (\ n ((: (go v0..vk) (? TEST (go U0..Uk) RESULT)) I0..Ik)), up to 3 loop vars in the loopregs
-   ; bank RAW, the param n the tagged Sp[0]. each iteration computes every Uj from the OLD regs --
+   ; bank raw, the param n the tagged Sp[0]. each iteration computes every Uj from the old regs --
    ; push all, then pop into the regs in reverse -- so the updates read pre-update values, as fib's
    ; `b` and `a+b` must. the loop regs survive the expr scratch, so nothing is saved.
    (lvreg tgt j) ((loopregs tgt) j)               ; loop var j -> its abstract register
@@ -904,9 +904,9 @@
    ; float values stay in registers, never boxed. f0 is the accumulator and a nested operand spills
    ; to the machine stack. peek is mopped, so a float constant is materialized arithmetically:
    ; fbits computes its IEEE-754 bits, and the 52-bit mantissa makes frac*2^52 exact.
-   ; LANE LAW: the float lane carries no overflow guard, since doubles saturate to inf and never
+   ; lane law: the float lane carries no overflow guard, since doubles saturate to inf and never
    ; promote to a bignum; only the integer lane keeps the deopt that preserves bignum promotion.
-   ; a float predicate leaf over a fixnum arg answers 0/1 here; a float RESULT is jitfr below.
+   ; a float predicate leaf over a fixnum arg answers 0/1 here; a float result is jitfr below.
    ; a gem arg would want the lvm_gembox type guard, so a non-fixnum arg deopts instead.
    (fbits x)                                                          ; a finite double -> its IEEE-754 u64 bits
     (x = 0.0 ? 0
@@ -933,7 +933,7 @@
                        (member? op '(+ - * /)
                         && ((cgf tgt v a d) + (xpushir tgt) + (cgf tgt v b (d + 1)) + (xpop1ir tgt) + (fbinop op)))
                        ()))
-   ; cgfp: a float predicate (cmp A B) -> acc 0/1 (A to f1, B to f0, ucomisd then set). x86-only, since
+   ; cgfp: a float predicate (cmp A B) -> acc 0/1 (a to f1, B to f0, ucomisd then set). x86-only, since
    ; the ucomisd-flag conditions are x86 unsigned cc; jitf, its sole caller, is an x86 self-test helper.
    (cgfp tgt v e d) (: op <e a <>e b <>>e
       cc (op @ '< 'below  '<= 'be  '> 'above  '>= 'ae  'eq)
@@ -946,7 +946,7 @@
    ; the heap is too full to fit the box, exactly as `jo` deopts when a fixnum result leaves range.
    ; fast path (room proven): write [Hp]=lvm_gembox (the jk gem slot, read off g like the
    ; string guard), the double at [Hp+8] with NaN->0 (mk_gem's law), return Hp untagged (an even heap
-   ; ptr IS the gem), bump Hp by gem_req. the epilogue stores the pointer (NO putfix) and threads the
+   ; ptr is the gem), bump Hp by gem_req. the epilogue stores the pointer (NO putfix) and threads the
    ; advanced Hp on through Continue, so the box is live to the next op and the GC at the next safepoint.
    ; nanc: NaN -> 0.0 in f0 (mk_gem's law). x86: ucomisd xmm0,xmm0 ; jnp +4 ; xorpd (the parity cc +
    ; self-jump as a raw blob). arm64: fcmp d0,d0 ; b.vc ok ; (d0 <- 0) ; ok -- unordered sets V, so vc
@@ -986,14 +986,14 @@
    (hlook v ht) (? (atom? ht) -1 (v = <<ht) <><ht (hlook v >ht))
    (hcon tgt v ht) (: r (hlook v ht) (-1 < r ? [['movsd 'f0 (fr r)]] (fconst tgt v)))   ; the hoisted const's reg -> f0, else an inline fconst
    ; the optimizing float-body allocator: a value-numbered DAG (CSE) plus linear-scan allocation.
-   ; it compiles a SET of root exprs -- the inner-loop mag and the fvar updates, which share
+   ; it compiles a set of root exprs -- the inner-loop mag and the fvar updates, which share
    ; subexprs like zx*zx -- to register-only code, each value in its own xmm so the CPU runs
    ; independent ops in parallel. leaves (fvars, consts) live in fixed regs from env; binop results
    ; allocate from the working pool, are freed at last use, and are reused in place where an
    ; operand dies.
    (snoc l x) (l + (list x))
    (nthl l i) (i = 0 ? <l (nthl >l (i - 1)))
-   (dfind nd dag i) (? (atom? dag) -1 (nd = <dag) i (dfind nd >dag (i + 1)))   ; CSE: an existing node?
+   (dfind nd dag i) (? (atom? dag) -1 (nd = <dag) i (dfind nd >dag (i + 1)))   ; cse: an existing node?
    (dadd nd dag) (: i (dfind nd dag 0) (-1 < i ? [i dag] [#dag (snoc dag nd)]))
    (vnum e dag) (two? e ? (: ra (vnum <>e dag) rb (vnum <>>e <>ra)
                              (dadd [<e <ra <rb] <>rb))            ; a binop: (op vn-a vn-b)
@@ -1007,7 +1007,7 @@
    (bcat ps) (foldl (\ a b (a + b)) () ps)                                          ; concat a list of IR pieces
    (efold names i) (two? names ? ([<names i] . efold >names (i + 1)) ())   ; names -> (name reg) from reg i
    ; --- the nested grid owner, D-dimensional -----------------------------------------------------
-   ; own a WHOLE counted-loop nest as one native kernel: D nested integer loops over fixnum coords,
+   ; own a whole counted-loop nest as one native kernel: D nested integer loops over fixnum coords,
    ; M derived-float invariants per cell, then a float recurrence over N float-vars accumulating an
    ; integer count -- one boundary crossing per grid rather than one per cell. mandelbrot's 64x64
    ; grid is the D=2, M=2, N=2 instance; any D>=1 and any M+N<=6 fits.
@@ -1029,10 +1029,10 @@
                           ()))
    (loopcode-gridn dims cnames invs invd fvars updates testexpr cmpop bound lim tgt)
     ; the scalar D-dim kernel as one neutral IR program, both targets: control flow is labels, the
-    ; recurrence is allocp's CSE'd scalar-double forms, the cold derives are IR too.
+    ; recurrence is allocp's cse'd scalar-double forms, the cold derives are IR too.
     ; k=r7, acc=r8, counters r9.. through gr; f2..=consts, f8..=invariants, fvars next, rest the
     ; DAG pool. x86 D>=3 spills the callee-saved counters; on arm64 the counters are caller-saved.
-    (: D #dims  M #invs  N #fvars  SCR (greg tgt 'acc)    ; SCR: integer scratch (the fbits load + the result)
+    (: D #dims  M #invs  N #fvars  SCR (greg tgt 'acc)    ; scr: integer scratch (the fbits load + the result)
        cregs (rangeL 10 (10 + D))                                             ; counter regs (phys r10..), outer->inner
        saved (id? tgt 'amd64 ? (rangeL 12 (10 + D)) ())                       ; x86 r12.. callee-saved (D>=3); arm64's counters are caller-saved
        fenv (invs + fvars)
@@ -1059,24 +1059,24 @@
        pushsv (foldl (\ a r (a + [['push (gr r)]])) () saved)
        popsv2 (foldl (\ a r (a + [['pop (gr r)]])) () (rev saved))
        preload (foldl (\ a e (a + [['li SCR (fbits <e)] ['movqxr (fr <>e) SCR]])) () ht)   ; load each const
-       (pushsv + preload + '((li r8 0)) + (loop-nest 0 cell) + popsv2 + [['mov SCR 'r8]]))   ; push saved; consts; acc=0; the nest; pop; result -> SCR
+       (pushsv + preload + '((li r8 0)) + (loop-nest 0 cell) + popsv2 + [['mov SCR 'r8]]))   ; push saved; consts; acc=0; the nest; pop; result -> scr
    ; --- the 2-wide packed grid kernel ------------------------------------------------------------
    ; the same D-dim float-recurrence grid, but the innermost dim runs two cells at a time: lanes
    ; [c, c+1] packed [low, high] in each xmm, the recurrence packed, so both pixels advance per op
    ; and the two independent chains hide the mul latency the scalar kernel's serial z is bound by.
-   ; the escape test becomes a per-lane mask ANDed into a sticky `alive`, and the per-lane count is
+   ; the escape test becomes a per-lane mask anded into a sticky `alive`, and the per-lane count is
    ; a packed-int vector bumped by `psubq count,alive` -- an alive lane is all-ones = -1, so
    ; subtracting it adds 1. the loop runs while any lane is alive and k < lim, and is bit-exact vs
    ; the scalar interp: identical IEEE per-lane ops, the same count until first escape, capped.
    ; grid2-ok? gates the shape: D<=2, M+N<=4 (invs and fvars at f8..f11), at most 2 inner consts
    ; (f2,f3, leaving f4,f5,f6 for count/alive/scratch), cmpop in {< <=}, an even innermost dim.
-   ; SSE2, so x86-64 only.
+   ; sse2, so x86-64 only.
    (fr n)   (intern ("f" + (show n)))                                                    ; an xmm number -> its IR symbol f0..f15
    (gr p)   (intern ("r" + (show (p - 1))))                                              ; a physical GPR encoding (>=8) -> its abstract-file IR name (r10 -> r9 ..)
    (sseop op)  (op @ '+ 'addpd  '* 'mulpd  '- 'subpd  '/ 'divpd  'movupd)   ; a DAG op -> its packed-double mnemonic (grid2)
    (sseops op) (op @ '+ 'addsd  '* 'mulsd  '- 'subsd  '/ 'divsd  'movsd)    ; ... its scalar-double mnemonic (gridn)
    (ucmpx op) (op @ '<= 'above  '< 'ae  '>= 'be  '> 'below  ())             ; the exit cc after ucomisd: the inverse of the continue cmp
-   ; the float-body allocator: CSE plus linear scan, emitting IR forms through mv (the move) and
+   ; the float-body allocator: cse plus linear scan, emitting IR forms through mv (the move) and
    ; opmap (op -> mnemonic), so the same walk serves the scalar and the packed kernel.
    (allocp dag rv env n pool mv opmap)
     (: rg {} pl (pin {} 'p pool)
@@ -1097,7 +1097,7 @@
     ((member? cmpop '(< <=)) && (#dims < 3) && (1 < (last dims)) && (0 = ((last dims) % 2))
      && ((#invs + #fvars) < 5)
      && (#(htbl (fcc bound (fccl updates (fcc testexpr ()))) 2) < 3))
-   ; GP IR regs: r0=scratch, r5=Ip (the deopt tail), r7=k, r8=acc, r9../r10..=the grid counters.
+   ; gp IR regs: r0=scratch, r5=Ip (the deopt tail), r7=k, r8=acc, r9../r10..=the grid counters.
    ; xmm: f2,f3=consts, f4=count, f5=alive, f6=scratch, f8,f9=invariants, f10,f11=fvars, and
    ; f0,f1,f12..f15 the DAG pool.
    (loopcode-grid2 dims cnames invs invd fvars updates testexpr cmpop bound lim)
@@ -1133,7 +1133,7 @@
        preload (foldl (\ a e (a + [['li 'r0 (fbits <e)] ['movqxr (fr <>e) 'r0] ['unpcklpd (fr <>e) (fr <>e)]])) () ht)   ; broadcast each const [c,c]
        (preload + '((li r8 0)) + (loop-nest 0 cell) + '((mov r0 r8))))                    ; IR program (x86): acc=0 ; nest ; result -> r0(=acc)
    ; jitfgridn tries the 2-wide packed kernel when the shape fits and takes the scalar one otherwise.
-   ; grid2 is x86-only, since NEON has no movmskpd, so arm64 always rides gridn. both kernels answer an
+   ; grid2 is x86-only, since neon has no movmskpd, so arm64 always rides gridn. both kernels answer an
    ; IR program ending with the checksum in acc, and jitfgridn appends loopepi and assembles for tgt.
    (jitfgridn lam cnames dims invs invd fvars updates testexpr cmpop bound lim tgt)
     (: pk (id? tgt 'amd64 && grid2-ok? dims invs fvars updates testexpr cmpop bound
@@ -1145,7 +1145,7 @@
    (jitfgrid lam pxn pyn cxd cyd fvars updates testexpr cmpop bound lim tgt)
     (jitfgridn lam '(px py) [pxn pyn] '(cx cy) [cxd cyd] fvars updates testexpr cmpop bound lim tgt)
    ; --- the auto-hook grid recognizer ------------------------------------------------------------
-   ; read a float-recurrence grid nest from SOURCE and extract the jitfgrid structure, so ordinary
+   ; read a float-recurrence grid nest from source and extract the jitfgrid structure, so ordinary
    ; interpreted code glazes with no hand-call. the shape is a recurrence
    ;   (\ cx cy zx zy it (? (&& (it < LIM) (cmp TEST BOUND)) (mand ..updates.. (it + 1)) it))
    ; driven by two counted loops, with exactly 2 invariants (the point) and 2 fvars (the iterate).
@@ -1170,7 +1170,7 @@
    ; --- the neutral-IR lanes ---------------------------------------------------------------------
    ; greg maps a logical role to the abstract holo register, per target. x86 lands g/Ip/Hp/Sp in
    ; rdi/rsi/rdx/rcx (abstract r6/r5/r2/r1, SysV's first four args -- the convention IS the calling
-   ; convention); aarch64's AAPCS lands them in x0..x3, so the accumulator moves off r0. anchor is
+   ; convention); aarch64's aapcs lands them in x0..x3, so the accumulator moves off r0. anchor is
    ; the machine stack-pointer snapshot for the deopt unwind; scratch is mulo/rem's extra register,
    ; unused on x86.
    (greg tgt role)                                                     ; a role table, not a chain: read it in columns
@@ -1229,7 +1229,7 @@
 
    ; --- the loop-body neutral IR ------------------------------------------------------------------
    ; cgvir is cgir's arith grammar for the loop lanes, whose state fills the loop registers and leaves
-   ; no free reg for an anchor. so the overflow and /-by-0 guards deopt INLINE: unwind the d pending
+   ; no free reg for an anchor. so the overflow and /-by-0 guards deopt inline: unwind the d pending
    ; machine-stack pushes, then tail-apply interp (value[1]) to the arg still in Sp[0], where cgir
    ; restores from its anchor. a var is loaded by `varld` -- the counter from its raw register, an
    ; n-loop param via fxir.
@@ -1266,17 +1266,17 @@
    ; --- the neutral-IR group lane ----------------------------------------------------------------
    ; a group of mutually recursive first-order integer fns to native, both targets: `call H_g` is
    ; (call <name>), each H opens (label <name>), and the assembler resolves the rel offsets. IR
-   ; chunks concatenate flat through bcat. it covers the full op grammar: int arith, TCO, value-mode
+   ; chunks concatenate flat through bcat. it covers the full op grammar: int arith, tco, value-mode
    ; cons, and the string/map/cask lanes.
    ; arg-register ABI: args in the callee-saved bank (x86 rbx/r13/r14/r15, arm64 x19..x22) and the
    ; OVF anchor in another callee-saved reg. a call passes args on the machine stack, and each H
    ; saves, loads and restores its own arg regs so a caller's args survive a nested call; on arm64 it
-   ; also saves lr, which bl clobbers, where x86's CALL/RET keeps the return address on the stack.
+   ; also saves lr, which bl clobbers, where x86's call/RET keeps the return address on the stack.
    ; mov to or from sp is `lea`: the ORR-based mov reads and writes XZR for reg 31, never sp.
    (slotsz tgt) (id? tgt 'amd64 ? 8 16)                                          ; the push/pop unit
    (govf tgt)   (id? tgt 'amd64 ? 'r11 'r23)                                     ; the OVF anchor reg: x86 r12 / arm64 x23
    (argregir tgt i) ((id? tgt 'amd64 ? '(r3 r12 r13 r14) '(r19 r20 r21 r22)) i)
-   (hsave tgt)  (id? tgt 'amd64 ? () ['(push lr)])                            ; arm64's H spills lr; x86 rides CALL/RET's stack
+   (hsave tgt)  (id? tgt 'amd64 ? () ['(push lr)])                            ; arm64's H spills lr; x86 rides call/RET's stack
    (hrest tgt)  (id? tgt 'amd64 ? () ['(pop lr)])
    (saveargsir tgt k) (foldl (\ a i (bcat [a [['push (argregir tgt i)]]])) () (rangeL 0 k))
    (restargsir tgt k) (foldl (\ a i (bcat [a [['pop (argregir tgt ((k - 1) - i))]]])) () (rangeL 0 k))
@@ -1303,7 +1303,7 @@
             '- [['subs A A imm] '(br vs OVF)]
             ()))
    (flipc op) (op @ '< '>  '<= '>=  '> '<  '>= '<=  op)   ; mirror a cmp's operands; = stays
-   (deoptmn tgt bodyp) (: IP (greg tgt 'ip) T (greg tgt 'tmp)                    ; tail-apply interp (value[1]); bodyp -> its BODY (+16, arity>=2)
+   (deoptmn tgt bodyp) (: IP (greg tgt 'ip) T (greg tgt 'tmp)                    ; tail-apply interp (value[1]); bodyp -> its body (+16, arity>=2)
       [['ld T IP 8] (bodyp ? ['lea IP T 16] ['mov IP T]) ['ld T IP 0] ['jmpr T]])
    ; cggir: a group expr e over params ps, which live in arg regs; syms are the group fn names, the call
    ; targets. a call pushes its args, `call H_g`, pops them; arith overflow and a /-by-0 jump to the
@@ -1366,7 +1366,7 @@
    (relabel ir lp ht ms en dp) (map (f \ map (x \ (x @ 'loop lp  'hit ht  'miss ms  'end en  'deopt dp  x)) f) ir)
    ; consir: build a chain cell on the heap -> acc. the room guard comes first, so no GC fires
    ; mid-native, then [Hp] = the chain kind, [Hp+8] = cap (the popped a), [Hp+16] = cup, acc = Hp --
-   ; an even pointer IS the value, so no putfix -- and Hp += 3 words. r9/r10 are free scratch in the
+   ; an even pointer is the value, so no putfix -- and Hp += 3 words. r9/r10 are free scratch in the
    ; group ABI (args r3/r12-r14, anchor r11, acc r0, tmp r7, sp r1, hp r2, ip r5).
    (consir tgt) (: A (greg tgt 'acc) T (greg tgt 'tmp) S (greg tgt 'sp) HP (greg tgt 'hp)
       [['lea 'r9 HP 88] ['cmp S 'r9] '(br below OVF)                             ; room for 3w+floor; Sp < Hp+88 -> heap full -> deopt
@@ -1387,7 +1387,7 @@
                  (bcat [(cggir tgt syms ps c) [['cmp A 0] ['br 'le el]] (cggvir tgt syms ps t)
                         [['jmp en] ['label el]] (cggvir tgt syms ps f) [['label en]]]))
               ())))
-   ; cggtir: e in TAIL position. a tail self-call of matching arity computes the new args from the OLD
+   ; cggtir: e in tail position. a tail self-call of matching arity computes the new args from the old
    ; arg regs onto the machine stack, pops them into the arg regs, then jumps Lbody, past save/load --
    ; the frame is reused, so a counted loop is O(1) stack with no call/ret per iteration. a tail ?
    ; recurses tail into both branches, its test staying non-tail. anything else goes to cggir and falls
@@ -1395,7 +1395,7 @@
    (cggtir tgt syms ps e selfnm Lbody)
     (: A (greg tgt 'acc) k #ps
        (? (two? e && id? <e selfnm && #>e = k)                    ; a tail self-call -> loop in place
-            (bcat [(gargsir tgt syms ps >e)                                      ; push the new args, all read from the OLD regs
+            (bcat [(gargsir tgt syms ps >e)                                      ; push the new args, all read from the old regs
                    (foldl (\ a i (bcat [a [['pop (argregir tgt ((k - 1) - i))]]])) () (rangeL 0 k))   ; pop into the arg regs, in reverse
                    [['jmp Lbody]]])
           (e @ ('? c t f) (: el (mint 0) en (mint 0)                            ; a tail ? -> test non-tail, both branches tail
@@ -1403,15 +1403,15 @@
                         [['jmp en] ['label el]] (cggtir tgt syms ps f selfnm Lbody) [['label en]]]))
                (cggir tgt syms ps e))))                                          ; any other tail expr -> a value in acc
    ; mkhir: one function -- label; [push lr]; save arg regs; load the passed args; Lbody; body; restore;
-   ; [pop lr]; ret. a value body (it conses) takes cggvir and no TCO; an int body takes cggtir.
+   ; [pop lr]; ret. a value body (it conses) takes cggvir and no tco; an int body takes cggtir.
    (mkhir tgt syms nm ps body)
     (: k #ps Lbody (mint 0)
        (bcat [[['label nm]] (hsave tgt) (saveargsir tgt k) (loadargsir tgt k) [['label Lbody]]
                (hasl body ? (cggvir tgt syms ps body) (cggtir tgt syms ps body nm Lbody))
                (restargsir tgt k) (hrest tgt) ['(ret)]]))
-   ; mkouterir: the entry's OUTER -- save the anchor and arg regs; anchor = sp; fixnum-guard and push
+   ; mkouterir: the entry's outer -- save the anchor and arg regs; anchor = sp; fixnum-guard and push
    ; the args; call H_entry; pop; restore; putfix + Continue. OVF restores sp from the anchor, which
-   ; abandons the group's frames, then falls into DEOPT.
+   ; abandons the group's frames, then falls into deopt.
    ; it also partitions the entry's external args by kind: int (untagged), string|map|cask (kind-guarded,
    ; raw), chain (raw, unguarded), point (nom|mint-guarded, raw).
    (mkouterir tgt k entry arity valt smask mmask bufmask cmask pmask)              ; valt: a value-typed entry stores acc as-is, with no putfix
@@ -1456,7 +1456,7 @@
    ; jgir-lrf -- the ((mpeep..) (peep..) (mpin..) (pin..) def..) tail the deopt fallback re-evaluates.
    (jgir-lrf entry ds) (atom? ds ? [entry] (: d <ds (<d . (>d . jgir-lrf entry >ds))))
    ; (jitgroupir defs entry tgt): defs are ((nameform . body) ..), and the entry is the group's value.
-   ; the deopt fallback is (ev <the whole group>), and post-rebind `ev` IS the glaze, so it re-glazes
+   ; the deopt fallback is (ev <the whole group>), and post-rebind `ev` is the glaze, so it re-glazes
    ; the group -- harmless, a never-deopting native gets rebuilt -- which is why the mpeep/mpin ->
    ; peep/pin aliases (ldxb/stxb) must assemble on every target, arm64 included. mpeep and mpin are
    ; glaze-internal, not real fns: the aliases read the previous, global binding by the sequence law
@@ -1470,7 +1470,7 @@
     (: parse (map (d \ (: nf <d [<nf >nf >d])) defs)            ; (name params body) per fn
        syms (map cap parse)                                                            ; the fn names, which are the call targets
        efn (gfind (f \ id? <f entry) parse)  eps (efn 1)  eb (efn 2)  k #eps
-       ord (efn . filter (f \ !(id? <f entry)) parse)                      ; the entry first, so H_entry sits right after the OUTER
+       ord (efn . filter (f \ !(id? <f entry)) parse)                      ; the entry first, so H_entry sits right after the outer
        valt (hasl eb)                                                                 ; a value-typed entry (its body conses) takes the value epilogue
        info (map (f \ [<f (f 1) (f 2) #(f 1)]) parse)                   ; (name params body arity), for the interprocedural string fixpoint
        smap0 (map (f \ <f . filter (j \ suse? (f 2) ((f 1) j)) (rangeL 0 (f 3))) info)   ; per-fn direct string params (peep/tally/pin)
@@ -1482,5 +1482,5 @@
        outer (mkouterir tgt k entry k valt smask mmask bufmask cmask pmask)
        Hs (foldl (\ a f (bcat [a (mkhir tgt syms <f (f 1) (f 2))])) () ord)
        elam ('\ . eps + [eb])                                        ; the entry's source lambda, the =/show src fallback
-       (nif (emit ((assemble tgt (bcat [outer Hs])) 'bytes)) deopt (two? src ? src elam) k))   ; the OUTER surface if the caller gave one, else elam
+       (nif (emit ((assemble tgt (bcat [outer Hs])) 'bytes)) deopt (two? src ? src elam) k))   ; the outer surface if the caller gave one, else elam
 )

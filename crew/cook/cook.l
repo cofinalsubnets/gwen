@@ -39,7 +39,7 @@
 ; default when none), and (cook (ticket 0)) builds just the first. cook can also
 ; read a real Makefile directly: only a file named like one (Makefile, makefile,
 ; GNUmakefile, *.mk -- makefilep) is read as make; every other recipe file (Cards.l,
-; Cookfile, or a -f FILE) is love source. See "importing a Makefile" at the foot of
+; Cookfile, or a -f file) is love source. See "importing a Makefile" at the foot of
 ; this file. The first rule is the default ticket either way.
 
 ; the wrap: every lane rides module 'cook. a consumer says (use 'cook)

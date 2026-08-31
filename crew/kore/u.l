@@ -1,15 +1,15 @@
-; crew/kore/u.l -- THE U-FLOOR: the shared helpers every kore tool stands on, and the only
+; crew/kore/u.l -- the u-floor: the shared helpers every kore tool stands on, and the only
 ; part of kore that anything outside kore uses. `uread` answers the (1 text) presence wrapper,
 ; `udie` says its piece and leaves with a status, `urun` is the door a deep leave comes back
 ; through, `uleave` raises it; the rest is text and argument plumbing.
 ;
-; ⚠ IT IS ITS OWN FILE BECAUSE OF THE COMPILER. mooncc's cat needs exactly five of these
+; it is its own file because of the compiler. mooncc's cat needs exactly five of these
 ; (ubase udie uread urun usplit) and nothing else in kore -- but core.l held all 53 names, so
 ; the whole toolbox sat in `moonfiles`, and editing the `ls` applet re-baked mooncc0.image and
 ; recompiled love.c and every host/*.c behind it. ~95 s to move a printf. The floor moved out;
 ; the applets are no longer the compiler's business.
 ;
-; a body-less top-level `:` -- these names LEAK on purpose, which is what makes them a floor.
+; a body-less top-level `:` -- these names leak on purpose, which is what makes them a floor.
 (module 'kore
 (:
    ; -- the u-floor --
@@ -23,11 +23,11 @@
    ; a path + text -> 1 when it lands, () when it will not open (uread's mirror)
    (uwrite p t) (: q (open p "w") (? q (: _ (say q t) _ (close q) 1) ()))
    ; -- the option walk, shared by every applet taking clustered flags -----------
-   ; ⚠ CLUSTERING IS NOT OPTIONAL: this tree's own scripts write -qF, -qiw, -vE,
+   ; clustering is not optional: this tree's own scripts write -qF, -qiw, -vE,
    ; -oE and -ne, so a walk that reads only whole words takes `-qF` for a pattern
    ; and a script for a file. a plain flag pins 1 on t under its own charm; `vals`
    ; names the charms taking a VALUE, glued (-m3) or as the next word, and those
-   ; pin the (1 v) wrapper -- ⚠ never the bare string, since `two?` is false for
+   ; pin the (1 v) wrapper -- never the bare string, since `two?` is false for
    ; one and a bare "" would read as absent. charm 101 (-e) is the repeatable one
    ; and stacks into a list instead, that being the option every tool here spells
    ; more than once. answers (t stacked rest), or () when a value is missing.
@@ -40,7 +40,7 @@
                  (? (tally a <= k) (uopts rest t vals es)
                     (: c (a k)
                        (? !(member? c vals) (: _ (pin t c 1) (cl (k + 1) rest es))
-                          ; ⚠ a GLUED value is asked by TALLY and never by `two?`: a text
+                          ; a glued value is asked by tally and never by `two?`: a text
                           ; is no link, so `two? "2"` is 0 and a -m2 read as a bare -m
                           ; with nothing behind it -- silently, since the miss then took
                           ; the next word (the FILE) for the count
@@ -54,10 +54,10 @@
                 (cl 1 >as eps)))))
    ; a value option's text, or () -- the presence read that pairs with uopts
    (uoptv t c) (: r (peep t c ()) (? (two? r) <>r ()))
-   ; the exit door, two faces: a main ANSWERS its status as a charm, and a leave from
+   ; the exit door, two faces: a main answers its status as a charm, and a leave from
    ; deep inside scares 'leave carrying it. urun is the driver both come back through,
-   ; so a caller in the SAME IMAGE gets a charm instead of a dead process -- the seat
-   ; quits with what it answers. ⚠ nothing unwinds through a scare (spec.l's control
+   ; so a caller in the same image gets a charm instead of a dead process -- the seat
+   ; quits with what it answers. nothing unwinds through a scare (spec.l's control
    ; section), so a port a tool holds at the leave is lost, exactly as `quit` lost it.
    (uleave c) (scare 'leave c)
    (urun f as)
@@ -79,7 +79,7 @@
                 (<a + " " + ujoin >a))
    ; the many-file banner head and tail share: none before the first, a blank between
    (uhdr first f) (? first ("==> " + f + " <==\n") ("\n==> " + f + " <==\n"))
-   ; the two pure line clips (lawed in law.l). ⚠ each chomps only when the SOURCE's last
+   ; the two pure line clips (lawed in law.l). each chomps only when the source's last
    ; line actually rode through: head that cut before it ends on a line the text itself
    ; terminated, so it keeps its newline whatever the far end of the input looked like.
    (uhead n t) (: ls (lines t) k (tally ls) cut (n < k)
@@ -88,8 +88,8 @@
    (utail n t) (: ls (lines t) k (tally ls)
                   o (unlines (? (n < k) (drop (k - n) ls) ls))
                   (? (nl-end? t) o (chomp o)))
-   ; the wc counter as a FOLD, so a gulp can be counted and dropped: st is
-   ; [inw lines words bytes]. ⚠ `inw` HAS TO RIDE BETWEEN GULPS -- a word is a
+   ; the wc counter as a fold, so a gulp can be counted and dropped: st is
+   ; [inw lines words bytes]. `inw` has to ride between gulps -- a word is a
    ; maximal ink run and one straddling the boundary counts twice without it.
    (ucount-go st s)
     (: n (tally s)
@@ -145,7 +145,7 @@
        (go m first) (? !(two? m) (slurp o)
                        (: _ (? first () (put o c)) _ (say o <m) (go >m 0)))
        (go ls 1))
-   ; cut's LIST -> ((lo hi)..): N, N-M, N- (open above), -M (from 1)
+   ; cut's list -> ((lo hi)..): N, N-M, N- (open above), -M (from 1)
    (uspec s)
     (: (one p)
         (: n (tally p)
@@ -161,7 +161,7 @@
     (? !(two? spec) 0
        (: r <spec
           (? (!(k < <r) && !(<>r < k)) 1 (upick >spec k))))
-   ; tr's SET -> the charm list: a-z ranges expand, \n \t \r \0 \\ escape, a dash at
+   ; tr's set -> the charm list: a-z ranges expand, \n \t \r \0 \\ escape, a dash at
    ; either end stays literal
    (uset s)
     (: n (tally s)
@@ -186,10 +186,10 @@
     (: o (jug 0)
        (go k) (? (k < 0) (slurp o) (: _ (put o (s k)) (go (k - 1))))
        (go (tally s - 1)))
-   ; --- reading an input WITHOUT holding it ----------------------------------
+   ; --- reading an input without holding it ----------------------------------
    ; uread + `lines` keeps four whole copies of the input alive at once -- `rev` of
    ; 50 MB wanted 1.09 GB of live set. These hand it over a gulp or a line at a time.
-   ; ⚠ see/unsee/chug AND NOT `swig`: kore runs in two worlds (see ucopy-bytes) and
+   ; see/unsee/chug and not `swig`: kore runs in two worlds (see ucopy-bytes) and
    ; the kernel image compiles no host/*.c. The gulp door is core's, so no probe.
    ; 'p is the unread cursor into the held bytes, 'm how far the newline scan has
    ; looked. the read-through prefix is dropped when a fill wants the room and not
@@ -205,7 +205,7 @@
              _ (pin t 'h (snip h p (tally h)))
              _ (pin t 'm ((peep t 'm 0) - p))
              (pin t 'p 0))))
-   ; one gulp onto the held bytes; 1 when something arrived, 0 at the end. ⚠ the
+   ; one gulp onto the held bytes; 1 when something arrived, 0 at the end. the
    ; see/unsee pair is what terminates it -- `see` touches the device (chug never
    ; does) and the byte it answers is one chug must count, so a gulp is never empty.
    (urd-fill t)
@@ -216,9 +216,9 @@
              _ (urd-drop t)
              _ (pin t 'h ((peep t 'h "") + (chug q)))
              1)))
-   ; the next line -> [line term?], () when spent. term? is whether the SOURCE ended
+   ; the next line -> [line term?], () when spent. term? is whether the source ended
    ; it with a newline -- what `nl-end?` answers on the whole-text road.
-   ; ⚠ the scan mark is not an optimisation: without it the held bytes are rescanned
+   ; the scan mark is not an optimisation: without it the held bytes are rescanned
    ; from the front every gulp, so an input with no newline costs its length squared.
    (urd-line t)
     (: h (peep t 'h "") n (tally h) p (peep t 'p 0) m (peep t 'm 0)
@@ -239,18 +239,18 @@
 
    ; --- the operand walk -----------------------------------------------------
    ; each name in turn, a miss complains and costs the status without stopping the
-   ; run. ⚠ no operands at all IS one operand, and it is stdin.
+   ; run. no operands at all is one operand, and it is stdin.
    (uwalk one as)
     (: (go a ok) (? (two? a) (go >a (one <a ok)) (: _ (flush out) (? ok 0 1)))
        (? (two? as) (go as 1) (: _ (one "-" 1) _ (flush out) 0)))
-   ; an operand open for reading -> [port close?] | (). ⚠ "-" is stdin and is NOT
+   ; an operand open for reading -> [port close?] | (). "-" is stdin and is not
    ; closed after: a later operand may be it again. `miss` says the complaint, because
    ; grep and sed each owe GNU a different sentence for the same failure.
    (uin miss f)
     (? (f = "-") [in 0]
        (: q (open f "r") (? q [q 1] (: _ (miss f) ()))))
    (umiss who) (\ f (: _ (say err (who + ": cannot open " + f)) _ (put err 10) 0))
-   ; THE DRIVER the rest ride: body gets (name first? reader) per operand and answers
+   ; the driver the rest ride: body gets (name first? reader) per operand and answers
    ; truth to keep the status. first? is 1 on the leading one, all `uhdr` needs.
    (ureachm miss body as)
     (: t (tablet 0) _ (pin t 'f 1)
@@ -271,11 +271,11 @@
             (\ f fst rd (: (go _) (: h (urd-gulp rd) (? (tally h) (: _ (dot h) (go 0)) 1))
                            (go 0)))
             as)
-   ; --- the operands AS ONE STREAM -------------------------------------------
+   ; --- the operands as one stream -------------------------------------------
    ; sed's joined lane: the line numbers and `$` run through the files, so the read
-   ; has to cross them. ⚠ ONE LINE OF LOOKAHEAD, which is the whole reason this is
+   ; has to cross them. one line of lookahead, which is the whole reason this is
    ; not `ureach` -- `$` is "no further line anywhere", and nothing shorter answers it.
-   ; ⚠ 'bad is read off the box AFTER the walk: a miss cannot stop a joined stream,
+   ; 'bad is read off the box after the walk: a miss cannot stop a joined stream,
    ; it only costs the status, and by then the reader has passed it.
    (urdj-box miss fs)
     (: t (tablet 0)
@@ -305,9 +305,9 @@
           (: nx (urdj-raw t)
              _ (pin t 'pk nx)
              [<pk <>pk (? (two? nx) 0 1)])))
-   ; the LINE face: primed, so `last?` is answerable from the first line on
+   ; the line face: primed, so `last?` is answerable from the first line on
    (urdj miss fs) (: t (urdj-box miss fs) _ (pin t 'pk (urdj-raw t)) t)
-   ; the BYTE face: unprimed, because priming would eat a line. od dumps ROWS and its
+   ; the byte face: unprimed, because priming would eat a line. od dumps rows and its
    ; offsets run through the operands, which is the same join and not the same unit.
    (urdb miss fs) (urdj-box miss fs)
    ; up to k bytes off the joined stream, "" when it is spent. 'hp is the unread
@@ -335,7 +335,7 @@
        (snip h p (p + m)))
 
    ; dot gets (line term?), one line at a time -- every tool whose whole-text body was
-   ; `(go (lines t))`. ⚠ dot answering 0 STOPS this operand, so a tool can read no
+   ; `(go (lines t))`. dot answering 0 stops this operand, so a tool can read no
    ; further than it has to.
    (ulines who dot as)
     (ureach who

@@ -1,5 +1,5 @@
 ; --- test/host/gzc.l: the C twins of gz.l, held to the love they shadow ---
-; NOT in the test/*.l corpus: `inflate` (src/inflate.c) and `crc32` (src/hash.c) are
+; not in the test/*.l corpus: `inflate` (src/inflate.c) and `crc32` (src/hash.c) are
 ; host nifs and lib/gz.l is a lib module, so neither is visible to the love0 bake.
 ;
 ; test/host/gz.l is where lib/gz.l's own laws live; this file asks the other question --
@@ -7,21 +7,21 @@
 ; (src/inflate.c says so in its head), so a disagreement is the C being wrong until
 ; proven otherwise.
 ;
-;   SHAPES    the round trip over the five that break coders, plus a long dist-1 run and
+;   shapes    the round trip over the five that break coders, plus a long dist-1 run and
 ;             a periodic one -- the overlapping copy, and the word move that is only
 ;             right from eight back.
-;   HINTS     the size believed, absent, negative, too small and too large. the last
+;   hints     the size believed, absent, negative, too small and too large. the last
 ;             three are the retry, which counts the stream and allocates a second time.
-;   TORN      every prefix of a good stream, both answering ().
-;   FUZZ      a flipped bit anywhere in a good stream, and this is the one that matters:
+;   torn      every prefix of a good stream, both answering ().
+;   fuzz      a flipped bit anywhere in a good stream, and this is the one that matters:
 ;             gz-huff does not check that the lengths describe a code, so a corrupt block
-;             decodes to NONSENSE in love rather than failing, and the C has to produce
-;             the SAME nonsense. It is why inf_build fills first-writer-wins and zeroes
+;             decodes to nonsense in love rather than failing, and the C has to produce
+;             the same nonsense. It is why inf_build fills first-writer-wins and zeroes
 ;             its symbol array -- drop either and the fuzz reddens within a few bits.
 ;   CRC       every length 0..129, which is the eight-at-a-time tail at every offset.
-;   MISUSE    a wrong shape answers (), it does not decode.
+;   misuse    a wrong shape answers (), it does not decode.
 ;
-; ⚠ `string?`, NEVER `?` OR `!`, to ask whether an answer is there: a decoded run of NULs
+; `string?`, never `?` or `!`, to ask whether an answer is there: a decoded run of NULs
 ; sums to zero and reads as false, so a presence test spelled `(! r)` calls a correct
 ; answer a failure -- and only on inputs nobody hand-writes.
 ;
@@ -31,9 +31,9 @@
 (assert
  (lit? inflate)
  (lit? crc32)
- ; ⚠ THE PRESENCE PROBE ITSELF, on a name no build carries. This is the line that would
- ; have caught the first spelling of the doors: an unbound global SCARES when referenced,
- ; so `(lit? crc32)` is not a test for a missing nif -- it is the crash. A binary with the
+ ; the presence probe itself, on a name no build carries. This is the line that would
+ ; have caught the first spelling of the doors: an unbound global scares when referenced,
+ ; so `(lit? crc32)` is not a test for a missing nif -- it is the crash. a binary with the
  ; nifs cannot exercise the fallback, but it can prove the probe tells the two apart.
  (0 = (gz-nif 9 (\ _ gz-no-such-nif)))
  (0 = (gz-nif 9 (\ _ gz-no-such-nif)))          ; ..and the answer is kept, asked twice
@@ -50,7 +50,7 @@
    gzc-run   (gzc-mk 300 (\ i 65))                       ; dist 1, the overlapping copy
    gzc-long  (gzc-mk 100000 (\ i 65))                    ; ..and matches at the 258 ceiling
    gzc-per   (gzc-mk 40000 (\ i (65 + (i % 11))))        ; dist 11, three words at a time
-   ; ⚠ EVERY SHORT PERIOD, 2 THROUGH 9, and the ones under eight are the whole reason:
+   ; every short period, 2 through 9, and the ones under eight are the whole reason:
    ; they are the distances at which a word move reads bytes it has not written yet, and
    ; a corpus of one period cannot say where that line falls. The C copies byte by byte
    ; today and this row still earns its place -- with only period 11 in the gate, a copy
@@ -105,7 +105,7 @@
     (: d (gz-deflate s)   nb (8 * (tally d))   n (tally s)
        (go k) (? (nb <= k) 1 (! (gzc-same (gzc-flip d k) n)) 0 (go (k + step)))
        (go 0))
-   ; ⚠ a corrupt stream inflates to NONSENSE, and gz-puff walks that nonsense at love
+   ; a corrupt stream inflates to nonsense, and gz-puff walks that nonsense at love
    ; speed -- so the streams here are small on purpose. the shapes, not the sizes, are
    ; what the fuzz is for: a dynamic block (text), a stored one (noise), a fixed one (one).
    gzc-fz [gzc-text gzc-run gzc-one])
@@ -114,7 +114,7 @@
  (gzc-fuzz gzc-noise 29))
 
 ; --- crc32, the other twin in src/hash.c, against gz-crcwalk ---
-; ⚠ EVERY LENGTH 0 THROUGH 129, because the C reads EIGHT BYTES AT A TIME where the walk
+; every length 0 through 129, because the C reads eight bytes at a time where the walk
 ; reads one: the tail is the only place the two can part and it is a different tail at
 ; every length mod eight. The published check value is asserted off the C side, so a twin
 ; that agrees with a walk which has drifted still fails.
@@ -128,13 +128,13 @@
  (3421780262 = (crc32 "123456789"))              ; 0xcbf43926, what every crc32 publishes
  (gzc-crclen 129)
  (gzc-all gzc-crc gzc-shapes)
- ; ⚠ all-NUL and empty are the two answers a truth test would throw away: the crc of ""
- ; IS 0, and the crc of 300 NULs is not, and both have to come back as charms.
+ ; all-NUL and empty are the two answers a truth test would throw away: the crc of ""
+ ; is 0, and the crc of 300 NULs is not, and both have to come back as charms.
  (gzc-crc (gzc-mk 300 (\ i 0)))
  (0 = (crc32 ""))
  (charm? (crc32 (gzc-mk 300 (\ i 0)))))
 
-; --- MISUSE: a value op, so a wrong shape answers () and decodes nothing ---
+; --- misuse: a value op, so a wrong shape answers () and decodes nothing ---
 (assert
  (! (charm? (crc32 7)))
  (! (charm? (crc32 ())))
@@ -148,7 +148,7 @@
  ; ..and the empty stream is not a stream at all, at either lane
  (gzc-same "" 0))
 
-; --- DEFLATE, the coder twin (src/deflate.c): held to the BYTES, not just the round
+; --- deflate, the coder twin (src/deflate.c): held to the bytes, not just the round
 ;     trip -- same parse, same block costing, same Huffman tie-breaks, so `=` over the
 ;     streams is the law. the love lane is the oracle; a divergence is the C being
 ;     wrong until proven otherwise.
@@ -162,8 +162,8 @@
       (lit? deflate)
       (gzc-all gzd-same gzd-corp)                       ; the bytes, corpus-wide
       (gzc-all gzd-trip gzd-corp)                       ; ..and both inflates read them
-      ; ⚠ ONE OPERAND, so a second applies to the ANSWER: a string of an index is that
-      ; byte, and the two spellings are the same value. A nif run carrying a curry
+      ; one operand, so a second applies to the answer: a string of an index is that
+      ; byte, and the two spellings are the same value. a nif run carrying a curry
       ; prologue it has no operands for reads the spare operand as its return address.
       (= (deflate gzc-text 3) ((deflate gzc-text) 3))
       (= (deflate gzc-one 0) ((deflate gzc-one) 0)))

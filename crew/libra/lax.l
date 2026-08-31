@@ -1,16 +1,16 @@
 #!/usr/bin/env -S love -l
-; lax -- find the pattern positions that the LAX `()` rule was carrying.
+; lax -- find the pattern positions that the lax `()` rule was carrying.
 ;
-; a paren pattern used to be lax on its tail: (a b c) fit a chain of three OR
-; LONGER, and the empty () asked nothing at all and so fit anything. making ()
+; a paren pattern used to be lax on its tail: (a b c) fit a chain of three or
+; longer, and the empty () asked nothing at all and so fit anything. making ()
 ; strict, the way [] always was, turns each of those into an exact-length test.
 ; every site below is one that changes meaning, and the respelling is a tail:
 ; (a b c) that wants "or longer" becomes (a . b . c . _), and a bare () that
-; meant "anything" becomes _. `.` is right-associative and cons takes TWO, so
+; meant "anything" becomes _. `.` is right-associative and cons takes two, so
 ; the dots go all the way down -- (a b c . _) is (cons (a b c) _), a different
 ; shape entirely, and it matches nothing the original did.
 ;
-; usage:  love crew/libra/lax.l FILE ..
+; usage:  love crew/libra/lax.l file ..
 ;
 ; it reads the surface, before opfix, so a pattern here is spelled the way the
 ; file spells it. the walk knows three pattern positions -- an @ arm, a \ param,
@@ -54,12 +54,12 @@
    (untagged? p)
     (? (nil? (two? p)) 0                      ; an atom is a literal: already strict
        (any-infix? p) 0                       ; . >< + || && @ -- a tag, or a guard
-       (: h <p (? (nom? h) (nil? (member? h tagheads)) 1)))   ; a quoted head IS untagged
+       (: h <p (? (nom? h) (nil? (member? h tagheads)) 1)))   ; a quoted head is untagged
 
    ; --- the walk -------------------------------------------------------------
    ; a tagged form's operands are patterns in their own right and the strict rule
    ; reaches all the way down, so a site is a whole subtree. but only the slots pw
-   ; walks as patterns count: a `?`'s leading operands are GUARDS and a `&&`'s
+   ; walks as patterns count: a `?`'s leading operands are guards and a `&&`'s
    ; right side is one, a `^`pin's operand is read from outside, and a `\`'s is a
    ; literal -- recursing into those reports ordinary calls as patterns.
    (kids p) (: h <p as >p
@@ -90,7 +90,7 @@
    (allpats ps acc) (? (nil? (two? ps)) acc
                        (allpats >ps (pat1 <ps acc)))
    ; a : binder's head, (f p1 p2 ..): the name leads, the rest are params, and
-   ; the body sits OUTSIDE the head, so unlike a \ there is no last one to skip
+   ; the body sits outside the head, so unlike a \ there is no last one to skip
    (binders bs acc) (? (nil? (two? bs)) acc
                        (nil? (two? >bs)) acc                ; the trailing body is not a pair
                        (: nm <bs
@@ -111,7 +111,7 @@
           (foldl (\ a e (hits e a)) a1 x)))
 
    ; --- the report -----------------------------------------------------------
-   ; a love file is usually ONE top-level form, so the datum's own offset says
+   ; a love file is usually one top-level form, so the datum's own offset says
    ; almost nothing. a flagged pattern prints the way the source spells it --
    ; that is what untagged means -- so the line is found by looking its text up
    ; in the source, and the count says how many sites share the spelling.

@@ -1,11 +1,11 @@
 ; --- test/host/fs.l: smoke test for the fs nifs (src/posix.c) ---
-; rename/symlink/readlink/chmod/chown/utime/umask link into `love` AND love0 now
+; rename/symlink/readlink/chmod/chown/utime/umask link into `love` and love0 now
 ; (love0 carries the whole host/*.c glob since the self-host promotion); this
 ; still runs standalone against the built binary, like test/host/init.l --
 ; not in test/*.l. Run (assert comes from test/00-init.l):
 ;   cat test/00-init.l test/host/fs.l | out/host/love
 ; the conventions under test are init.c's posix_ lane: an effect op answers ()
-; ok | a POSITIVE errno | EINVAL misuse; a value op answers the value | ().
+; ok | a positive errno | EINVAL misuse; a value op answers the value | ().
 
 (: d "out/.fs-nif-smoke"
    a (+ d "/a") b (+ d "/b") l (+ d "/l")
@@ -15,15 +15,15 @@
 
    ; rename: the file moves whole -- old gone, new wears the same size
    _ (assert
-       (id? (rename a b) ())                        ; ok is the REAL (), not charm 0
+       (id? (rename a b) ())                        ; ok is the real (), not charm 0
        (id? (stat a) ()) (= 5 (cap (stat b)))
        (< 0 (rename a (+ d "/x")))                  ; a missing source is a live errno
        (= 22 (rename 7 b)))                         ; EINVAL misuse: a non-string path
 
-   ; symlink + readlink: path becomes a link TO target -- and the target string
-   ; resolves relative to the LINK's directory, so a link beside its file names
-   ; it bare. readlink answers that string verbatim; on a NON-link (or a miss)
-   ; it is nothing. stat FOLLOWS the link, so through l it sees the file whole.
+   ; symlink + readlink: path becomes a link to target -- and the target string
+   ; resolves relative to the link's directory, so a link beside its file names
+   ; it bare. readlink answers that string verbatim; on a non-link (or a miss)
+   ; it is nothing. stat follows the link, so through l it sees the file whole.
    _ (assert
        (id? (symlink "b" l) ())
        (= (readlink l) "b")
@@ -42,12 +42,12 @@
        (< 0 (chmod (+ d "/nope") 384))              ; a miss is a live errno
        (= 22 (chmod b "rw")))                       ; EINVAL misuse: a non-charm mode
 
-   ; chown: a no-op self-chown succeeds (-1 -1 leaves both ids alone); misuse EINVALs
+   ; chown: a no-op self-chown succeeds (-1 -1 leaves both ids alone); misuse einvals
    _ (assert
        (id? (chown b -1 -1) ())
        (= 22 (chown b "x" 0)))
 
-   ; umask: always answers the PREVIOUS mask, so set-read-restore round-trips
+   ; umask: always answers the previous mask, so set-read-restore round-trips
    _ (: m0 (umask 18)
         (assert (charm? m0) (= 18 (umask m0)) (= m0 (umask m0))))
 
@@ -73,8 +73,8 @@
           (id? (unlink h) ())))
 
    ; copyfile: a VALUE op, so it answers the byte count and encodes errno negative.
-   ; ⚠ an empty source answers 0 -- a falsy success, which is why every caller tests
-   ; the SIGN and never the truth.
+   ; an empty source answers 0 -- a falsy success, which is why every caller tests
+   ; the sign and never the truth.
    _ (: c (+ d "/c") z (+ d "/z")
         _ (: p (open c "w") _ (say p "five!") (close p))
         _ (: p (open z "w") (close p))
@@ -88,18 +88,18 @@
           (id? (unlink (+ d "/c2")) ()) (id? (unlink (+ d "/z2")) ())))
 
    ; selfpath: the running binary's own path, the seat every library walk starts
-   ; from. no cwd and no argv here -- an ABSOLUTE path at a real regular file is
+   ; from. no cwd and no argv here -- an absolute path at a real regular file is
    ; the whole contract, and it is what the per-OS doors have to agree on.
    _ (: s (selfpath 0)
         (assert
           (string? s)
           (= 47 (peep s 0 0))                       ; absolute, whatever the cwd was
-          (= 32768 (& 61440 (cauup (stat s))))      ; S_IFREG: a file, not the /proc link
+          (= 32768 (& 61440 (cauup (stat s))))      ; s_ifreg: a file, not the /proc link
           (< 0 (cap (stat s)))))
 
-   ; the OS roster: the linux lane is COMPILED IN, not its stub. a lost
-   ; __linux__ predefine compiles posix.c's lanes out in SILENCE, so probe one:
-   ; the stub always answers ENOSYS (38), the real mount answers the call's own
+   ; the OS roster: the linux lane is compiled in, not its stub. a lost
+   ; __linux__ predefine compiles posix.c's lanes out in silence, so probe one:
+   ; the stub always answers enosys (38), the real mount answers the call's own
    ; errno (nobody mounts "" on / as no-such-fs). sigfd's twin assert lives in
    ; test/host/sh.l. forks on the OS when a second one joins.
    _ (: e (mount "" "/" "no-such-fs")

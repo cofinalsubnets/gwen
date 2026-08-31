@@ -1,7 +1,7 @@
 ; --- test/host/manifest.l: the spreadsheet, engine and tui, end to end ---
-; NOT in the test/*.l corpus (the tui rides raw/winsize; the pty harness
+; not in the test/*.l corpus (the tui rides raw/winsize; the pty harness
 ; rides tether -- all host/*.c). the engine itself is pure core, probed here
-; against the loaded app; the tui is driven over a REAL pty and its painted
+; against the loaded app; the tui is driven over a real pty and its painted
 ; screen read back through the cb glass -- the emulator built for berth is
 ; the spreadsheet's witness:
 ;
@@ -25,7 +25,7 @@
  _ (assert
     (= "hello" (worth sh (\ e1)))
     (= "port of call" (worth sh (\ f1))))
- _ (cell! sh (\ g1) "(+ 2)")              ; a cell may HOLD a function
+ _ (cell! sh (\ g1) "(+ 2)")              ; a cell may hold a function
  _ (cell! sh (\ h1) "(g1 40)")            ; ... and a neighbour may apply it
  _ (assert (= 42 (worth sh (\ h1))))
  _ (cell! sh (\ a1) "10")                 ; an edit recomputes the dependents
@@ -90,8 +90,8 @@
  md (tether ["out/host/love" "-l" "crew/manifest/manifest.l" "-e" "(manifest ())"])
  m (cup md)
  ; a reader task gathers every painted byte into a box, so the test can
- ; HANDSHAKE: keys sent before the child's raw-mode first frame would land
- ; in a COOKED pty (ICRNL eats the \r commit) -- wait for proof, then type
+ ; handshake: keys sent before the child's raw-mode first frame would land
+ ; in a cooked pty (ICRNL eats the \r commit) -- wait for proof, then type
  buf {""}
  rd (twirl (\ _ (: (pump x) (: ch (see m)
                               (? (= ch -1) ()
@@ -114,7 +114,7 @@
  _ (catch rd)                             ; the reader drains to EOF and rests
  outb (peep buf () "")
  scr (mkscr 24 80)
- ; the tail "\e[?1049l" would CLEAR the one-grid witness (alt-screen leave
+ ; the tail "\e[?1049l" would clear the one-grid witness (alt-screen leave
  ; is clear-and-restore) -- scribe only the voyage, not the stepping-ashore
  shore (findi outb "\e[?1049l" 0)
  _ (scribe scr (? (< -1 shore) (snip outb 0 shore) outb))

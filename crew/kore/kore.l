@@ -1,13 +1,13 @@
-; crew/kore/kore.l -- the multi-call dispatcher (busybox's trick): ONE binary, `kore`,
+; crew/kore/kore.l -- the multi-call dispatcher (busybox's trick): one binary, `kore`,
 ; shadowing nothing on the host, picking the util off the command line -- or off
 ; argv[0] through a tool-named symlink, which is how the distro will shadow at will.
 ;
-;   kore diff OLD NEW    unified diff (patience hunks); exit 0 same / 1 differ / 2 trouble
-;   kore nc HOST PORT    the netcat (tools/ain.l); nc -l PORT listens
+;   kore diff old new    unified diff (patience hunks); exit 0 same / 1 differ / 2 trouble
+;   kore nc host port    the netcat (tools/ain.l); nc -l port listens
 ;   kore make [F] [T..]  the build tool (crew/cook/cook.l)
-;   kore as TGT IN OUT   assemble IR forms from IN (amd64|arm64) into an ELF at OUT
-;   kore objcopy -O binary|ihex IN OUT   a linked ELF flattened (crew/holo/copy.l)
-;   kore nm [-gup] FILE..   an ELF's symbols, nm's three columns (crew/holo/link.l)
+;   kore as tgt in out   assemble IR forms from in (amd64|arm64) into an ELF at out
+;   kore objcopy -O binary|ihex in out   a linked ELF flattened (crew/holo/copy.l)
+;   kore nm [-gup] file..   an ELF's symbols, nm's three columns (crew/holo/link.l)
 ;   kore cat|tac|head|tail|wc|sort|uniq|tee|echo|seq|yes|true|false|basename|dirname
 ;   kore cut|tr|nl|rev|paste|comm|join|split|od   the line, field and record tools
 ;                                                 (crew/kore/core.l)
@@ -18,32 +18,32 @@
 ;   kore ls|cp|mv|rm|mkdir|rmdir|ln|touch|pwd|chmod   the fs tools (crew/kore/fs.l)
 ;   kore realpath|link|unlink        a path made canonical, and the two bare calls
 ;   kore stat|du|chown|mktemp                        ... and what they report
-;   kore expr EXPRESSION             the little language (crew/kore/expr.l)
+;   kore expr expression             the little language (crew/kore/expr.l)
 ;   kore patch [-pN] [-R] [-i F]     unified diffs laid on a tree (crew/kore/patch.l)
-;   kore grep [-nvclqhaixwFEo] [-e P] [-m N] PATTERN [F..]   BRE/ERE (crew/kore/re.l)
-;   kore sed [-nEi] [-e SCRIPT].. SCRIPT [F..]   the stream editor (crew/kore/sed.l)
-;   kore awk [-F FS] [-v v=x].. 'PROG' [F..]     the language (crew/kore/awk.l)
+;   kore grep [-nvclqhaixwfeo] [-e P] [-m N] pattern [F..]   BRE/ERE (crew/kore/re.l)
+;   kore sed [-nEi] [-e script].. script [F..]   the stream editor (crew/kore/sed.l)
+;   kore awk [-F fs] [-v v=x].. 'PROG' [F..]     the language (crew/kore/awk.l)
 ;   kore find [PATH..] [EXPR]                    the tree walk (crew/kore/find.l)
 ;   kore env|printenv|sleep|kill|xargs|date|id   the process and world tools
 ;                                                 (crew/kore/proc.l)
 ;   kore ps|free|uptime|pidof|pgrep|pkill|killall|pwdx   the /proc family
 ;   kore whoami|groups|arch|nproc    the four one-line answers
-;   kore vi [FILE]                   the editor (crew/vi/)
+;   kore vi [file]                   the editor (crew/vi/)
 ;   kore less|more [-Nise] [+N|+/P] [F..]   the pager (crew/kore/less.l; one pager,
 ;                                           two spellings, less's keys and its manners)
-;   kore sh [-c CMD | FILE]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
+;   kore sh [-c CMD | file]          the shell, lush (crew/lush/; also `lush`, and an sh symlink)
 ; (the C compiler is NO LONGER here -- it split into its own app `mooncc`, doc/misc/moon.md.)
 ;
-; loads LAST in the kore cat, when every tool main is already defined; the tool files'
-; own SEATs stay quiet here (no file of theirs sits in the program seat), so this
-; dispatcher is the one thing that fires. the module head is the EXPORT LIST -- this is
+; loads last in the kore cat, when every tool main is already defined; the tool files'
+; own seats stay quiet here (no file of theirs sits in the program seat), so this
+; dispatcher is the one thing that fires. the module head is the export list -- this is
 ; the last kore block in every cat, so its leave prunes the whole module down to the
 ; names below: every tool's <name>-main (lush's in-image lane and any (from 'kore ..)
 ; reach them by that spelling), the u/text floors later cat members read bare, and
 ; kore-main. the helpers this file defines (die, read-text, the registry) stay private.
-; every path ANSWERS a charm through core.l's urun, so an in-image caller lives through
+; every path answers a charm through core.l's urun, so an in-image caller lives through
 ; a tool that would have quit (the SEAT below is the one site that quits).
-; ⚠ a main here leaves deep through `die`, never `quit`.
+; a main here leaves deep through `die`, never `quit`.
 (module (kore kore-main
         diff-main as-main ar-main ld-main nm-main
         arch-main awk-main base32-main base64-main basename-main bracket-main cat-main
@@ -96,8 +96,8 @@
    ; ar: the classic "!<arch>" archive, GNU shape to the byte -- the bytes come
    ; from holo's `arbytes` (crew/holo/link.l), beside the reader that pulls them
    ; back, so mooncc's runtime archive and this one are the same writer.
-   ; `ar rcs OUT M..` writes OUT whole (fresh, like liblove.a's rm-first recipe),
-   ; member names stored as BASENAMES (GNU's rule). `ar t OUT` lists.
+   ; `ar rcs OUT M..` writes out whole (fresh, like liblove.a's rm-first recipe),
+   ; member names stored as basenames (GNU's rule). `ar t OUT` lists.
    ; (x/d verbs: add when a real script wants them.)
    (ar-write dst ms)                                          ; ms: ((basename bytes)..)
     (: q (open dst "w")
@@ -144,7 +144,7 @@
 
    ; ld: holo's static linker as an applet -- mooncc .o (and any ELF relocatable
    ; crew/holo/link.l reads) into a static exe, no binutils anywhere; -pie the
-   ; self-relocating ET_DYN, -Ttext the bare-metal org (qemu -kernel's lane).
+   ; self-relocating et_dyn, -Ttext the bare-metal org (qemu -kernel's lane).
    (ld-main as)
     (: (num s) (: n (tally s)
                   hex ((2 < n) && (s 0 = 48) && (s 1 = 120))
@@ -163,7 +163,7 @@
            (<a = "-pie")   (go >a fs o 1 org tgt rd)
            (<a = "-t")     (? (two? >a) (go >>a fs o pie org (intern <>a) rd) (die "ld: -t wants a target"))
            (<a = "-Ttext") (? (two? >a) (go >>a fs o pie (num <>a) tgt rd) (die "ld: -Ttext wants an address"))
-           ; --readme FILE: plain text into `.love.README`, for whoever opens the output
+           ; --readme file: plain text into `.love.README`, for whoever opens the output
            (<a = "--readme") (? (two? >a)
                                 (: t (uread <>a) (? (two? t) (go >>a fs o pie org tgt <>t)
                                                     (die ("ld: cannot open " + <>a))))
@@ -179,16 +179,16 @@
        _ (chmod o 493)
        0)
 
-   ; nm: the symbols a file names, in nm's three columns -- VALUE TYPE NAME, over
+   ; nm: the symbols a file names, in nm's three columns -- VALUE type NAME, over
    ; crew/holo/link.l's ld-syms. the letter is ELF's own facts and never a guess: U
-   ; undefined, A absolute, C common, else the defining section's flags pick T
-   ; executable / B nobits / D writable / R the rest, and a LOCAL bind lowercases it
-   ; -- that case IS nm's whole convention. -g keeps the externals, the only view a
+   ; undefined, a absolute, C common, else the defining section's flags pick T
+   ; executable / B nobits / D writable / R the rest, and a local bind lowercases it
+   ; -- that case is nm's whole convention. -g keeps the externals, the only view a
    ; link has an opinion about; -u the undefined ones, which is what says a lane was
-   ; BORROWED from libgcc rather than ours (tools/moon-parity.sh reads exactly that).
-   ; ⚠ an ARCHIVE is not walked here: `ar t` lists members, and nm's per-member
+   ; borrowed from libgcc rather than ours (tools/moon-parity.sh reads exactly that).
+   ; an archive is not walked here: `ar t` lists members, and nm's per-member
    ; header shape wants the member walk ar-t owns. an ELF of any e_type is fine.
-   ; the sort is by BYTE, which is `LC_ALL=C nm`'s order and not the bare `nm` a
+   ; the sort is by byte, which is `LC_ALL=C nm`'s order and not the bare `nm` a
    ; desk with a locale set answers -- a build tool reads no locale, so the order
    ; is the same on every machine.
    (nm-sp w) (? (w < 1) "" (nm-sp (w - 1) + " "))
@@ -209,11 +209,11 @@
     (: r (uread p) _ (? (two? r) () (die ("nm: cannot open " + p)))
        b <>r
        w (? (b 4 = 2) 16 8)
-       ; a SECTION or FILE symbol names no value of the program's -- nm shows
+       ; a section or file symbol names no value of the program's -- nm shows
        ; neither, and an empty name is the null-ish filler a section symbol leaves
        all (filter (\ sy (? (nil? (tally <sy)) () (member? (at sy 2) '(3 4)) () 1))
                    (ld-syms p b))
-       ; ⚠ "no symbols" is the FILE's fact, asked before the flags narrow: a -u that
+       ; "no symbols" is the file's fact, asked before the flags narrow: a -u that
        ; comes back empty says the lanes are all ours, which is an answer, not a lack
        _ (? (two? all) () (: _ (say err ("nm: " + p + ": no symbols")) _ (put err 10) 1))
        keep (filter (\ sy (? (g && (at sy 1 = 0)) () (u && !(at sy 3 = 0)) () 1)) all)
@@ -225,7 +225,7 @@
                 0 ord)
        (two? all))
    (nm-main as)
-    ; flags CLUSTER: -gu is -g -u, which is what a hand types and what nm takes
+    ; flags cluster: -gu is -g -u, which is what a hand types and what nm takes
     (: (nm-flags t k g u srt)
         (? (tally t <= k) [g u srt]
            (: c (t k)
@@ -253,17 +253,17 @@
             'make (from 'cook 'cook-main) 'cook (from 'cook 'cook-main)   ; cook.l's wrap registered ahead in the cat; the map ctor evaluates values
             'as as-main
             'ar ar-main 'ld ld-main
-            'objcopy (from 'holo 'objcopy)   ; the applet IS the function: crew/holo/copy.l, module-side
+            'objcopy (from 'holo 'objcopy)   ; the applet is the function: crew/holo/copy.l, module-side
             'cat cat-main 'tac tac-main 'echo echo-main
             'head head-main 'tail tail-main
             'wc wc-main 'sort sort-main
             'uniq uniq-main 'tee tee-main
             'seq seq-main 'yes yes-main
             'true true-main 'false false-main
-            ; ⚠ test/[ are PROGRAMS here, not just shell builtins: cook's in-image lane
+            ; test/[ are programs here, not just shell builtins: cook's in-image lane
             ; execs a recipe's words directly, so a `test -s $t && mv ..` looks them up
             ; on PATH. uname and printf are the other two a bootstrap cannot start without.
-            ; ⚠ `[` cannot be QUOTED -- it opens a bracket in the reader -- so the nom
+            ; `[` cannot be quoted -- it opens a bracket in the reader -- so the nom
             ; is interned by name; the map ctor evaluates its keys, which is the door.
             'test test-main (name "[") bracket-main
             'uname uname-main 'arch arch-main 'nproc nproc-main 'printf printf-main
@@ -300,7 +300,7 @@
             'kill kill-main 'xargs xargs-main
             ; the shell: lush's wrap registered ahead of this file in the cat, so sh-main
             ; folds here. `kore sh ..` and a /bin/sh symlink both land it (the
-            ; symlink usually through lush's OWN seat, which fires first at
+            ; symlink usually through lush's own seat, which fires first at
             ; cat load on an sh/lush basename -- this row serves the image
             ; wake, where only kore-main dispatches)
             'sh (from 'lush 'sh-main) 'lush (from 'lush 'sh-main)}
@@ -352,38 +352,38 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
              (go 0 0))
 
    ; -- the dispatch (this form's body) --
-   ; the SPELLINGS kore answers to: itself, its file, and every applet -- the symlink
-   ; lane is just an applet name in the program seat, so the table IS the list. the
+   ; the spellings kore answers to: itself, its file, and every applet -- the symlink
+   ; lane is just an applet name in the program seat, so the table is the list. the
    ; scan is love/verbs.l's `seatof` (over the list we are handed, never a command
    ; line: the in-image door dispatches (link "kore" "ls" "-l")), which drops the -l
    ; pairs and answers (SEAT-WORD . rest), () when the seat is someone else's -- so a
    ; bake loading the cat as `love -l .kore-cat.l -e ..` stays quiet.
-   ; the seat word's BASENAME picks the face: a tool name runs that tool on the rest;
+   ; the seat word's basename picks the face: a tool name runs that tool on the rest;
    ; anything else (kore itself, a dev path) reads the next word as the tool.
    mynames ("kore" >< "kore.l" >< map string (keys applets))
-   ; the VERBS: kore's applet table IS a verb collection, and the registry is where one
+   ; the verbs: kore's applet table is a verb collection, and the registry is where one
    ; goes. every row lands twice over -- `love ls -l` (the word door) and an `ls` symlink
    ; onto the artifact (the seat door) -- while `love kore ls` still nests through the
-   ; dispatch below. pinned HERE rather than by whoever cats the file, so every image
+   ; dispatch below. pinned here rather than by whoever cats the file, so every image
    ; carrying this cat carries the names: the dist artifact, and the kernel, whose
-   ; userland this IS.
-   ; ⚠ each row closes over ITS OWN f -- the inner `:` is a fresh scope per step, so the
+   ; userland this is.
+   ; each row closes over its own f -- the inner `:` is a fresh scope per step, so the
    ; closures do not all end up holding the last applet.
    _ (: T (from 'verbs 'tab)
-        ; ⚠ kore-main is UNBOUND here -- it binds later in this same form -- so the
+        ; kore-main is unbound here -- it binds later in this same form -- so the
         ; closure reads it through the registry at the call, when module 'kore holds
         ; it. a bare read compiled here would ride a missing cell against the
-        ; CALLER's walk, where kore never walks.
+        ; caller's walk, where kore never walks.
         _ (pin T 'kore (\ as ((from 'kore 'kore-main) ("kore" >< as))))
         (go ks) (? (two? ks) (: f (applets <ks) _ (pin T <ks (\ as (urun f as))) (go >ks)) 0)
         (go (keys applets)))
    ; kore-main is the dispatch door, and the in-image door too: it dispatches a
    ; program-relative arg list -- argv0 a tool symlink, or `kore`/a dev path then the
-   ; tool word -- and ANSWERS the status charm, () when kore is not seated (the bake
+   ; tool word -- and answers the status charm, () when kore is not seated (the bake
    ; stays quiet; an unknown tool is usage's 2, a status like any other). the baked
    ; kore.image wakes to it with a synthetic "kore" argv0, so a caller holding the
    ; image runs a tool by handing it (link "kore" "ls" "-l") and reading the charm.
-   ; ⚠ two doors: a list handed in is SCANNED, () means "the line I was started with".
+   ; two doors: a list handed in is scanned, () means "the line I was started with".
    (kore-main a)
     (: s (? (two? a) ((from 'verbs 'scan) mynames a) ((from 'verbs 'fire) mynames))
        (? !(two? s) ()
@@ -392,7 +392,7 @@ usage: kore TOOL ARGS..     (or symlink a tool's name to kore)
                 (: t >s
                    f (? (two? t) (applets (intern <t)) ())
                    (? f (urun f >t) (usage ()))))))))
-; the SEAT: file mode (cat | love) dispatches on the real command line and quits with
+; the seat: file mode (cat | love) dispatches on the real command line and quits with
 ; the status. the -l bake preload seats a flag, not kore, so the scan answers () and
 ; kore-main answers () -- the presence guard, and the one answer that is not a status.
 (: r (kore-main ()) (? (charm? r) (quit r) ()))

@@ -2,18 +2,18 @@
 ; the definition, and the holo IR beside it that says the same thing to a cpu. This gate is
 ; the differential between them, and it needs nothing outside the tree.
 ;
-; ⚠ THE TWIN HERE IS LOVE, not C. test/gate/forge.l's kernels shadow C nifs, so a red there
+; the twin here is love, not C. test/gate/forge.l's kernels shadow C nifs, so a red there
 ; could be either side; here the twin is the only definition there is, so a disagreement is
 ; the kernel's. That is also the reason this kernel is worth having: what it beats is an
 ; interpreted loop, where forge's own three merely draw with gcc.
 ;
-; ⚠ THE GUARDS ARE MOST OF IT. The twin reads its arguments THROUGH LOVE -- `(s i)` bounds-
+; the guards are most of it. The twin reads its arguments through love -- `(s i)` bounds-
 ; checks, a cask applied behaves as 0 -- so a torn `n` or a window array of the wrong size is
 ; a defined, if useless, answer there and a wild read here. Every shape the IR does not say
 ; must come back through the twin carrying the twin's own answer, and a guard that falls
 ; through where it should jump reads memory it does not own and says nothing about it.
 ;
-; ⚠ ZERO FITTED IS NOT A FAILURE HERE and is in test/gate/forge.l. A build with no glaze
+; zero fitted is not a failure here and is in test/gate/forge.l. a build with no glaze
 ; module answers the twin everywhere, which is the design; what this gate owes is that the
 ; two agree, and that it says out loud which one it was comparing.
 (: _ (use 'gz)
@@ -30,13 +30,13 @@
    _ (? (forge-why 0) (say out ("  declines: " + show (forge-why 0) + "\n")) 0)
 
    ; --- the corpora ---------------------------------------------------------------------
-   ; ⚠ chosen for the CHAIN, which is the thing the kernel walks. one byte repeated puts
+   ; chosen for the chain, which is the thing the kernel walks. one byte repeated puts
    ; every position in one bucket and is the only input that reaches gz-chain's limit at
    ; every step -- and the only one whose matches run to gz-maxmatch, so it is also where
-   ; the `lim <= l` early return lives. A short cycle is the same shape at real distances.
-   ; A spread leaves the buckets nearly empty and exercises the early exits instead. The
+   ; the `lim <= l` early return lives. a short cycle is the same shape at real distances.
+   ; a spread leaves the buckets nearly empty and exercises the early exits instead. The
    ; sizes differ because the twin is what costs here: `one` walks 32 chains of 258 bytes
-   ; at every position, and the point is chain DEPTH, which 3000 positions already has.
+   ; at every position, and the point is chain depth, which 3000 positions already has.
    corpora [['one    (mk  3000 (\ i 65))]
             ['cycle  (mk  9000 (\ i (65 + (i % 7))))]
             ['spread (mk 20000 (\ i (((i * 2654435761) >> 13) % 251)))]
@@ -47,7 +47,7 @@
                         (go 300 ""))]]
 
    ; --- the differential ----------------------------------------------------------------
-   ; ⚠ the window arrays are BUILT AS DEFLATE BUILDS THEM, every position indexed as it is
+   ; the window arrays are built as deflate builds them, every position indexed as it is
    ; passed, because a chain is only interesting once it is deep and a synthetic one would
    ; not have the shape the two can disagree about.
    (walk nom s)
@@ -67,7 +67,7 @@
                + show (tally corpora) + " corpora\n"))
 
    ; --- the shapes the IR does not say --------------------------------------------------
-   ; a real window pair, so that in every row below exactly ONE thing is odd.
+   ; a real window pair, so that in every row below exactly one thing is odd.
    wn 20000
    ws (mk wn (\ i (65 + (i % 11))))
    wh (cask win)   wp (cask win)
@@ -98,11 +98,11 @@
           bads)
    _ (say out ("  " + show (tally bads) + " shapes the IR declines come back through the twin\n"))
 
-   ; A DOCTORED WINDOW. None of these can come out of gz-ins and each is one `pin` away,
+   ; a doctored window. None of these can come out of gz-ins and each is one `pin` away,
    ; and each is a different wrong read: a cell naming a position ahead of i walks the
    ; compare forward off the end of s, and a cell with the top bit set is where `ld4`'s
    ; sign extension and gz-c32's four shifted bytes part company.
-   ; ⚠ `ws` HAS PERIOD 11, so a distance divisible by 11 matches to the limit and one that
+   ; `ws` has period 11, so a distance divisible by 11 matches to the limit and one that
    ; is not matches nothing -- which is what makes the last row below discriminating. A
    ; dead first link, then a torn link, then a live one 11 back: the twin walks past the
    ; torn cell to the match, and a kernel that read that cell as -1 would stop at it and
@@ -115,9 +115,9 @@
    docs [['ahead     [[0 hs 20000]]]
          ['topbit    [[0 hs 4294967295]]]
          ['prevahead [[0 hs 100] [1 (99 & gz-wmask) 20000]]]
-         ; the two sign-extension rows, and they must be TWO: the head cell and the chain
+         ; the two sign-extension rows, and they must be two: the head cell and the chain
          ; link are separate loads, and a torn cell only tells them apart where the walk
-         ; goes ON PAST it to a match -- so each row parks a live position 11 back at the
+         ; goes on past it to a match -- so each row parks a live position 11 back at the
          ; bucket the torn one hands the walk to.
          ['headtorn  [[0 hs 4294967295] [1 (4294967294 & gz-wmask) 90]]]
          ['prevtorn  [[0 hs 91] [1 (90 & gz-wmask) 4294967295]
@@ -127,7 +127,7 @@
    _ (say out ("  a doctored window agrees " + show (tally docs) + " ways\n"))
 
    ; --- and the whole coder, both finders -----------------------------------------------
-   ; ⚠ the finder feeds the GREEDY PARSE, so one differing match moves every token after it:
+   ; the finder feeds the greedy parse, so one differing match moves every token after it:
    ; a byte-identical stream over a corpus this size is a much stronger claim than the
    ; per-position walk above, and it is the one a user would notice breaking.
    (defl fn s) (: n (tally s)
@@ -146,8 +146,8 @@
    _ (say out ("  " + show (tally big) + " bytes deflate byte-identical both ways, and round-trip\n"))
 
    ; --- the floor ------------------------------------------------------------------------
-   ; ⚠ `use 'forge` costs ~24 ms of parse and eval and a tar member is a few hundred bytes,
-   ; so below the floor the twin IS the better program and the finder must not reach for
+   ; `use 'forge` costs ~24 ms of parse and eval and a tar member is a few hundred bytes,
+   ; so below the floor the twin is the better program and the finder must not reach for
    ; the kernel at all. Above it, having reached once, the answer is cached.
    _ (? (id? (gz-finder (gz-floor - 1)) gz-find) 0 (die "a small input forged anyway"))
    _ (? (id? (gz-finder (gz-floor + 1)) nat) 0 (die "the forged finder is not cached"))

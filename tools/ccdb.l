@@ -2,8 +2,8 @@
 ;
 ;   love tools/ccdb.l              (from the tree root)
 ;
-; clangd runs its fallback command from THE FILE'S OWN DIRECTORY, so a relative -I in
-; .clangd resolves against host/ or free/ and love.h is not found. that miss is FATAL --
+; clangd runs its fallback command from the file's own directory, so a relative -I in
+; .clangd resolves against host/ or free/ and love.h is not found. that miss is fatal --
 ; the parse stops and every name after it reports undeclared, a flood that says nothing
 ; about the code. a database carries an absolute directory per entry, so the paths land
 ; where they mean.
@@ -11,7 +11,7 @@
 ; the flag groups mirror the real builds: src/build.mk (hcc) and src/kernel.mk
 ; (kcflags + kcppflags). they are few and they are stable; when one moves, move it here.
 ;
-; THE TREE IS THE SOURCE: the same pruned walk selfpack cuts the archive with finds the
+; the tree is the source: the same pruned walk selfpack cuts the archive with finds the
 ; .c files, so nothing here asks a version control system what the tree holds. what it
 ; writes carries absolute paths, so it is this machine's and rides in no archive.
 (use 'tar)
@@ -23,7 +23,7 @@
    (dot-c? nom) (: n (tally nom) (2 < n && (snip nom (n - 2) n) = ".c"))
 
    ; the host lane: love.c, host/, and the crew's C.
-   ; ⚠ /core carries love.h and every lane names it bare, so a group that drops it
+   ; /core carries love.h and every lane names it bare, so a group that drops it
    ; parses nothing: the miss is fatal and the flood after it says nothing.
    host ["-std=gnu23" "-Dai_tco=1"
          (inc "") (inc "/core") (inc "/out/lib") (inc "/out/host") (inc "/crew/quay")]
@@ -32,14 +32,14 @@
           "-DK_TEST"
           (inc "") (inc "/core") (inc "/out/lib") (inc "/out/host") (inc "/crew/quay")]
          + [(inc "/free") (inc "/crew/moon/include")])
-   ; moon's replacement libc -- compiled against its OWN headers, so glibc's
+   ; moon's replacement libc -- compiled against its own headers, so glibc's
    ; declarations would conflict with the real ones.
    moonlibc ["-std=gnu23" "-ffreestanding" "-nostdinc" (inc "/crew/moon/include") (inc "")]
    ; the playdate workbench takes its lcat'd cas.h out of out/playdate.
    playdate (host + ["-DTARGET_PLAYDATE=1" "-DTARGET_EXTENSION=1"
                      (inc "/port/playdate") (inc "/out/playdate")])
 
-   ; two files reach for a VENDOR SDK outside the tree. point the database at it when the
+   ; two files reach for a vendor sdk outside the tree. point the database at it when the
    ; environment names one; otherwise the file stays out entirely and .clangd quiets it,
    ; since no flag set here could resolve the include.
    pd-sdk (getenv "PLAYDATE_SDK_PATH")

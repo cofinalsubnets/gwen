@@ -8,17 +8,17 @@
 ;
 ; terms are quoted lists: UU nat bool unit empty zero tt true false <fixnum>
 ;   (pi x A B) (lam x b) (total2 x A B) (tpair a b) (pr1 w) (pr2 w) (succ n)
-;   (coprod A B) (ii1 a) (ii2 b) (paths A a b) (idpath a) (the T t)
+;   (coprod A B) (ii1 a) (ii2 b) (paths a a b) (idpath a) (the T t)
 ;   (nat_rect P z s n) (bool_rect P t f b) (unit_rect P u x)
 ;   (coprod_rect P f g v) (empty_rect P e) (paths_rect P pr e)
 ;   (let x a b) -- definitional: x binds the VALUE of a, transparent to conv
 ; and any other list is an application spine. (f) == f here too.
 ;
-; a MODULE on every corpus target (host + love0 + the inle kernel + wasm): the
+; a module on every corpus target (host + love0 + the inle kernel + wasm): the
 ; frontend lists this source in its ai_libs table and its boot says (use 'uu), then
 ; rebinds `uu` to the accessor -- (: uu (from 'uu)) -- so the surface stays
 ; (uu 'vof), (uu 'defn), (uu 'chk), (uu 'lof), and every internal a probe away.
-; the layer IS the module boundary now: the old uu-mark/sweep trailer retired
+; the layer is the module boundary now: the old uu-mark/sweep trailer retired
 ; with the brackets. the UniMath theorem corpus rides in test/uu.l (and the
 ; test/uu*.l ladder over it), binding this surface at its head; the defn/defq/
 ; axm macros land in this layer's macro slot and ride the boot splice.
@@ -30,10 +30,10 @@
 
 (: (vsucc v) (charm? v ? (v + 1) ['succ v])
 
-   ; a uu closure carries a LOVE FUNCTION, so applying one is an application and not a
-   ; re-walk of the body's syntax. ⚠ ('clo f) is opaque above this line: conv reaches a
+   ; a uu closure carries a love function, so applying one is an application and not a
+   ; re-walk of the body's syntax. ('clo f) is opaque above this line: conv reaches a
    ; closure only through capp (its lam/pi/sig branches all come before the spine case), and
-   ; lof prints TERMS, so these two lines plus comp's three ('clo ..) sites are the whole
+   ; lof prints terms, so these two lines plus comp's three ('clo ..) sites are the whole
    ; representation.
    (capp cl v) (<>cl v)
    (vapp f a) (f @ ['lam cl] (capp cl a) ['na f a])
@@ -49,29 +49,29 @@
    (dojr P r ev) (ev @ ['refl _] r ['njr P r ev])
    (vof-sym en x) (assq x en @ (_ y) y (GLOB x @ (_ y) y (scare 'uu-unbound x)))
 
-   ; --- comp: the term walked ONCE, into a love function of the env ---
+   ; --- comp: the term walked once, into a love function of the env ---
    ; every case below reads `(\ en ..)` where the old vof read the value directly, and that is
-   ; the whole change: the head dispatch, the destructuring and the arity all happen HERE, once
-   ; per term, where they used to happen once per EVALUATION. a lam's body becomes a love
+   ; the whole change: the head dispatch, the destructuring and the arity all happen here, once
+   ; per term, where they used to happen once per evaluation. a lam's body becomes a love
    ; closure over the compiled body, so capp is an application.
-   ; ⚠ vof-sym STAYS DYNAMIC. it reads GLOB, and a defn later in the corpus must be visible to
+   ; vof-sym stays dynamic. it reads glob, and a defn later in the corpus must be visible to
    ; a term compiled earlier -- so the lookup rides the `(\ en ..)`, never the compile.
-   ; ⚠ ORDERED BY MEASURED FREQUENCY, and the tail is never reached at all: over the UniMath
+   ; ordered by measured frequency, and the tail is never reached at all: over the UniMath
    ; corpus lam and succ are 550740 and 526521 of 1102646 head dispatches, while total2 pr1 pr2
-   ; ii1 ii2 are ZERO -- the reader spells them, but every USE arrives through a spine or a
+   ; ii1 ii2 are zero -- the reader spells them, but every use arrives through a spine or a
    ; rect. succ once sat at position 8 behind four of those zeros. The tests are mutually
    ; exclusive symbols so the order is free; only `(two? h)` must stay first, the spine last.
-   ; ⚠ the order matters LESS than it did (once per term, not per evaluation) and is kept
+   ; the order matters less than it did (once per term, not per evaluation) and is kept
    ; because compiling is itself on the hot path: chk and inf compile each subterm they visit.
    (comp t)
    (? (charm? t) (en \ t)
       (nom? t) (? (memq t '(UU nat bool unit empty tt true false)) (en \ t)
                   (id? t 'zero) (en \ 0)
                   (en \ vof-sym en t))
-      ; A PATTERN IS THE TERM GRAMMAR, so this dispatch now reads like the header's own
+      ; a pattern is the TERM grammar, so this dispatch now reads like the header's own
       ; list of shapes. It costs the arity guards, and here they are nearly free: comp runs
       ; 14778 times over the corpus where the old vof ran 1102646, so this whole chain is
-      ; 1.3% of one capp's traffic. ⚠ THE (two? h) FAST PATH IS GONE with it: a LIST head is
+      ; 1.3% of one capp's traffic. the (two? h) fast PATH is gone with it: a list head is
       ; never id? to a tag, so a spine falls through every arm to the else on its own -- and
       ; it is 259 of those 14778, which is not worth a branch or a second copy of the body.
       (t @
@@ -112,9 +112,9 @@
    ; the old door, kept for every caller (chk, inf, the globals, test/uu.l): compile, then run.
    vof (flip comp)
 
-   ; ⚠ THE SCRUTINEE IS A PAIR, which is why this one stays a `?`: an arm reads both
+   ; the scrutinee is a pair, which is why this one stays a `?`: an arm reads both
    ; sides, and a pattern would build the [a b] per call to say less than the tests do.
-   ; the two atom arms are GUARDS -- equal charms and equal noms are id? above, so
+   ; the two atom arms are guards -- equal charms and equal noms are id? above, so
    ; reaching one means unequal, and it keeps `<a` off a non-list below.
    (conv d a b)
    (? (id? a b) 1
@@ -146,7 +146,7 @@
    (as @ (a . u) (f @ ('pi A q) (chk cx en d a A, inf-spine cx en d (capp q (vof en a)) u)
                    (scare 'uu-not-a-pi as)) f)
 
-   ; ⚠ CHECKING IS TWO SHAPES AT ONCE -- the term's and the type's -- so every arm here
+   ; checking is two shapes at once -- the term's and the type's -- so every arm here
    ; is an `@` inside an `@`, and the inner else is the mismatch that names both.
    (chk cx en d t T)
    (t @
@@ -168,9 +168,9 @@
       (: Ti (inf cx en d t)
        (conv d T Ti || scare 'uu-type-mismatch t)))
 
-   ; ⚠ THE ELSE IS THE SPINE and needs no head test in front of it: a LIST head is never
+   ; the else is the spine and needs no head test in front of it: a list head is never
    ; id? to a tag, and (inf .. <t) answers for a nom head and a nested spine alike.
-   ; ⚠ a pattern carries the ARITY the old head test did not, so a tag at the wrong
+   ; a pattern carries the arity the old head test did not, so a tag at the wrong
    ; length reaches the spine and comes back unbound instead of reading () for operands.
    (inf cx en d t)
    (? (charm? t) 'nat
@@ -252,7 +252,7 @@
    (chk 0 0 0 T 'UU,
     pin GLOB nm [(vof 0 T) ['nv nm]],
     nm)
-   ; the Qed driver: CHECKED like defn, then sealed -- pinned with its own
+   ; the Qed driver: checked like defn, then sealed -- pinned with its own
    ; neutral as value, so applying the proof never evaluates it. Coq's
    ; Qed/Defined distinction, here because strict NbE would otherwise build
    ; the proof's whole beta-normal form at every use.
@@ -266,18 +266,18 @@
    (: r (call-cc (\ k (pin HELPC () (\ a b (k 'rejected)), th 0, 'accepted)))
     (pin HELPC () 0, r)))
 
-; --- uu2l: the uu-to-l leg. uu2coq and uu2lean re-CERTIFY the corpus in two
-; --- foreign kernels; uu2l runs it HOME -- a CLOSED term compiles to a love
-; --- form whose value IS vof's answer (charms for nats, ('chain a b) for
+; --- uu2l: the uu-to-l leg. uu2coq and uu2lean re-certify the corpus in two
+; --- foreign kernels; uu2l runs it HOME -- a closed term compiles to a love
+; --- form whose value is vof's answer (charms for nats, ('chain a b) for
 ; --- pairs), at compiled-love speed; lof (l-of, vof's fast twin) evaluates one.
-; --- UNTRUSTED by design: chk/conv never touch it, so a uu2l bug can miss a
+; --- untrusted by design: chk/conv never touch it, so a uu2l bug can miss a
 ; --- demo, never fake a theorem -- and the corpus asserts (vof t = lof t)
-; --- differentially wherever both lanes are tractable. generated code has NO
+; --- differentially wherever both lanes are tractable. generated code has no
 ; --- free names: the runtime kit and every global embed as live literals
 ; --- under the quote sigil, so nothing a uu binder spells can capture.
-; --- BRIDGE maps standard names to native love (add is +, the eager-NbE O(n)
-; --- niszero is (= m 0)) -- each bridge rides the SAME differential gate.
-; --- defn feeds SRC; a defq/axm name compiles to its own neutral, exactly
+; --- bridge maps standard names to native love (add is +, the eager-NbE O(n)
+; --- niszero is (= m 0)) -- each bridge rides the same differential gate.
+; --- defn feeds src; a defq/axm name compiles to its own neutral, exactly
 ; --- the sealed book value.
 (: (qlit v) ['\ v]
    (kchain a b) ['chain a b]
@@ -300,7 +300,7 @@
 
    (u2app t bs) (map (a \ u2 a bs) t)
 
-   ; ⚠ THE TAG DOES NOT PICK THE ORDER: nat_rect and friends take their operands
+   ; the tag does not pick the order: nat_rect and friends take their operands
    ; the way knrec wants them, not the way the term spells them.
    (u2 t bs)
    (? (charm? t) t
@@ -334,10 +334,10 @@
    (bridge nm f) (pin BRIDGE nm ['hit f], nm))
 
 ; --- the arity door. defn/defq/axm are fully curried, so a paren slip that
-; --- hands one too few operands is not an error -- it is a truthy CLOSURE one
-; --- curry away from running, an assert paints it green, and NOTHING pins
+; --- hands one too few operands is not an error -- it is a truthy closure one
+; --- curry away from running, an assert paints it green, and nothing pins
 ; --- (the (f)==f trap at proof grain; too many operands feed the returned nom
-; --- and vanish the same way). the macros guard CALL position: exactly the
+; --- and vanish the same way). the macros guard call position: exactly the
 ; --- right operand count, or the form scares carrying itself. the expansion
 ; --- heads (1 defn) -- the identity's head is no macro, so no re-expansion --
 ; --- and the functions keep their names, so the baked book still serves them

@@ -9,7 +9,7 @@
 ; positives. It is cross-arch: it reads e_machine and picks a per-arch return
 ; mnemonic, preferring multi-target llvm-objdump for non-x86 images.
 ;
-; Usage: l vmret.l ELF [--prefix PREFIX] [--objdump PATH]
+; Usage: l vmret.l ELF [--prefix prefix] [--objdump PATH]
 ; Exit:  0 = all clean, 1 = suspects found, 2 = usage/tool error.
 ;
 ; This needs the host-only `hark`/`getenv` nifs (subprocess + environment).
@@ -18,7 +18,7 @@
    (usage 0) (: _ (say out "usage: vmret.l ELF [--prefix PREFIX] [--objdump PATH]\n") (quit 0)))
 
 ; --- character classes + cursors over a line (string s) --------------
-; ws = Python \s within a line (space tab cr ff vtab); hex = [0-9a-fA-F].
+; ws = Python \s within a line (space tab cr ff vtab); hex = [0-9a-fa-f].
 (: (ws?  c) (any (\ x (= x c)) [32 9 13 12 11])
    (hex? c) (? (&& (>= c 48)  (<= c 57))  1
             (? (&& (>= c 97)  (<= c 102)) 1
@@ -32,7 +32,7 @@
    (dash? a) (&& (< 0 (tally a)) (= 45 (peep a 0 0))))
 
 ; --- line classifiers ---------------------------------------------
-; HEADER_RE  ^\s*[0-9a-fA-F]+\s+<(.+)>:\s*$  -> the captured name, else 0.
+; header_re  ^\s*[0-9a-fa-f]+\s+<(.+)>:\s*$  -> the captured name, else 0.
 (: (parse-header line)
    (: i (skip-ws line 0)
       j (skip-hex line i)
@@ -48,7 +48,7 @@
                         0))
                   0))))))
 
-; INSN_RE  ^\s*([0-9a-fA-F]+):\s+(.*)$  -> (addr . text), else 0.
+; insn_re  ^\s*([0-9a-fA-F]+):\s+(.*)$  -> (addr . text), else 0.
 (: (parse-insn line)
    (: i (skip-ws line 0)
       j (skip-hex line i)
@@ -87,13 +87,13 @@
           (? (< start i) [(snip s start i)] 0)))
     0 0))
 
-; --- ELF64 symbol sizes: bound each function to its real extent -------
+; --- elf64 symbol sizes: bound each function to its real extent -------
 ; The text scan charges any `ret` in inter-function padding to the nearest
 ; preceding <name>: header (e.g. a stray aligned `ret` after a clean tail-jump).
-; Reading each FUNC symbol's st_size from .symtab lets us drop instructions past
-; a function's [start, start+size). ELF64 LE is asserted in the driver below.
+; Reading each func symbol's st_size from .symtab lets us drop instructions past
+; a function's [start, start+size). elf64 le is asserted in the driver below.
 ; Addresses can be high-half (a kernel image links at 0xffffffff80000000), which
-; overflows a fixnum -- so u64/BIG/hex->int use `+`/`*` (which promote to bignum),
+; overflows a fixnum -- so u64/big/hex->int use `+`/`*` (which promote to bignum),
 ; never bitwise `<<`/`|` (which would not), keeping the values exact.
 (: (hex->int s) ((: (f i acc)
                     (? (< i (tally s))
@@ -112,13 +112,13 @@
    (u16 d i) (| (u8  d i) (<< (u8  d (+ i 1)) 8))
    (u32 d i) (| (u16 d i) (<< (u16 d (+ i 2)) 16))
    (u64 d i) (+ (u32 d i) (* (u32 d (+ i 4)) 4294967296))   ; `+`/`*` so a high-half addr promotes to bignum
-   (find-symtab d base ent n k)                           ; SHT_SYMTAB (2) -> (off . size), else 0
+   (find-symtab d base ent n k)                           ; sht_symtab (2) -> (off . size), else 0
      (? (< k n)
         (: sh (+ base (* k ent))
            (? (= 2 (u32 d (+ sh 4))) (link (u64 d (+ sh 24)) (u64 d (+ sh 32)))
               (find-symtab d base ent n (+ k 1))))
         0)
-   (collect-syms d off n k m)                             ; Elf64_Sym (24 B): value -> size, sized FUNCs
+   (collect-syms d off n k m)                             ; Elf64_Sym (24 B): value -> size, sized funcs
      (? (< k n)
         (: p (+ off (* k 24)) info (u8 d (+ p 4)) val (u64 d (+ p 8)) sz (u64 d (+ p 16))
            (collect-syms d off n (+ k 1)
@@ -137,7 +137,7 @@
 ; prefix* functions seen. prefix, the ret matcher, and a function-start -> size
 ; map are captured. lim = end of the current function's symtab extent; a `ret`
 ; at or past it is padding (an orphan in the gap before the next symbol), not
-; the function's -- so it does not count. unsized symbols -> lim BIG (old behavior).
+; the function's -- so it does not count. unsized symbols -> lim big (old behavior).
 (: (scan-all ls prefix ret? sizes)
    ((: (loop ls name watching lim rets flagged total)
        (? (two? ls)
@@ -174,7 +174,7 @@
                      ""))
 
 ; sort the flagged entries by function name (ascending), matching .py.
-; the merge split counts the SPINE (entries are chains; $ is the net sum), so fold.
+; the merge split counts the spine (entries are chains; $ is the net sum), so fold.
 (: (emerge a b) (? (two? a) (? (two? b)
                      (? (str< (cap (cap a)) (cap (cap b)))
                         (link (cap a) (emerge (cup a) b)) (link (cap b) (emerge a (cup b))))
@@ -230,7 +230,7 @@
                   _ (say err " is an unrecognized arch (0x") _ (putbn err mach 16)
                   _ (say err "); falling back to the generic `ret` matcher\n") 0))
    ; objdump preference: GNU objdump for x86 (host-arch), llvm-objdump for the
-   ; cross arches; an explicit --objdump or $OBJDUMP wins. execvp does the PATH
+   ; cross arches; an explicit --objdump or $objdump wins. execvp does the PATH
    ; search, so a candidate that isn't found just spawn-fails -> next one.
    cands    (filter id [od (getenv "OBJDUMP")
                          (? x86? "objdump" "llvm-objdump") (? x86? "llvm-objdump" "objdump")])

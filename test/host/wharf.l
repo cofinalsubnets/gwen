@@ -1,13 +1,13 @@
 ; --- test/host/wharf.l: the laws of lib/wharf.l, quay's layout algebra ---
-; NOT in the test/*.l corpus, but for a different reason than its neighbours here:
-; wharf needs NO nifs at all -- it is arithmetic over lists, and would run happily
-; on love0, wasm and the kernel. what it needs is the LOADER: `use` finds lib/wharf.l
+; not in the test/*.l corpus, but for a different reason than its neighbours here:
+; wharf needs no nifs at all -- it is arithmetic over lists, and would run happily
+; on love0, wasm and the kernel. what it needs is the loader: `use` finds lib/wharf.l
 ; by the filesystem walk, and the corpus also runs where there is no filesystem. when
 ; a second seat bakes wharf behind its egg, these laws can move to the corpus whole.
 ;
 ;   cat test/00-init.l test/host/wharf.l | out/host/love   ; exits 1 on fail
 ;
-; the vocabulary under test is rectangles in CELLS: (id row col rows cols), origins
+; the vocabulary under test is rectangles in cells: (id row col rows cols), origins
 ; 0-based, and a bar is (dir row col len) with dir 'across or 'down.
 (use "lib/wharf.l")
 
@@ -32,7 +32,7 @@
            (stack 30 (beside 50 1 2) (beside 50 3 4))
            (beside 50 (stack 50 1 2) (stack 50 3 4))
            (beside 10 1 (beside 10 2 (beside 10 3 4))))
-   ; ⚠ <>s, not (cup s): the tail of (24 80) is the LIST (80), whose net is 80 --
+   ; <>s, not (cup s): the tail of (24 80) is the list (80), whose net is 80 --
    ; so the arithmetic below would run on a list and quietly prove nothing
    sizes '((24 80) (1 1) (2 2) (3 3) (1 80) (80 1) (5 7) (200 300))
  _ (assert
@@ -72,8 +72,8 @@
     ('(1 2 3) = (wharf-berths p))))
 
 ; --- 6. the tight end: three cells is the smallest split there is ---
-; ⚠ under three, the split does not happen: a takes the axis, b lays at its
-; PARENT'S corner with zero extent -- present in the list, absent from the glass.
+; under three, the split does not happen: a takes the axis, b lays at its
+; parent's corner with zero extent -- present in the list, absent from the glass.
 (: p '(beside 50 1 2)
    b3 (wharf-lay p 24 3)
    b2 (wharf-lay p 24 2)
@@ -84,7 +84,7 @@
     (() = (wharf-bars p 24 2))
     (wharf-show? <b2)
     (! (wharf-show? <>b2))
-    (2 = (tally b2))))                          ; ⚠ and it is STILL IN THE LIST
+    (2 = (tally b2))))                          ; and it is still in the list
 
 ; --- 7. the hit test: bars belong to nobody ---
 (: bs (wharf-lay '(beside 50 1 (stack 50 2 3)) 24 80)

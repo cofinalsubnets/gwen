@@ -1,26 +1,26 @@
-; crew/holo/pe.l -- the PE32+ container: lay obj.l relocatables into a UEFI
-; APPLICATION (subsystem 10) instead of an ELF. same lay/patch heart as
+; crew/holo/pe.l -- the pe32+ container: lay obj.l relocatables into a uefi
+; application (subsystem 10) instead of an ELF. same lay/patch heart as
 ; link.l's ldlink (this file rides after it in a cat -- ld-read/ldlay/ldpatch/
-; ldsyms all bound there); only the clothing differs. the whole image is ONE
-; RWX .text section (text/rodata/data/nifs contiguous, bss the zero tail the
+; ldsyms all bound there); only the clothing differs. the whole image is one
+; rwx .text section (text/rodata/data/nifs contiguous, bss the zero tail the
 ; loader grants past SizeOfRawData), plus .reloc: the abs64 sites ldpatch
 ; collects for the -pie lane, re-encoded as base relocations -- firmware slides
 ; the image wherever it likes and fixes every pointer itself, no self-reloc.
-; entry is the FIRST object's text (the mkefi.l thunk). `target` is ldkern's
-; word, and the COFF machine below is the only arch-bound thing here: the DIR64
+; entry is the first object's text (the mkefi.l thunk). `target` is ldkern's
+; word, and the coff machine below is the only arch-bound thing here: the dir64
 ; base relocations included, everything else reads the same on both.
 ;
-; TWO load sections, page-aligned apart, and the split is not decoration:
+; two load sections, page-aligned apart, and the split is not decoration:
 ; firmware protects a loaded image by section, and every section it finds
-; EXECUTABLE it also makes READ-ONLY. one RWX section therefore comes back as
-; RO+X, and the first write to a static takes a permission fault -- which is
+; executable it also makes read-only. one rwx section therefore comes back as
+; ro+X, and the first write to a static takes a permission fault -- which is
 ; what aarch64 firmware does and x86 firmware happens not to. so .text carries
 ; text + rodata and no write bit, .data carries data + nifs + bss and no
 ; execute bit, and the protection lands where it was aimed.
 ;
 ; the one address subtlety: ldlay reserves a header inside the load image (an
-; ELF's own header rides there); PE headers live BELOW the first section, so
-; pelink asks for a reserve of ZERO and the first text byte lands exactly at
+; ELF's own header rides there); pe headers live below the first section, so
+; pelink asks for a reserve of zero and the first text byte lands exactly at
 ; base = ImageBase + 0x1000.
 
 (module 'holo
@@ -53,11 +53,11 @@
                  (blocks <g (catall [(le32 pg) (le32 (8 + 2 * #es)) (catall (map le16 es))] . acc))))
           (catall (blocks sites ()))))
 
-   ;; the COFF machine, elf.l's elf-machines in the other clothing
+   ;; the coff machine, elf.l's elf-machines in the other clothing
    pe-machines (tabof [('amd64 . 34404)                          ; 0x8664
-                       ('arm64 . 43620)])                       ; 0xAA64
+                       ('arm64 . 43620)])                       ; 0xaa64
 
-   ;; link a set -- ((id bytes)..), the mkefi thunk FIRST -- into a PE32+ at out.
+   ;; link a set -- ((id bytes)..), the mkefi thunk first -- into a pe32+ at out.
    (pelink target srcs out)
     (: mach (peep pe-machines target 0)
        emach (peep elf-machines target 0)
@@ -72,7 +72,7 @@
        o1 <objs
        ent (peep (peep o1 'base 0) <(peep (peep o1 'lanes 0) 'text ()) 0)
        cx [glo n0 end end end relbox ()]
-       ;; the read-only half. each lane is emitted AT the address ldlay gave it,
+       ;; the read-only half. each lane is emitted at the address ldlay gave it,
        ;; so the gap the alignment opened is written out as zeros.
        et (ldemit cx 'text base objs ())
        eo (ldemit cx 'rodata o0 objs (>et + [(ld-zeros (- o0 <et))]))
@@ -92,14 +92,14 @@
        rraw (pe-al pe-falign rsz)
        img-sz (reloc-rva + pe-al 4096 rsz)
        opt (catall [
-         (le16 523) '(0 0)                               ; PE32+ magic, linker 0.0
+         (le16 523) '(0 0)                               ; pe32+ magic, linker 0.0
          (le32 traw) (le32 draw) (le32 0)
-         (le32 (ent - pe-ibase)) (le32 4096)             ; entry RVA, base of code
+         (le32 (ent - pe-ibase)) (le32 4096)             ; entry rva, base of code
          (le64 pe-ibase)
          (le32 4096) (le32 pe-falign)                    ; section / file alignment
          (le16 0) (le16 0) (le16 0) (le16 0) (le16 0) (le16 0) (le32 0)
          (le32 img-sz) (le32 pe-hraw)
-         (le32 0) (le16 10) (le16 0)                     ; subsystem EFI_APPLICATION
+         (le32 0) (le16 10) (le16 0)                     ; subsystem efi_application
          (le64 1048576) (le64 4096) (le64 1048576) (le64 4096)
          (le32 0) (le32 16)
          (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)
@@ -107,14 +107,14 @@
          (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)
          (le64 0) (le64 0) (le64 0) (le64 0) (le64 0)])
        hdr (catall [
-         '(77 90) (map (_ \ 0) ^58) (le32 64)       ; MZ, e_lfanew = 64
+         '(77 90) (map (_ \ 0) ^58) (le32 64)       ; mz, e_lfanew = 64
          '(80 69 0 0)
-         (le16 mach) (le16 3)                            ; the COFF machine, three sections
+         (le16 mach) (le16 3)                            ; the coff machine, three sections
          (le32 0) (le32 0) (le32 0)
-         (le16 #opt) (le16 34)                    ; EXE | LARGE_ADDRESS_AWARE
+         (le16 #opt) (le16 34)                    ; exe | large_address_aware
          opt
          (pe-sect ".text" tfsz 4096 traw pe-hraw 1610612768)           ; 0x60000020 code|r-x
-         (pe-sect ".data" data-vsz data-rva draw (pe-hraw + traw) 3221225536)    ; 0xC0000040 data|rw-
+         (pe-sect ".data" data-vsz data-rva draw (pe-hraw + traw) 3221225536)    ; 0xc0000040 data|rw-
          (pe-sect ".reloc" rsz reloc-rva rraw (pe-hraw + traw + draw) 1107296320)])   ; 0x42000040
        _ (pe-hraw < #hdr ? (scare 'pe-headers-overflow #hdr))
        ;; headers, the read-only half padded to its file size, then the writable

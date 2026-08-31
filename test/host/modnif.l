@@ -1,6 +1,6 @@
 ; --- test/host/modnif.l: ai_defn's module lane (AiModNif, src/mem.c) ---
-; peepw/pinw register under MODULE 'mem at the boot drain -- nothing lands on the
-; bare book -- and (module 'mem ..) text reopens the SAME tablet, so an app's C
+; peepw/pinw register under module 'mem at the boot drain -- nothing lands on the
+; bare book -- and (module 'mem ..) text reopens the same tablet, so an app's C
 ; half and .l half share one module. Runs warm on purpose: a woken image carries
 ; the registry, and the drain re-pins the current addresses into the found tablet.
 (: m (from 'mem)

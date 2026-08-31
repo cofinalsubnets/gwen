@@ -1,17 +1,17 @@
-; crew/lux/config.l -- the CONFIG: ~/.xmonad/xmonad.hs transliterated, now with a
+; crew/lux/config.l -- the config: ~/.xmonad/xmonad.hs transliterated, now with a
 ; door. Everything the Haskell record pinned, as plain values the driver
-; (crew/lux/lux.l) reads -- the DSL underneath (core/layout/manage/keys/ewmh)
-; already IS the xmonad vocabulary, so this file is short the way a config should
-; be. A body-LESS `:`.
+; (crew/lux/lux.l) reads -- the dsl underneath (core/layout/manage/keys/ewmh)
+; already is the xmonad vocabulary, so this file is short the way a config should
+; be. a body-less `:`.
 ;
-; THE DOOR is salt (lib/salt.l): ~/.love/etc/lux.l for your taste, then ./.lux.l
+; the door is salt (lib/salt.l): ~/.love/etc/lux.l for your taste, then ./.lux.l
 ; for a tree's own, the second winning. Every setting falls back to the value that
 ; was hardcoded here, so no config file anywhere is today's lux to the byte.
-; ⚠ salt is DATA, never code: nothing in a config file is evaluated, so nothing in
+; salt is data, never code: nothing in a config file is evaluated, so nothing in
 ; it needs quoting.
 ;
-; ⚠ a repeated setting REPLACES rather than appends -- so each roster takes ALL
-; its entries in ONE form, and `()` as the lone operand spells the EMPTY roster
+; a repeated setting replaces rather than appends -- so each roster takes all
+; its entries in one form, and `()` as the lone operand spells the empty roster
 ; (an operand-less `(startup)` is indistinguishable from no line at all).
 ;
 ;   (border 3)  (normal-color "Dark Slate Blue")  (focused-color "Light Cyan")
@@ -25,17 +25,17 @@
 ;   (unbind (sup p) (sup z))
 ;   (display ":7")  (xauthority "/home/me/.Xauthority")
 ;
-; a CHORD is a list, the last element the key and the rest modifiers: a symbol
-; names it (`e`, `Return`), a one-char string IS that character (`","`, `"1"`),
+; a chord is a list, the last element the key and the rest modifiers: a symbol
+; names it (`e`, `Return`), a one-char string is that character (`","`, `"1"`),
 ; and a bare number is the keysym itself -- so the name table is a convenience,
 ; never a ceiling.
 ;
 ; the conf-* readers take the tablet, so crew/lux/law.l proves the defaults against
-; an EMPTY one -- the gate must not change meaning the day you write a config file.
+; an empty one -- the gate must not change meaning the day you write a config file.
 (use 'salt)
 (:
    ; --- the readers. a roster entry is a name or a form; anything else (the lone
-   ;     `()` that spells "empty") drops out, and an ABSENT roster takes d. ---
+   ;     `()` that spells "empty") drops out, and an absent roster takes d. ---
    (conf-live? e) (two? e || name? e || string? e)
    (conf-roster c k d) (: r (salt-all c k) (two? r ? (filter conf-live? r) d))
    (conf-mod c) (: m (kmod-of (salt-one c 'mod 'sup) supm) (m ? m supm))
@@ -55,7 +55,7 @@
    ;            . toggleLayouts Full . mkToggle (single MIRROR) $ l1 ||| l2
    ;   (avoidStruts lives in the driver as ewmh-rect; windowNavigation is
    ;    nav-target under the directional keys -- both always-on, not records)
-   ;   l2 = Dwindle R CW phi 1.1 where phi = fib 32 / fib 31 -- the fib, verbatim
+   ;   l2 = Dwindle R cw phi 1.1 where phi = fib 32 / fib 31 -- the fib, verbatim
    (lux-fib m n i) (i < 1 ? m (lux-fib n (m + n) (i - 1)))
    lux-phi (lux-fib 0 1 32 / lux-fib 0 1 31)
    ; one ||| member as data: the head names the layout, the tail its operands, and
@@ -82,7 +82,7 @@
    lux-layout (foldr lux-wrap-of (choice lux-lays) lux-wraps)
 
    ; manageHook / keys: assembled in manage.l / keys.l (composeAll and
-   ;   `keys def UNION custom` are the DSL's own assembly points)
+   ;   `keys def UNION custom` are the dsl's own assembly points)
    lux-manage (manage-for (conf-roster lux-conf 'center-class mg-center-def)
                           (conf-roster lux-conf 'float-class mg-float-def)
                           (conf-roster lux-conf 'ignore-class ()))
@@ -92,15 +92,15 @@
 
    ; startupHook = spawn "setxkbmap -option ctrl:nocaps -option compose:rctrl"
    ;   (setWMName "LG3D (XMonad)" rides ewmh-init; the cursor is x-cursor).
-   ;   LUX_NOSTARTUP skips the spawns -- a headless harness wants no keyboard
+   ;   lux_nostartup skips the spawns -- a headless harness wants no keyboard
    ;   churn on its bare Xvfb
    lux-startup (? (getenv "LUX_NOSTARTUP") ()
                   (conf-roster lux-conf 'startup
                                '(("setxkbmap" "-option" "ctrl:nocaps" "-option" "compose:rctrl"))))
 
-   ; the display: DISPLAY (":0" / ":7.0" -> the unix socket) unless a config names
+   ; the display: display (":0" / ":7.0" -> the unix socket) unless a config names
    ;   one, the cookie from the xauth file when the server wants one (an -ac Xephyr
-   ;   has no entry -> ()). ⚠ XAUTHORITY names that file and WINS over ~/.Xauthority
+   ;   has no entry -> ()). xauthority names that file and wins over ~/.Xauthority
    ;   -- every other X client reads it that way, and a display manager that parks
    ;   the live cookie elsewhere (ly's /run/user/<uid>/lyxauth) leaves a stale
    ;   ~/.Xauthority behind, whose cookie the server refuses

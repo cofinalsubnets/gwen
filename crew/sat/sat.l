@@ -1,11 +1,11 @@
 ; sat -- a real CDCL SAT solver in love, riding the core's mutable maps. An app: it
-; owns crew/sat/ alone, touches no core file. A literal is a nonzero fixnum (var k true =
-; +k, false = -k); a clause is a LIST of literals; a formula a list of clauses; an
+; owns crew/sat/ alone, touches no core file. a literal is a nonzero fixnum (var k true =
+; +k, false = -k); a clause is a list of literals; a formula a list of clauses; an
 ; assignment a map var -> 1 (true) | -1 (false), absent = unassigned. The DPLL
 ; baseline below is the correctness oracle (Stage 1); the CDCL engine (Stages 2-3:
-; two-watched-literals BCP, 1-UIP clause learning, non-chronological backjump, VSIDS
+; two-watched-literals bcp, 1-uip clause learning, non-chronological backjump, VSIDS
 ; + Luby restarts) is built on top, validated to agree with it. Run: out/host/love
-; crew/sat/sat.l  (strict asserts self-gate). ⚠ pure app -- no love.c / love.h / host edit.
+; crew/sat/sat.l  (strict asserts self-gate). pure app -- no love.c / love.h / host edit.
 (:
    ; --- literals --------------------------------------------------------------
    (vof l)  (abs l)                                          ; the variable of a literal
@@ -17,11 +17,11 @@
    ; --- assignment (an alist (var . +-1) for the pure DPLL baseline) -----------
    (aget a v)  (? (atom? a) 0 (= (caap a) v) (cuap a) (aget >a v))        ; 0 = unassigned
    (lval a l)  (: v (aget a (vof l)) (? (= v 0) 0 (= v (sgn l)) 1 -1))    ; 1 sat / -1 falsified / 0 free
-   (put-lit a l) ((vof l >< sgn l) >< a)                                  ; extend a so literal l is TRUE
+   (put-lit a l) ((vof l >< sgn l) >< a)                                  ; extend a so literal l is true
    ; --- clause / formula status under a ---------------------------------------
    (csat? a c)  (any (\ l (= 1 (lval a l))) c)               ; some literal satisfied
    (cfals? a c) (all (\ l (= -1 (lval a l))) c)              ; every literal falsified (a conflict)
-   (sat? a formula) (all (\ c (csat? a c)) formula)          ; MODEL CHECK: every clause satisfied
+   (sat? a formula) (all (\ c (csat? a c)) formula)          ; model check: every clause satisfied
    ; --- unit propagation (functional: returns an extended alist, or 'conflict) -
    (unit-of a c) (? (csat? a c) 0                            ; satisfied clause forces nothing
                     (: free (filter (\ l (= 0 (lval a l))) c)
@@ -41,7 +41,7 @@
                 (: r (dpll (put-lit a2 v) formula nvars)
                    (? (id? r 'unsat) (dpll (put-lit a2 (neg v)) formula nvars) r))))))
    (solve formula nvars) (dpll () formula nvars)             ; top-level: '() assignment in, model or 'unsat out
-   ; --- model COUNTING (enumerate all satisfying assignments) -- a self-check ---
+   ; --- model counting (enumerate all satisfying assignments) -- a self-check ---
    (count-models formula nvars)
     ((: (go a)
         (? (any (\ c (cfals? a c)) formula) 0
@@ -52,7 +52,7 @@
    ; distinct models = the Lucas number L_n (L_10 = 123) -- an oracle from combinatorics.
    (cyclic n) (map (\ i ((+ i 1) >< ((+ 1 (% (+ i 1) n)) >< ()))) (jot n))
    (lucas n)  ((: (go k a b) (? (= k 0) a (go (- k 1) b (+ a b)))) n 2 1)    ; L_0=2,L_1=1,..  L_n
-   ; pigeonhole PHP(h): h+1 pigeons into h holes -> UNSAT, and resolution-hard, so it forces MANY
+   ; pigeonhole php(h): h+1 pigeons into h holes -> UNSAT, and resolution-hard, so it forces many
    ; conflicts (exercises clause learning + restarts). var x[p][k] = p*h+k+1 (pigeon p in hole k).
    (php h) (: P (+ h 1)
               pc (map (\ p (map (\ k (+ (* p h) (+ k 1))) (jot h))) (jot P))                          ; each pigeon in some hole
@@ -63,9 +63,9 @@
    (php-vars h) (* (+ h 1) h)
 
    ; ===========================================================================
-   ; CDCL engine (Stage 2): mutable trail + 1-UIP clause learning + backjump,
-   ; propagating through TWO-WATCHED LITERALS (the `prop-lit` block below). State `s`
-   ; is one map of sub-maps; assignment carries decision LEVEL and REASON (the clause
+   ; CDCL engine (Stage 2): mutable trail + 1-uip clause learning + backjump,
+   ; propagating through two-watched literals (the `prop-lit` block below). State `s`
+   ; is one map of sub-maps; assignment carries decision level and reason (the clause
    ; that forced each var) so a conflict can be analysed. Differentially fuzz-tested
    ; against the DPLL oracle on random 3-SAT below.
    ; ===========================================================================
@@ -74,7 +74,7 @@
    (lit-val s l) (: v (val-of s (vof l)) (? (= v 0) 0 (= v (sgn l)) 1 -1))   ; 1 sat / -1 false / 0 free under the trail
    (add-clause s c)                                         ; append a clause, return its id
     (: id (peep s 'ncls 0) _ (pin (vmap s 'cls) id c) _ (pin s 'ncls (+ id 1)) id)
-   (assign s lit cid)                                       ; set lit TRUE at the current level, reason = clause cid (-1 = decision)
+   (assign s lit cid)                                       ; set lit true at the current level, reason = clause cid (-1 = decision)
     (: v (vof lit) t (peep s 'top 0)
        _ (pin (vmap s 'val) v (sgn lit)) _ (pin (vmap s 'lvl) v (peep s 'level 0))
        _ (pin (vmap s 'reason) v cid) _ (pin (vmap s 'trail) t lit) _ (pin s 'top (+ t 1)) 0)
@@ -86,10 +86,10 @@
        _ (pin s 'watch (tablet 0)) _ (pin s 'wl (tablet 0)) _ (pin s 'bad 0)
        _ (pin s 'phase (tablet 0)) _ (pin s 'vinc 1.0) _ (pin s 'nconf 0) _ (pin s 'rnum 1) _ (pin s 'climit 100)
        _ (foldl (\ _ c (load-clause s c)) 0 formula) s)
-   ; --- TWO-WATCHED-LITERALS BCP -----------------------------------------------
+   ; --- two-watched-literals bcp -----------------------------------------------
    ; Each clause watches two of its literals; watch[l] lists the clauses watching l;
-   ; wl[cid] is the watched pair (a . b). A clause is touched ONLY when a watched
-   ; literal becomes FALSE -- then we slide that watch to any other non-false literal,
+   ; wl[cid] is the watched pair (a . b). a clause is touched only when a watched
+   ; literal becomes false -- then we slide that watch to any other non-false literal,
    ; or (none left) the clause is unit (propagate the other watch) or a conflict. The
    ; invariant survives backtracking untouched (unassigning only relaxes), so backjump
    ; just rewinds qhead. This is the O(touched), not O(clauses), propagation core.
@@ -100,8 +100,8 @@
        _ (pin (vmap s 'watch) a (cid >< peep (vmap s 'watch) a ()))
        _ (pin (vmap s 'watch) b (cid >< peep (vmap s 'watch) b ())) 0)
    (dedup-lits c) (? (atom? c) () (member? <c >c) (dedup-lits >c) (<c >< dedup-lits >c))                                ; drop duplicate literals
-   (taut? c) (? (atom? c) 0 (member? (neg <c) >c) 1 (taut? >c))                  ; contains a literal AND its negation?
-   (load-clause s c0)                                       ; add a source clause to the DB + watches (clean it first: dedupe, drop tautologies)
+   (taut? c) (? (atom? c) 0 (member? (neg <c) >c) 1 (taut? >c))                  ; contains a literal and its negation?
+   (load-clause s c0)                                       ; add a source clause to the db + watches (clean it first: dedupe, drop tautologies)
     (? (= 1 (taut? c0)) 0                                                        ; tautology -> always satisfied, skip
        (: c (dedup-lits c0)
           (? (atom? c) (pin s 'bad 1)                                            ; empty clause -> UNSAT
@@ -109,11 +109,11 @@
              (: cid (add-clause s c) (watch2 s cid <c <>c)))))                   ; >=2 distinct lits -> watch the first two
    (find-watch s cid wo)                                    ; a literal of clause cid other than wo and not currently false, else 0
     ((: (go ls) (? (atom? ls) 0 (: l <ls (? (!(= l wo) && !(= (lit-val s l) -1)) l (go >ls))))) (peep (vmap s 'cls) cid ()))
-   (prop-lit s f)                                           ; literal f just became FALSE: re-examine watch[f]; -> conflict cid or -1
+   (prop-lit s f)                                           ; literal f just became false: re-examine watch[f]; -> conflict cid or -1
     (: res ((: (go cs kept)                                                      ; kept = clauses that keep watching f; rebuild watch[f]
                (? (atom? cs) (-1 >< kept)
                   (: cid <cs rest >cs pr (peep (vmap s 'wl) cid ())
-                     wo (? (= <pr f) >pr <pr)                                     ; the OTHER watched literal
+                     wo (? (= <pr f) >pr <pr)                                     ; the other watched literal
                      (? (= (lit-val s wo) 1) (go rest (cid >< kept))             ; satisfied by wo -> keep watching f
                         (: k (find-watch s cid wo)
                            (? !(= k 0)                                            ; slide the watch f -> k
@@ -121,14 +121,14 @@
                                  _ (pin (vmap s 'watch) k (cid >< peep (vmap s 'watch) k ()))
                                  (go rest kept))                                  ; cid no longer watches f
                               (= (lit-val s wo) 0) (: _ (assign s wo cid) (go rest (cid >< kept)))     ; unit -> force wo
-                              (cid >< cat kept (cid >< rest))))))))               ; wo false -> CONFLICT; f keeps cid + the unprocessed rest
+                              (cid >< cat kept (cid >< rest))))))))               ; wo false -> conflict; f keeps cid + the unprocessed rest
             (peep (vmap s 'watch) f ()) ())
        _ (pin (vmap s 'watch) f >res) <res)
    (propagate s)                                            ; drain the trail queue through the watches; -> conflict cid or -1
     ((: (loop _) (? (>= (peep s 'qhead 0) (peep s 'top 0)) -1
                    (: p (peep (vmap s 'trail) (peep s 'qhead 0) ()) _ (pin s 'qhead (+ 1 (peep s 'qhead 0)))
                       confl (prop-lit s (neg p)) (? (> confl -1) confl (loop ()))))) ())
-   ; --- 1-UIP conflict analysis -----------------------------------------------
+   ; --- 1-uip conflict analysis -----------------------------------------------
    ; absorb a reason clause's literals into (counter . learnt): mark each unseen
    ; level>0 var, count those at the conflict level, collect the rest as the
    ; learnt clause's lower-level literals. skipv = the resolved var to skip (0 = none).
@@ -144,7 +144,7 @@
            acc c)
    (find-seen tr seen idx) (? (= 0 (peep seen (vof (peep tr idx ())) 0)) (find-seen tr seen (- idx 1)) idx)
    (bj-level s learnt) (foldl (\ m l (: lv (peep (vmap s 'lvl) (vof l) 0) (? (> lv m) lv m))) 0 learnt)
-   ; the learnt clause's 2nd watch MUST be its highest-level literal, else a backtrack could unassign
+   ; the learnt clause's 2nd watch must be its highest-level literal, else a backtrack could unassign
    ; an unwatched literal and the clause would go unit/conflict undetected. So reorder learnt so [1]
    ; is the max-level tail literal (learnt[0] stays the asserting literal).
    (rem-lit x ls) (? (atom? ls) () (= <ls x) >ls (<ls >< rem-lit x >ls))
@@ -175,8 +175,8 @@
        _ (pin s 'top nt) _ (pin s 'qhead nt) _ (pin s 'level lvl) 0)   ; rewind the propagation queue to the new top
    ; --- VSIDS: bump a var's activity by the current increment; decay grows the
    ;     increment each conflict (so recent conflicts weigh more); rescale keeps
-   ;     activities finite. pick-branch takes the highest-activity FREE var, and
-   ;     decides its SAVED phase (phase saving -- the last value it held). --------
+   ;     activities finite. pick-branch takes the highest-activity free var, and
+   ;     decides its saved phase (phase saving -- the last value it held). --------
    (bump s v) (pin (vmap s 'act) v (+ (peep (vmap s 'act) v 0.0) (peep s 'vinc 1.0)))
    (rescale s) (foldl (\ _ v (pin (vmap s 'act) v (* (peep (vmap s 'act) v 0.0) 1e-100))) 0 (rng 1 (+ (peep s 'nvars 0) 1)))
    (decay s) (: vi (* (peep s 'vinc 1.0) 1.05)
@@ -212,8 +212,8 @@
    (cdcl formula nvars) (: s (mk formula nvars)
                            (? (= 1 (peep s 'bad 0)) 'unsat                       ; empty clause / contradictory units at construction
                               (: r (search s) (? (id? r 'unsat) 'unsat (extract-model s nvars)))))
-   ; --- model COUNTING via the CDCL solver: solve, BLOCK the model, repeat until UNSAT. A real #SAT
-   ;     technique; the count is solver-INDEPENDENT (a fact), so count-cdcl (cyclic n) == Lucas n. -----
+   ; --- model counting via the CDCL solver: solve, block the model, repeat until UNSAT. a real #SAT
+   ;     technique; the count is solver-independent (a fact), so count-cdcl (cyclic n) == Lucas n. -----
    (block model) (map (\ vv (neg (* >vv <vv))) model)                  ; clause excluding exactly this model
    (count-cdcl formula nvars)
     ((: (go fm c) (: r (cdcl fm nvars) (? (id? r 'unsat) c (go (block r >< fm) (+ c 1))))) formula 0)
@@ -252,22 +252,22 @@
     (: f '((1 2) (-1 3) (-2 -3)) m (cdcl f 3) (!(id? m 'unsat) && sat? m f))
     (id? (cdcl '((1) (-1)) 1) 'unsat)
     (id? (cdcl '((1 2) (1 -2) (-1 2) (-1 -2)) 2) 'unsat)                       ; all 4 clauses over 2 vars -> UNSAT
-    ; the cyclic instance: SAT, model checks, AND the model count matches DPLL/Lucas
+    ; the cyclic instance: SAT, model checks, and the model count matches DPLL/Lucas
     (: f (cyclic 12) m (cdcl f 12) (!(id? m 'unsat) && sat? m f))
     ; CDCL really learns: a unit clause forces propagation, a conflict at level 0 is UNSAT
     (id? (cdcl '((1 2 3) (1 2 -3) (1 -2 3) (1 -2 -3) (-1)) 3) 'unsat)          ; forces 1=0 then UNSAT under the first four
-    ; DIFFERENTIAL FUZZ: 60 random 3-SAT instances, CDCL == DPLL (SAT/UNSAT) + valid models
+    ; differential fuzz: 60 random 3-SAT instances, CDCL == DPLL (SAT/UNSAT) + valid models
     (fuzz 60 8 30)                                                            ; near phase transition (m/n ~ 3.75), mixed SAT/UNSAT
     (fuzz 40 10 30)
     (fuzz 30 12 50))
  _ (assert    ; --- Stage 3: VSIDS + Luby restarts + phase saving (heuristics: same answers, smarter search) ---
     ; the Luby restart sequence: 1 1 2 1 1 2 4 1 1 2 1 1 2 4 8
     (= 1 (luby 1)) (= 1 (luby 2)) (= 2 (luby 3)) (= 1 (luby 4)) (= 2 (luby 6)) (= 4 (luby 7)) (= 8 (luby 15))
-    ; with VSIDS + restarts on, CDCL STILL agrees with DPLL (heuristics change search order, not the answer)
+    ; with VSIDS + restarts on, CDCL still agrees with DPLL (heuristics change search order, not the answer)
     (fuzz 40 12 50)
     (fuzz 20 14 58)                                                           ; harder ratio (m/n ~ 4.1)
-    ; PIGEONHOLE PHP(5): UNSAT and resolution-hard -> hundreds of conflicts, so this exercises the
-    ; learning + RESTART path end to end (climit starts at 100; PHP(5) blows past it)
+    ; pigeonhole php(5): UNSAT and resolution-hard -> hundreds of conflicts, so this exercises the
+    ; learning + restart path end to end (climit starts at 100; PHP(5) blows past it)
     (id? (cdcl (php 5) (php-vars 5)) 'unsat)
     ; a larger satisfiable instance (cyclic n=80) solved, model checked
     (: f (cyclic 80) m (cdcl f 80) (!(id? m 'unsat) && sat? m f))

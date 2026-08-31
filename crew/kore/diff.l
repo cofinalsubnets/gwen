@@ -4,10 +4,10 @@
 ; is the generic `=`, so it diffs lines, symbols, charms, whole trees alike.
 ;
 ; the script is a list of (op x) 2-lists, op one of 'keep 'del 'add, in order: the
-; keep+del column spells the OLD list, keep+add the NEW, and the del+add count is
-; MINIMAL -- the three laws crew/kore/law.l holds it to (an O(nm) LCS oracle for the
+; keep+del column spells the old list, keep+add the new, and the del+add count is
+; minimal -- the three laws crew/kore/law.l holds it to (an O(nm) LCS oracle for the
 ; third). a body-less top-level `:` (the wm's app shape): `myers` the entry,
-; dold/dnew/dcost the script readers, d* the machinery. indexes and rounds ride TABLETS
+; dold/dnew/dcost the script readers, d* the machinery. indexes and rounds ride tablets
 ; (charm keys, negatives fine) for O(1) reads; every loop is a tail call.
 (module 'kore
 (:
@@ -15,7 +15,7 @@
    (dindex l) (: t (tablet 0)
                  (go i m) (? (two? m) (: _ (pin t i <m) (go (i + 1) >m)) t)
                  (go 0 l))
-   ; the down/right choice at diagonal k of round d, read off the PREVIOUS round's row
+   ; the down/right choice at diagonal k of round d, read off the previous round's row
    ; vp -- shared by the forward pass and the backtrack (they must agree or the path tears)
    (ddown? vp d k) ((k = (0 - d)) ||
                     (!(k = d) && (peep vp (k - 1) 0 < peep vp (k + 1) 0)))
@@ -71,7 +71,7 @@
    (dcost s) #(filter (\ o !(<o = 'keep)) s))
 
 ; --- patience: the anchoring layer over myers (Bram Cohen). same script shape, so the
-; projection laws carry over verbatim -- what changes is the SHAPE of the hunks: anchor
+; projection laws carry over verbatim -- what changes is the shape of the hunks: anchor
 ; on the lines a human would (unique in both sides), recurse between anchors, and let
 ; myers fill the gaps, trading minimality (dcost patience >= dcost myers) for hunks
 ; that align on landmarks instead of boilerplate. the pass: peel the common prefix and
@@ -100,7 +100,7 @@
                               (goa >m (i + 1) ([i j e] . acc))))
                         (rev acc))
        (goa a 0 ()))
-   ; the longest increasing subsequence of the j's (the i's already ascend): O(k^2) DP
+   ; the longest increasing subsequence of the j's (the i's already ascend): O(k^2) dp
    (dlis ps)
     (: n #ps pt (dindex ps)
        (jof t) <>(pt t)
@@ -116,7 +116,7 @@
                              (? (best < c) (gom (t + 1) c t) (gom (t + 1) best bt))))
        (gob t acc) (? (t < 0) acc (gob (peep pv t -1) (pt t . acc)))
        (gob (gom 0 0 -1) ()))
-   ; peel the common prefix; answers (a' b' keeps), the keeps REVERSED
+   ; peel the common prefix; answers (a' b' keeps), the keeps reversed
    (dpre a b ks)
     (? (&& (two? a) (two? b) (<a = <b))
        (dpre >a >b (['keep <a] . ks))
@@ -144,7 +144,7 @@
 ; big files stay linear. every entry tags as (op x i j) -- i/j the 1-based old/new seats
 ; it sits at -- then hunks gather with c lines of context, splitting where a keep run
 ; tops 2c (the coalescing law patch(1) expects); a side with no lines names the seat
-; BEFORE it (the -0,0 convention). `udiff` is the tool's engine: two texts and their
+; before it (the -0,0 convention). `udiff` is the tool's engine: two texts and their
 ; names -> the whole unified text, nothing when they agree.
 (:
    (utag s)                                                       ; seat every entry: (op x) -> (op x i j)

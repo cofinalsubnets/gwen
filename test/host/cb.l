@@ -1,6 +1,6 @@
 ; --- test/host/cb.l: a vttest-lite for quay's console screen (src/cb.c + crew/quay/quay.c) ---
-; NOT in the test/*.l corpus on purpose: the screen nifs (screen/scribe/glass/gaze/reply)
-; live in src/cb.c, which the final `love` links but love0 does NOT -- and love0 bakes the
+; not in the test/*.l corpus on purpose: the screen nifs (screen/scribe/glass/gaze/reply)
+; live in src/cb.c, which the final `love` links but love0 does not -- and love0 bakes the
 ; whole corpus, so a corpus test would read these names as missing and fail love0's
 ; self-test. So this is verified the host-nif way: standalone, against the built
 ; binary (the assert macro comes from test/00-init.l):
@@ -53,15 +53,15 @@
  _ (scribe s b)                          ; a cask pours its bytes
  _ (assert (= "hi!??" (snip (rowtx s 0) 0 5)))
  _ (scribe s "\r")
- _ (assert (= 0 (cur s)))                ; CR homes the column
+ _ (assert (= 0 (cur s)))                ; cr homes the column
  _ (scribe s "ab\x08\x08")               ; (\b is no reader escape: \x08 is the byte)
  _ (assert (= 0 (cur s)))
  _ (scribe s "\x08")
- _ (assert (= 0 (cur s))))               ; BS at column 0 stays (no row crossing)
+ _ (assert (= 0 (cur s))))               ; bs at column 0 stays (no row crossing)
 (: s (mkscr 4 10)
  _ (scribe s "ab\ncd")
  _ (assert
-    (= 99 (chat s 12)) (= 100 (chat s 13))   ; bare \n KEEPS the column (LNM off)
+    (= 99 (chat s 12)) (= 100 (chat s 13))   ; bare \n keeps the column (LNM off)
     (= 14 (cur s))))
 
 ; --- 3. tabs ---
@@ -77,7 +77,7 @@
 (: s (mkscr 4 10)
  _ (scribe s "0123456789")
  _ (assert
-    (= 9 (cur s))                         ; ten glyphs: cursor STAYS on the last column
+    (= 9 (cur s))                         ; ten glyphs: cursor stays on the last column
     (= 16 (& 16 (gaze s 3)))              ; ... wrap pending
     (= 57 (chat s 9)))
  _ (scribe s "A")
@@ -96,53 +96,53 @@
 ; --- 5. absolute addressing + relative moves, clamped ---
 (: s (mkscr 4 10)
  _ (scribe s "\e[2;5H")
- _ (assert (= 14 (cur s)))                ; CUP is 1-based
+ _ (assert (= 14 (cur s)))                ; cup is 1-based
  _ (scribe s "\e[9;99H")
  _ (assert (= 39 (cur s)))                ; ... and clamps to the grid
  _ (scribe s "\e[H")
  _ (assert (= 0 (cur s)))
- _ (scribe s "\e[2B") _ (assert (= 20 (cur s)))    ; CUD
- _ (scribe s "\e[3C") _ (assert (= 23 (cur s)))    ; CUF
- _ (scribe s "\e[2A") _ (assert (= 3 (cur s)))     ; CUU
+ _ (scribe s "\e[2B") _ (assert (= 20 (cur s)))    ; cud
+ _ (scribe s "\e[3C") _ (assert (= 23 (cur s)))    ; cuf
+ _ (scribe s "\e[2A") _ (assert (= 3 (cur s)))     ; cuu
  _ (scribe s "\e[9A") _ (assert (= 3 (cur s)))     ; clamped at the top
- _ (scribe s "\e[2D") _ (assert (= 1 (cur s)))     ; CUB
+ _ (scribe s "\e[2D") _ (assert (= 1 (cur s)))     ; cub
  _ (scribe s "\e[9C") _ (assert (= 9 (cur s)))     ; clamped in the row
- _ (scribe s "\e[5G") _ (assert (= 4 (cur s)))     ; CHA: column 5
- _ (scribe s "\e[3d") _ (assert (= 24 (cur s)))    ; VPA: row 3, column kept
- _ (scribe s "\e[E")  _ (assert (= 30 (cur s)))    ; CNL: next row home
- _ (scribe s "\e[2F") _ (assert (= 10 (cur s))))   ; CPL: two up, home
+ _ (scribe s "\e[5G") _ (assert (= 4 (cur s)))     ; cha: column 5
+ _ (scribe s "\e[3d") _ (assert (= 24 (cur s)))    ; vpa: row 3, column kept
+ _ (scribe s "\e[E")  _ (assert (= 30 (cur s)))    ; cnl: next row home
+ _ (scribe s "\e[2F") _ (assert (= 10 (cur s))))   ; cpl: two up, home
 
 ; --- 6. erase: display and line, all three shapes ---
 (: s (mkscr 3 10)
  _ (scribe s "0123456789012345678901234567")   ; fill (the last two pend)
  _ (scribe s "\e[2;5H\e[K")
- _ (assert (= "0123      " (rowtx s 1)))       ; EL 0: to end of row
+ _ (assert (= "0123      " (rowtx s 1)))       ; el 0: to end of row
  _ (scribe s "\e[1;5H\e[1K")
- _ (assert (= "     56789" (rowtx s 0)))       ; EL 1: from start, cursor inclusive
+ _ (assert (= "     56789" (rowtx s 0)))       ; el 1: from start, cursor inclusive
  _ (scribe s "\e[3;5H\e[2K")
- _ (assert (= "          " (rowtx s 2))))      ; EL 2: the whole row
+ _ (assert (= "          " (rowtx s 2))))      ; el 2: the whole row
 (: s (mkscr 3 10)
  _ (scribe s "aaaaaaaaaabbbbbbbbbbcccccccc")
  _ (scribe s "\e[2;5H\e[J")
  _ (assert
     (= "aaaaaaaaaa" (rowtx s 0))
     (= "bbbb      " (rowtx s 1))
-    (= "          " (rowtx s 2)))              ; ED 0: cursor to the end
+    (= "          " (rowtx s 2)))              ; ed 0: cursor to the end
  _ (scribe s "\e[1;5H\e[1J")
- _ (assert (= "     aaaaa" (rowtx s 0)))       ; ED 1: start to cursor
+ _ (assert (= "     aaaaa" (rowtx s 0)))       ; ed 1: start to cursor
  _ (scribe s "\e[2J")
- _ (assert (= "          " (rowtx s 0))))      ; ED 2: everything
+ _ (assert (= "          " (rowtx s 0))))      ; ed 2: everything
 
 ; --- 7. edit: insert/delete characters, erase characters ---
 (: s (mkscr 2 10)
  _ (scribe s "abcdefghij")
  _ (scribe s "\e[1;3H\e[2@")
- _ (assert (= "ab  cdefgh" (rowtx s 0)))       ; ICH: room made, tail slides off
+ _ (assert (= "ab  cdefgh" (rowtx s 0)))       ; ich: room made, tail slides off
  _ (scribe s "\e[2P")
- _ (assert (= "abcdefgh  " (rowtx s 0)))       ; DCH: closed back up
+ _ (assert (= "abcdefgh  " (rowtx s 0)))       ; dch: closed back up
  _ (scribe s "\e[3X")
  _ (assert (= "ab   fgh  " (rowtx s 0))
-           (= 2 (cur s))))                     ; ECH blanks in place, cursor still
+           (= 2 (cur s))))                     ; ech blanks in place, cursor still
 
 ; --- 8. insert/delete lines ---
 (: s (mkscr 4 10)
@@ -150,22 +150,22 @@
  _ (scribe s "\e[2;1H\e[L")
  _ (assert
     (= "aaaa      " (rowtx s 0))
-    (= "          " (rowtx s 1))               ; IL opened a blank row
+    (= "          " (rowtx s 1))               ; il opened a blank row
     (= "bbbb      " (rowtx s 2))
     (= "cccc      " (rowtx s 3)))              ; ... and dddd fell off
  _ (scribe s "\e[M")
  _ (assert
-    (= "bbbb      " (rowtx s 1))               ; DL took the blank back out
+    (= "bbbb      " (rowtx s 1))               ; dl took the blank back out
     (= "cccc      " (rowtx s 2))
     (= "          " (rowtx s 3))))
 
-; --- 9. the scroll region: DECSTBM, region-bound feeds, SU/SD, RI ---
+; --- 9. the scroll region: decstbm, region-bound feeds, su/sd, RI ---
 (: s (mkscr 5 10)
  _ (scribe s "top\e[2;1Haa\e[3;1Hbb\e[4;1Hcc\e[5;1Hbot")
  _ (scribe s "\e[2;4r")
  _ (assert
     (= 1 (gaze s 4)) (= 3 (gaze s 5))          ; the region took
-    (= 0 (cur s)))                             ; ... and DECSTBM homes
+    (= 0 (cur s)))                             ; ... and decstbm homes
  _ (scribe s "\e[4;1H\n")                      ; \n at the region's bottom margin
  _ (assert
     (= "top       " (rowtx s 0))               ; above the region: untouched
@@ -178,9 +178,9 @@
     (= "          " (rowtx s 1))               ; the region scrolled down
     (= "bb        " (rowtx s 2))
     (= "top       " (rowtx s 0)))
- _ (scribe s "\e[2S")                          ; SU by two
+ _ (scribe s "\e[2S")                          ; su by two
  _ (assert (= "cc        " (rowtx s 1)))
- _ (scribe s "\e[T")                           ; SD by one
+ _ (scribe s "\e[T")                           ; sd by one
  _ (assert (= "cc        " (rowtx s 2)))
  _ (scribe s "\e[r")                           ; the region opens back up
  _ (assert (= 0 (gaze s 4)) (= 4 (gaze s 5))))
@@ -250,52 +250,52 @@
  _ (scribe s "guest")
  _ (scribe s "\e[?1049l")
  _ (assert
-    (= 0 (chat s 0))                          ; the ground is NOT repainted (one grid,
+    (= 0 (chat s 0))                          ; the ground is not repainted (one grid,
     (= 6 (cur s))                             ;  the honest price) -- but the cursor
     (= 5 (cfg s 8))))                         ;  and pen come back as saved
 
-; --- 15. replies: DSR, DA, and the drain-once law ---
+; --- 15. replies: dsr, da, and the drain-once law ---
 (: s (mkscr 4 10)
  _ (scribe s "\e[3;7H\e[6n")
  _ (assert (= [27 91 51 59 55 82] (reply s))     ; "\e[3;7R"
            (! (reply s)))                        ; drained: quiet
  _ (scribe s "\e[c")
- _ (assert (= [27 91 63 54 99] (reply s)))       ; "\e[?6c", a VT102
+ _ (assert (= [27 91 63 54 99] (reply s)))       ; "\e[?6c", a vt102
  _ (scribe s "\eZ")
  _ (assert (= [27 91 63 54 99] (reply s)))
  _ (scribe s "\e[5n")
  _ (assert (= [27 91 48 110] (reply s))))        ; "\e[0n": all well
 
-; --- 15b. the asks a line editor waits on: colour queries, secondary DA ---
+; --- 15b. the asks a line editor waits on: colour queries, secondary da ---
 ; (silence here cost a real second of buffered keystrokes at zsh startup)
 (: s (mkscr 4 20)
  _ (scribe s "\e]11;?\x07")
  _ (assert (= [27 93 49 49 59 114 103 98 58 48 48 48 48 47 48 48 48 48 47 48 48 48 48 7]
-              (reply s)))                        ; bg: rgb:0000/0000/0000, BEL-terminated
- _ (scribe s "\e]10;?\e\\")                      ; ST-terminated ask, same answer lane
+              (reply s)))                        ; bg: rgb:0000/0000/0000, bel-terminated
+ _ (scribe s "\e]10;?\e\\")                      ; st-terminated ask, same answer lane
  _ (assert (= [27 93 49 48 59 114 103 98 58 99 48 99 48 47 99 48 99 48 47 99 48 99 48 7]
               (reply s)))                        ; fg: rgb:c0c0/c0c0/c0c0
  _ (scribe s "\e]0;just a title\x07")
  _ (assert (! (reply s)))                        ; a title is not a question
  _ (scribe s "\e[>c")
- _ (assert (= [27 91 62 48 59 48 59 48 99] (reply s)))     ; secondary DA
+ _ (assert (= [27 91 62 48 59 48 59 48 99] (reply s)))     ; secondary da
  _ (scribe s "\e[c")
- _ (assert (= [27 91 63 54 99] (reply s))))      ; primary DA unchanged
+ _ (assert (= [27 91 63 54 99] (reply s))))      ; primary da unchanged
 
 ; --- 16. what must be swallowed whole ---
 (: s (mkscr 2 10)
- _ (scribe s "\e]0;a title\x07x")                ; OSC to BEL (\x07 -- \a is no reader escape)
+ _ (scribe s "\e]0;a title\x07x")                ; osc to bel (\x07 -- \a is no reader escape)
  _ (assert (= 120 (chat s 0)))
- _ (scribe s "\e]2;more\e\\y")                   ; OSC to ST
+ _ (scribe s "\e]2;more\e\\y")                   ; osc to st
  _ (assert (= 121 (chat s 1)))
  _ (scribe s "\e(B\e)0\e=\e>z")                  ; charsets + keypad chatter
  _ (assert (= 122 (chat s 2)))
  _ (scribe s "\e[?2004h\e[>1c\e[0 q!")           ; odd modes, intermediates: junked
  _ (assert (= 33 (chat s 3)))
- _ (scribe s "a\x7fb\e[\x7f1D")                  ; DEL: nothing, anywhere (mid-CSI too)
+ _ (scribe s "a\x7fb\e[\x7f1D")                  ; del: nothing, anywhere (mid-CSI too)
  _ (assert (= 97 (chat s 4)) (= 98 (chat s 5)) (= 5 (cur s))))
 
-; --- 17. DECALN: the adjustment screen ---
+; --- 17. decaln: the adjustment screen ---
 (: s (mkscr 3 8)
  _ (scribe s "\e[2;3r\e#8")
  _ (assert
@@ -324,10 +324,10 @@
  _ (scribe s "\x80")                              ; a stray continuation: the ■
  _ (assert (= 254 (chat s 14)))
  _ (scribe s "\xc3\e[Dx")                         ; torn mid-sequence: a ■ lands,
- _ (assert (= 120 (chat s 15))                    ; the ESC rides on -- CUB steps
+ _ (assert (= 120 (chat s 15))                    ; the ESC rides on -- cub steps
            (= 16 (cur s))))                       ; back and x overwrites the ■
 
-; --- 18. RIS: back to the floor ---
+; --- 18. ris: back to the floor ---
 (: s (mkscr 3 8)
  _ (scribe s "\e[31;44;7mxyz\e[2;2r\e[?25l\e[?7l")
  _ (scribe s "\ec")
@@ -352,7 +352,7 @@
  _ (scribe s "\e[1;5r\e[4;1H\n")             ; a region scroll dirties the region
  _ (wet s 0)
  _ (scribe s "\e[2;1H\e[L")
- _ (assert (= 14 (& 14 (wet s 0)))))      ; IL at row 1: rows 1..3
+ _ (assert (= 14 (& 14 (wet s 0)))))      ; il at row 1: rows 1..3
 
 (test_fin ())
 (puts "cb: ok")

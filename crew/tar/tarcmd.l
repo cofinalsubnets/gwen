@@ -5,7 +5,7 @@
 ;   love tar tzf A.tar.gz         list, one path a line
 ;
 ; tools/tgz.l is the same two engines behind c|x|t; this is the spelling a hand types.
-; our DEFLATE lands a few percent above `gzip -9`; the numbers live in lib/gz.l.
+; our deflate lands a few percent above `gzip -9`; the numbers live in lib/gz.l.
 ;
 ; the module wrap is not decoration: `use` splices a module's names into the current
 ; layer, so unwrapped these two asks would put tar's and gz's names on the dist cat's
