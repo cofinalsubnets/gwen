@@ -357,6 +357,10 @@ static ai_inline bool ai_nilp(struct ai *g, word x) {
   if (mintp(x)) return true;                         // a bare point nets nothing
   return ai_net(g, x).re <= 0; }
 
+// a NaN is love's (): love admits no irreflexive value, so = reads two of them as one,
+// and it nets nothing, exactly as every other point does (ai_net's chain arm says so).
+static ai_inline bool ai_same_flo(ai_flo_t a, ai_flo_t b) { return a == b || (a != a && b != b); }
+static ai_inline ai_flo_t ai_net_flo(ai_flo_t v) { return v != v ? 0 : v; }
 // truncation toward zero / float remainder; pure and freestanding-safe (no libm)
 static ai_inline ai_flo_t ai_trunc(ai_flo_t x) {
  if (x != x) return x;
@@ -419,10 +423,10 @@ static ai_inline ai_flo_t gem_get(word x) {
 // the law, the one real-float box-write: NaN collapses to 0 so the order stays total and
 // !x == (0 = $x) holds. inf rides through. glaze's jit lanes emit the same collapse.
 static ai_inline word mk_gem(ai_word **hpp, ai_flo_t v) {
+ if (v != v) return ZeroPoint;   // nothing is unequal to itself, come on IEEE, give me a break
  struct ai_gem *f = (struct ai_gem*) *hpp;
  *hpp += gem_req;
  f->ap = lvm_gembox;
- if (v != v) v = 0; // nothing is unequal to itself, come on IEEE, give me a break
  f->w = ((ai_flo_pun){.d = v}).u;
  return word(f); }
 

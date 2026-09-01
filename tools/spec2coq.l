@@ -328,7 +328,7 @@
    ; -- no big kind -- so an expr that overflows a charm (e.g. (* 2 2^61) = 2^62) is
    ; unmodellable for a charm? test and must skip, not masquerade as Vz. the whole binop
    ; row, not just +/-/*: a narrow op widens on a zero divisor -- (% 7 0) is 0.0 and
-   ; (// 7 0) is ieee-inf -- and the kind lattice here is syntactic, so it cannot see that.
+   ; (// 7 0) is infinity -- and the kind lattice here is syntactic, so it cannot see that.
    ; the value can, which is what this asks. (used by tk below.)
    (concrete-int? x) (? (two? x) (len3? x && binop <x &&
                                   concrete-int? <>x && concrete-int? <>>x)

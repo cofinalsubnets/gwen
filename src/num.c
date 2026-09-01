@@ -1204,9 +1204,9 @@ static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
   default: return (intptr_t)((uintptr_t) a + (uintptr_t) b); } } // vop_add
 intptr_t vcmp_flo(int op, ai_flo_t a, ai_flo_t b) {
  switch (op) {
-  case vop_lt: return a < b; case vop_le: return a <= b;
-  case vop_gt: return a > b; case vop_ge: return a >= b;
-  default: return a == b; } }                   // vop_eq
+  case vop_lt: return a < b; case vop_le: return a <= b;   // the ordered four keep IEEE:
+  case vop_gt: return a > b; case vop_ge: return a >= b;   // () is not less than itself either
+  default: return ai_same_flo(a, b); } }        // vop_eq -- but it IS equal to itself
 intptr_t vcmp_int(int op, intptr_t a, intptr_t b) {
  switch (op) {
   case vop_lt: return a < b; case vop_le: return a <= b;

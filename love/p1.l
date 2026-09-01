@@ -29,7 +29,7 @@
              (go 255 ()))
    ; 12 is spelled out, here and in every class below: love's escapes are
    ; n t r e 0 x and nothing else, so "\f" in a love string is the letter f --
-   ; which would quietly make f whitespace and eat it out of `ieee-inf`.
+   ; which would quietly make f whitespace and eat it out of `infinity`.
    (p1-ws? c)   (& (p1-cls c) 2)
    (p1-dig? c)  (? (<= 48 c) (<= c 57) ())
    (p1-hex? c)  (? (p1-dig? c) 1 (? (<= 97 (p1-low c)) (<= (p1-low c) 102) ()))
@@ -139,8 +139,8 @@
      (: n (p1-int tok)
         s (string tok)
         (? (link? n) (cup n)
-           (= s "ieee-inf") (/ 1.0 0.0)
-           (= s "-ieee-inf") (/ -1.0 0.0)
+           (= s "infinity") (/ 1.0 0.0)
+           (= s "-infinity") (/ -1.0 0.0)
            (: lead (? (nil? (link? tok)) 0
                       (& (p1-cls (cap tok)) 64) (? (link? (cup tok)) (cap (cup tok)) 0)
                       (cap tok))

@@ -783,14 +783,14 @@ static ai_noinline bool tray_eq(struct ai *g, word a, word b) {
             aim = va->type == ai_C ? pa[2*i+1] : 0,
             bre = vb->type == ai_C ? pb[2*i] : tray_get_flo(vb, i),
             bim = vb->type == ai_C ? pb[2*i+1] : 0;
-   if (are != bre || aim != bim) return false; }
+   if (!ai_same_flo(are, bre) || !ai_same_flo(aim, bim)) return false; }
   return true; }
  if (va->type == ai_Z && vb->type == ai_Z) {        // exact: no double round-trip
   for (uintptr_t i = 0; i < n; i++)
    if (tray_get_int(va, i) != tray_get_int(vb, i)) return false;
   return true; }
  for (uintptr_t i = 0; i < n; i++)                  // a float on either side: as doubles
-  if (tray_get_flo(va, i) != tray_get_flo(vb, i)) return false;
+  if (!ai_same_flo(tray_get_flo(va, i), tray_get_flo(vb, i))) return false;
  return true; }
 
 // (= a b): value-equality with numeric promotion across the tower; falls through
@@ -1041,7 +1041,7 @@ static ai_noinline void cbin_fill(struct ai_tray *r, word a, word b, int op, boo
   cbin_part(btray, vb, sbr, sbi, ob, &br, &bi);
   if (cmp) {                                   // (re,im) lexicographic -- the same order
    int t;                                      // cmp3's complex arm gives a scalar pair
-   if (op == vop_eq) t = ar == br && ai == bi;     // kept exact (a NaN is equal to nothing)
+   if (op == vop_eq) t = ai_same_flo(ar, br) && ai_same_flo(ai, bi);   // ..and a NaN is () here too
    else {
     int c = ar < br ? -1 : ar > br ? 1 : ai < bi ? -1 : ai > bi ? 1 : 0;
     t = op == vop_lt ? c < 0 : op == vop_le ? c <= 0

@@ -100,11 +100,11 @@
           _ (go 0) _ (put o 46)
           (? (dxp < sig) (say o (snip ss dxp sig)) (put o 48)))   ; integral: force "X.0", never a fixnum face
        (: _ (say o "0.") _ (zeros o (0 - dxp)) (say o ss))))
-  (pgem o v) (? !(v <= v) (say o "ieee-nan")
-     ; the sign is the bit, not v < 0: -0.0 < 0 is false, and a comparison there
-     ; printed "0.0" -- the one value the roundtrip law lost.
+  ; the sign is the bit, not v < 0: -0.0 < 0 is false, and a comparison there
+  ; printed "0.0" -- the one value the roundtrip law lost.
+  (pgem o v)
      (: _ (? (v < 0 || (v = 0 && (1.0 / v) < 0)) (put o 45) 0) a (abs v)
-        (? (a = inf) (say o "ieee-inf") (a = 0) (say o "0.0") (pgem2 o a))))
+        (? (a = inf) (say o "infinity") (a = 0) (say o "0.0") (pgem2 o a)))
   ; a twin prints infix, parenthesized: (re ~ im) is self-delimiting, so it reads
   ; straight back wherever the printer put it.
   (ptwin o x) (: _ (put o 40) _ (pgem o (re x)) _ (say o " ~ ") _ (pgem o (im x)) (put o 41))

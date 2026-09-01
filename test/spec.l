@@ -124,7 +124,8 @@
 (hear test-strict)
 
 ; --- arithmetic --- + - * / // % infix; charm fast path, overflow grows charm->sun->big;
-; `/` is true division (inexact int quotient -> float); 0/0 = 0; bitwise << >> & | ^ are exact
+; `/` is true division (inexact int quotient -> float); 0/0 is () -- a NaN is the nothing,
+; love admitting no value unequal to itself; bitwise << >> & | ^ are exact
 ; over the whole integer tower: two's complement with the sign extended forever, so a negative
 ; operand carries ones above its magnitude. << is x * 2^k and promotes rather than dropping the
 ; bits off the word, the count is exact too ((<< 3 200) is 3 * 2^200), and a negative count turns
@@ -134,13 +135,14 @@
 (assert
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
  (1.0 = 7.0 % 2.0) (0.0 = 7.5 % 2.5) (-1.0 = -7.0 % 2.0)   ; % rides fmod, so it holds on the
- (gem? (% 7 0)) (gem? (% 7.0 0.0))                         ; float lane too, sign following the
-                                                           ; dividend; and by zero it is a gem, not a scare
+ (() = (% 7 0)) (() = (% 7.0 0.0))                         ; float lane too, sign following the
+                                                           ; dividend; and by zero it is fmod's NaN,
+                                                           ; which is the nothing -- never a scare
  (2 = 4 / 2) (charm? (4 / 2)) (-2 = (// -5 2))
  (-5 = ((- 0) 5)) (0.25 = ((/ 1) 4)) ((-1 ~ -2) = ((- 0) (1 ~ 2))) ; the sections are the monadics
- !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (0 = (/ 0 0))
- (ieee-inf = 1 / 0) ("ieee-inf" = (show (1 / 0))) ("-ieee-inf" = (show (-1 / 0)))
- (? word ("1.7976931348623157e308" = (show 1.7976931348623157e308)) 1)  ; the whole finite range prints digits -- only true infinity wears ieee-inf
+ !(charm? (2 * 2305843009213693952)) (gem? (1 / 0)) (? word (1e308 < 1 / 0) 1) (() = (/ 0 0))
+ (infinity = 1 / 0) ("infinity" = (show (1 / 0))) ("-infinity" = (show (-1 / 0)))
+ (? word ("1.7976931348623157e308" = (show 1.7976931348623157e308)) 1)  ; the whole finite range prints digits -- only true infinity wears infinity
  ; the printer is shortest-roundtrip (exact Steele & White): the fewest digits
  ; that read back to the same gem, so show never conflates neighbors and
  ; (read (show x)) = x for every finite gem. the word guard: these faces are
@@ -159,7 +161,13 @@
  (? word (0x1.8p-1075 = 5e-324) 1)                      ; past the tie, it rounds up
  (? word (0x1.fffffffffffffp+1023 = 1.7976931348623157e308) 1)
  (0x10 = 16) (nom? '0x)                    ; 0x10 is the integer lane; a bare 0x a symbol
- ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0)) (nom? 'inf) (nom? 'nan) (nom? 'ieee-nan)
+ ((/ 0 0) = (/ 0 0)) !(/ 0 0) (0 = $(/ 0 0))   ; reflexive, false, and nets nothing
+ (nom? 'inf) (nom? 'nan)                       ; the short spellings stay free names: `infinity`
+ !(nom? 'infinity) (gem? 'infinity)            ; is the one the reader spends, and it reads a value
+ ; ..and it is the nothing in an array too, where the bits stay NaN: a peep gives (), it
+ ; shows as (), it nets nothing so `?` reads it false, and = holds reflexively over it
+ (: t (@(0.0) / @(0.0)) (&& (= t t) (= () (peep t 0 0)) ("@(())" = (show t))
+                            (nil? t) !(= t @(0.0))))
  ; bignum // and % ride Knuth-D long division, whose 128/64 step is one `divq` on x86-64 and a
  ; soft divide elsewhere; `show` on a big divides too (the decimal printer), so it checks the same lane.
  (1267650591354675262013 = (// (100 2) 1000000007)) (976371285 = (100 2) % 1000000007)
@@ -393,7 +401,7 @@
 ; so a galaxy of bigs routes through the promoting scalar lane and stays exact. this is
 ; the lattice's algebra reading, not an exception to it: Z/2^w is the strongest +/* theory
 ; contiguous limbs afford, the way Z is the strongest boxed cells afford. a gem-tray is
-; not in the word lane either -- floats saturate to ieee-inf.
+; not in the word lane either -- floats saturate to infinity.
 (assert
  (6 = (tally (star-tray '(2 3) 0))) (2 = (rank (star-tray '(2 3) 0))) ('(2 3) = (shape (star-tray '(2 3) 0)))
  (star-tray = (tier (star-tray '(2 3) 0))) (20 = (peep @(10 20 30) 1 -1)) (-1 = (peep @(10 20 30) 9 -1))
@@ -416,7 +424,7 @@
  (big? (3 + (200 2)))                             ; where the star lane grows exact instead
  (: o (array '(2) (200 2) (200 2))                ; ...as does an object tray: boxed cells, not limbs
     (aall (o = ((o + (array '(2) 1 1)) - (array '(2) 1 1)))))   ; exact round trip at 2^200
- (? word ("@(ieee-inf ieee-inf)" = (show (@(1.0e308 1.0e308) * @(10.0 10.0)))) 1)  ; a gem-tray saturates, never wraps
+ (? word ("@(infinity infinity)" = (show (@(1.0e308 1.0e308) * @(10.0 10.0)))) 1)  ; a gem-tray saturates, never wraps
  (? word (@(-9223372036854775808 0) = (@(9223372036854775807 0) + @(1 0))) 1)   ; max+1 -> min
  (? word (@(9223372036854775807 0) = (@(-9223372036854775808 0) - @(1 0))) 1)   ; ...min-1 -> max
  ; the bitwise five broadcast too -- the word lane, elementwise

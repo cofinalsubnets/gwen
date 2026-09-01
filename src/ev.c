@@ -1790,12 +1790,12 @@ struct ai_zn ai_net(struct ai *g, word x) {
       uintptr_t i, n = tray_nelem(v);
       struct ai_zn s = zn(0, 0);                                  // rank>=1 array -> Σ elem
       if (v->type == ai_C) { ai_flo_t *d = tray_data(v);
-        for (i = 0; i < n; i++) s.re += d[2*i], s.im += d[2*i+1];
+        for (i = 0; i < n; i++) s.re += ai_net_flo(d[2*i]), s.im += ai_net_flo(d[2*i+1]);
         return s; }
       if (v->type == ai_O)
         for (i = 0; i < n; i++) { struct ai_zn e = ai_net(g, tray_get_obj(v, i));
           s.re += e.re, s.im += e.im; }
-      else for (i = 0; i < n; i++) s.re += tray_get_flo(v, i);
+      else for (i = 0; i < n; i++) s.re += ai_net_flo(tray_get_flo(v, i));
       return s; } }
   return zn(1, 0); }
 // $: the net observed once -- max(0, ceil) of its real part

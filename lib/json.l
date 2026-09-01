@@ -196,7 +196,7 @@
                  ((: (go l acc) (? (two? l) (go >l ((acc + ",") + <l)) acc)) >xs <xs))
 
    ; show is the whole number lane -- it already lays a charm, a sun, a big and a gem down
-   ; the way json spells them. the guard is for what json has no word for: ieee-inf and
+   ; the way json spells them. the guard is for what json has no word for: infinity and
    ; friends show as names, so anything not starting with a digit or a minus becomes null
    ; rather than riding out as text that no parser would take back.
    (jnumshow v) (: t (show v)

@@ -813,9 +813,9 @@ static ai_inline struct ai *ioread1sym(struct ai*g, uintptr_t d, int c) {
       // token leads with a digit (a sign or dot may front it).
       char *tx = txt(s);
       double dv;
-      if (n == 8 && !memcmp(tx, "ieee-inf", 8)) dv = __builtin_inf();
-      else if (n == 9 && !memcmp(tx, "-ieee-inf", 9)) dv = -__builtin_inf();
-      // no ieee-nan twin: mk_gem collapses NaN to 0, so there is no NaN value to
+      if (n == 8 && !memcmp(tx, "infinity", 8)) dv = __builtin_inf();
+      else if (n == 9 && !memcmp(tx, "-infinity", 9)) dv = -__builtin_inf();
+      // no ieee-nan twin: mk_gem answers () for a NaN, so there is no NaN value to
       // name -- "ieee-nan" stays an honest symbol, free for binding.
       else {
        char c0 = *tx == '+' || *tx == '-' ? tx[1] : *tx;

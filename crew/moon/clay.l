@@ -183,7 +183,7 @@
    (cnum n) (show n)                            ; a function, for cnested?'s reason below
    ; a float literal must look like one to a C lexer: love's shortest-roundtrip
    ; printer says `7` for 7.0 and `1e308` for the big one, so `.0` is owed to the
-   ; first and would corrupt the second. an infinity prints `ieee-inf`, for which C
+   ; first and would corrupt the second. an infinity prints `infinity`, for which C
    ; has no literal -- so one is sayable exactly when its characters are C's.
    (cfinite? x) (: s (show x)
                    !(any (\ i !(member? (s i) '(46 69 101 43 45 48 49 50 51 52 53 54 55 56 57)))

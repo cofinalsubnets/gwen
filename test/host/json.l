@@ -37,7 +37,7 @@
 (assert
  ("1.5" = (json-rt "1.5")) ("-3" = (json-rt "-3"))
  ("123456789012345678901234567890" = (json-rt "123456789012345678901234567890"))
- ("null" = (json-show (1.0e308 * 10.0))))         ; ieee-inf has no json spelling
+ ("null" = (json-show (1.0e308 * 10.0))))         ; infinity has no json spelling
 
 ; strings: the named escapes both ways, \uxxxx surrogates rejoined to utf-8
 (assert

@@ -14,6 +14,6 @@ float asinf(float), acosf(float), atanf(float);
 float expf(float), logf(float), log2f(float), log10f(float);
 float sqrtf(float), fabsf(float), floorf(float), ceilf(float);
 float atan2f(float, float), powf(float, float), fmodf(float, float);
-#define HUGE_VAL 1e999   /* overflows to +inf in the lexer (ieee-inf; fbits images it) */
+#define HUGE_VAL 1e999   /* overflows to +inf in the lexer (infinity; fbits images it) */
 #define HUGE_VALF 1e999f
 #endif

@@ -157,7 +157,7 @@
 ; weq, weqtopaths, and its section weqpathsweq all fall out by computation --
 ; UnivalenceAxiom.v's first theorems. (UniMath's neg/negf are SKIPPED: `neg`
 ; is the prel's monadic word for -x, and a corpus global would shadow it
-; for every test compiled after this file -- the ieee-inf lesson again.)
+; for every test compiled after this file -- the infinity lesson again.)
 (assert
  (defn total2_paths_f
    (pi A UU (pi P (pi x A UU)
