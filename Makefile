@@ -478,12 +478,15 @@ $(k_odir)/kproject.l: $(kproject_l) $(k_odir)/kproject.list
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(kproject_l)); } > $@
 
+# at the host's own arch there is no second kernel build: $(kart_o) is linked into the
+# shipped love already, so the elf is projected out of that binary. $(k_pie) is the lane
+# for a machine this one cannot run, or a face the artifact does not wear (K_TEST).
 k_pie_in = $(k_pie)
 k_pie_dep =
 ifndef K_TEST
 ifeq ($a,$(hosta))
 k_pie_in = $(ho)/love
-# the projection carries the baked image, so it must follow the in-place bake
+# `love bake` rewrites $(ho)/love in place, so the projection is ordered behind the stamp
 k_pie_dep = $(kcc_dep)
 endif
 endif
