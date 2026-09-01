@@ -33,6 +33,15 @@ endif
 # to the simply-expanded $(hosta) keeps the override and spends one fork for the tree.
 a ?= $(hosta)
 
+# arch -> the holo backend that lays for it, and the mksys entry that answers its machine
+# tail. one table, three keys: $a (the kernel), $(hosta) (the host's src.o and rt.o), $(xa).
+tgt_x86_64    = amd64
+tgt_aarch64   = arm64
+tgt_riscv64   = rv64
+mksys_x86_64  = mksys
+mksys_aarch64 = mksys-arm64
+mksys_riscv64 = mksys-riscv
+
 # THE VERSION, the checked-in ./VERSION and the whole of it -- what a build is called,
 # moving only when a release does. No VCS suffix anywhere: dist names the tarball for it,
 # love_version.h compiles it into love.o, and `.comment` carries the same string (which

@@ -3,7 +3,6 @@ include $(R)/mk/common.mk
 
 CCACHE ?= $(shell command -v ccache 2>/dev/null)
 
-cc_named := $(filter command line environment override,$(origin CC))
 ifneq ($(words $(CC)),1)
 CCACHE :=
 endif
@@ -136,14 +135,13 @@ $(lib_h) $(holo_h) out/lib/rune.h: $(love0)
 ho = out/host$(hsuf)
 h_o = $(love_c:$(R)/%.c=$(ho)/%.o)
 host_o = $(host_c:$(R)/%.c=$(ho)/%.o)
-host_cc = $(CC)
-hcc = LOVE_NO_IMAGE= $(host_cc) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Isrc -Iout/lib
+hcc = LOVE_NO_IMAGE= $(CC) $(ai_cflags) $(GCDBG) -Dai_tco=$(tco) -fpic -I$(ho) -I. -Isrc -Iout/lib
 image_ldflags = -Wl,--section-start=.love.image=0x2000000
 .PHONY: force_hostcc
 force_hostcc: ;
 $(ho)/.hostcc: force_hostcc
 	@mkdir -p $(ho)
-	@tf=$@.$$$$.tmp; printf '%s\n' '$(host_cc) $(image_ldflags)' > $$tf; \
+	@tf=$@.$$$$.tmp; printf '%s\n' '$(CC) $(image_ldflags)' > $$tf; \
 	 $(note)
 host: $(ho)/love $(ho)/love.baked $(ho)/love.1 $(ho)/cook.1
 love0: $(love0)
@@ -163,8 +161,8 @@ $(ho)/liblove.a: $(h_o)
 	@mkdir -p $(dir $@)
 	@rm -f $@; ar rcs $@ $^
 
-love0_host_o = $(patsubst $(R)/%.c,out/host/0/%.o,$(filter-out $(R)/src/cats.c,$(host_c)))
-love0_o = $(love0_host_o) $(love_c:$(R)/%.c=out/host/0/%.o)   # pinned (not $(ho)/0)
+# pinned to out/host/0, never $(ho)/0: love0 is one binary whatever HCC and tco say
+love0_o = $(patsubst $(R)/%.c,out/host/0/%.o,$(filter-out $(R)/src/cats.c,$(host_c)) $(love_c))
 out/host/0/src/main.o: $(boot_h)
 out/host/0/src/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 boot_cc = $(CCACHE) $(CC) $(ai_cflags) -fPIE -DLoveBoot -Dai_tco=0 -Dai_data_section=0 -DAiVersion='"$(love_base)+bootstrap"' -I. -Isrc -Iout/lib
@@ -203,7 +201,6 @@ $(ho)/src/main.o $(ho)/src/ustar.o: $(R)/src/ustar.h
 # src/cb.c rides the crew/quay sources by unity include -- recompile when they move.
 $(ho)/src/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 
-boot_love = $(love0)
 moon0 = $(love0) wake out/host/mooncc0.image mooncc $(GCDBG)
 moon0_dep = out/host/mooncc0.image
 moon_d = $(ho)/moon
@@ -227,11 +224,6 @@ $(moon_d)/m_%.o: crew/moon/lib/math/%.c $(moon0_dep)
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
 	@$(moon0) -Icrew/moon/lib/math -Icrew/moon/include -c $< $@
-ifeq ($(hosta),aarch64)
-mksys_e = mksys-arm64
-else
-mksys_e = mksys
-endif
 mksys_l = crew/kore/text.l crew/kore/u.l crew/kore/asbook.l \
           crew/holo/amd64.l crew/holo/arm64.l crew/holo/rv64.l \
           crew/holo/elf.l crew/holo/obj.l crew/moon/lib/mksys.l
@@ -246,7 +238,7 @@ out/host/.mksys-cat.l: $(mksys_l) out/host/.mksys-cat.list
 $(moon_d)/sys.o: out/host/.mksys-cat.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(boot_love) -l out/host/.mksys-cat.l -q -e "((from 'moon '$(mksys_e)) \"$@\")" && test -s $@
+	@LOVE_NO_IMAGE= $(love0) -l out/host/.mksys-cat.l -q -e "((from 'moon '$(mksys_$(hosta))) \"$@\")" && test -s $@
 ifneq ($(HCC),)
 $(ho)/love $(ho)/love.cand: $(host_o) $(ho)/liblove.a $(ho)/.hostcc $(R)/src/love_data.ld $(baked_h)
 	@echo 'LD	'$@
@@ -335,17 +327,10 @@ dist_drop = bench port wasm
 force_src: ;
 $(dist_source): force_src $(love0)
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(boot_love) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
+	@LOVE_NO_IMAGE= LOVE_BUDGET_MB=256 $(love0) tools/selfpack.l $@ love-$(dist_ver) $(dist_stamp) $(dist_drop)
 
-src_arch = amd64
-ifeq ($(hosta),aarch64)
-src_arch = arm64
-endif
-ifeq ($(hosta),riscv64)
-src_arch = rv64
-endif
 out/host/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(love0)
-	@$(boot_love) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(src_arch)
+	@$(love0) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(tgt_$(hosta))
 
 rt_slice = $(wildcard crew/moon/include/*.h crew/moon/include/*/*.h \
                       crew/moon/lib/*.l \
@@ -353,21 +338,15 @@ rt_slice = $(wildcard crew/moon/include/*.h crew/moon/include/*/*.h \
                       crew/moon/lib/nolibc/*/*.c crew/moon/lib/nolibc/*/*.h \
                       crew/moon/lib/math/*.c)
 out/host/rt.o: $(rt_slice) tools/mkrt.l out/host/mooncc0.image $(love0)
-	@$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(src_arch)
+	@$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(tgt_$(hosta))
 
-xtgt_x86_64   = amd64
-xtgt_aarch64  = arm64
-xtgt_riscv64  = rv64
 xqemu_x86_64  = qemu-x86_64
 xqemu_aarch64 = qemu-aarch64
 xqemu_riscv64 = qemu-riscv64
-xmksys_x86_64  = mksys
-xmksys_aarch64 = mksys-arm64
-xmksys_riscv64 = mksys-riscv
 xa ?= $(if $(filter aarch64,$a),x86_64,aarch64)
-xtgt   = $(xtgt_$(xa))
+xtgt   = $(tgt_$(xa))
 xqemu  = $(xqemu_$(xa))
-xmksys = $(xmksys_$(xa))
+xmksys = $(mksys_$(xa))
 ifeq ($(xtgt),)
 $(error x-lane: no such arch `$(xa)' -- the roster carries x86_64 aarch64 riscv64)
 endif
@@ -401,7 +380,7 @@ $(xd)/sys.o: out/host/.mksys-cat.l $(love0)
 	@$(love0) -l out/host/.mksys-cat.l -q -e "((from 'moon '$(xmksys)) \"$@\")" && test -s $@
 
 $(xd)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $(love0)
-	@$(boot_love) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xtgt)
+	@$(love0) -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(xtgt)
 $(xd)/rt.o: $(rt_slice) tools/mkrt.l out/host/mooncc0.image $(love0)
 	@$(love0) wake out/host/mooncc0.image tools/mkrt.l $@ $(xtgt)
 $(xd)/love: $(xobjs) $(xd)/src.o $(xd)/rt.o out/lib/readme.bin
@@ -411,7 +390,7 @@ fat = out/dist/love-fat
 .PHONY: dist-fat
 dist-fat: $(ho)/love.baked $(xd)/love tools/fatpack.l
 	@mkdir -p out/dist
-	@$(boot_love) tools/fatpack.l $(fat) $a $(ho)/love $(xa) $(xd)/love
+	@$(love0) tools/fatpack.l $(fat) $a $(ho)/love $(xa) $(xd)/love
 	@chmod +x $(fat)
 
 huefiles = crew/vi/config.l crew/vi/hue.l tools/hue2vim.l
@@ -425,7 +404,6 @@ syntax: $(ho)/syntax.vim
 include $(R)/mk/distro.mk
 
 ko = out/free
-dl = dl
 
 # every gate and verb below is phony: one roster, so adding one is one line and not two.
 .PHONY: force_kfs_list kmain_o run run-$a run-sh run-headless init-container \
@@ -441,8 +419,9 @@ KCC ?= LOVE_NO_IMAGE= $(ho)/love mooncc
 k_arch_c = $(wildcard $(R)/src/$a_*.c)
 k_free_c = $R/src/kmain.c $R/src/blk.c $R/src/sys.c
 k_host_c = $(patsubst %,$R/src/%.c,main cats cb image mem hash sock tls deflate inflate src posix seat ustar)
-k_quay_c = $R/crew/quay/cga_8x8.c $R/crew/quay/moderndos_8x16.c $R/crew/quay/paint.c
-k_shared_c = $(love_c) $(k_quay_c) $(c_c)
+k_shared_c = $(love_c) \
+  $R/crew/quay/cga_8x8.c $R/crew/quay/moderndos_8x16.c $R/crew/quay/paint.c \
+  $(c_c)
 k_h = $(love_h) $(R)/src/k.h $(R)/src/ustar.h $(wildcard *.h $(R)/src/$a_*.h)
 
 k_odir = $(ko)/$a$(ksuf)
@@ -456,13 +435,9 @@ k_host_o = $(k_host_c:$(R)/%.c=$(k_odir)/%.o)
 k_lay_o = $(k_odir)/$a/vec.o
 k_boot_o = $(k_odir)/$a/boot.o
 k_tail_o = $(k_odir)/$a/sys.o
-k_rt_o = $(k_odir)/rt.o
-ifndef K_TEST
-k_src_o = $(k_odir)/src.o
-endif
-k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_host_o) $(k_lay_o) $(k_tail_o) $(k_rt_o) $(k_src_o) $(k_doom_o)
+k_o = $(k_shared_o) $(k_arch_o) $(k_free_o) $(k_host_o) $(k_lay_o) $(k_tail_o) \
+  $(k_odir)/rt.o $(if $(K_TEST),,$(k_odir)/src.o) $(k_doom_o)
 
-kcflags =
 kcppflags := \
   -I$(k_odir) \
   -I. -Isrc -I$(R)/out/host -Iout/lib -I$(R)/crew/quay -I$(R) \
@@ -472,7 +447,7 @@ ifdef K_TEST
 # tail-threaded, matching the real kernel and the host; love0 stays the trampoline lane.
 kcppflags += -DK_TEST -Dai_tco=1
 endif
-kcc = $(KCC) $(kcflags) $(kcppflags) -t $(k_be_$a)
+kcc = $(KCC) $(kcppflags) -t $(tgt_$a)
 # ours has to exist before it can compile anything.
 kcc_dep = $(ho)/love.baked
 
@@ -482,15 +457,15 @@ $(k_odir)/src/cb.o: crew/quay/quay.c crew/quay/nif.c crew/quay/quay.h
 $(k_odir)/rt.o: $(rt_slice) tools/mkrt.l $m
 	@echo 'LOVE	'$@
 	@mkdir -p "$(dir $@)"
-	@$m tools/mkrt.l $@ $(k_be_$a)
+	@$m tools/mkrt.l $@ $(tgt_$a)
 $(k_odir)/src.o: $(dist_source) tools/mksrc.l out/host/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(k_be_$a)
+	@LOVE_NO_IMAGE= $m -l out/host/.mksys-cat.l tools/mksrc.l $(dist_source) $@ $(tgt_$a)
 $(k_pie): $(k_o) $m
 	@echo 'MOON	'$@
 	@mkdir -p "$(dir $@)"
-	@$(KCC) -pie -t $(k_be_$a) $(k_o) -o $@
+	@$(KCC) -pie -t $(tgt_$a) $(k_o) -o $@
 kproject_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
   $R/crew/holo/elf.l $R/crew/holo/obj.l $R/crew/holo/link.l $R/tools/kproject.l
 $(k_odir)/kproject.list: force_dist_list
@@ -570,7 +545,7 @@ $(k_odir)/doom/%.o: $(doom_d)/%.c $(kcc_dep)
 $(k_odir)/doom/wad.o: $R/dl/doom1.wad tools/mkblob.l out/host/.mksys-cat.l $m
 	@echo 'MKBLOB	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $m -l out/host/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(k_be_$a)
+	@LOVE_NO_IMAGE= $m -l out/host/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(tgt_$a)
 # and the same set on the KART lane, which is where the host's own kernel is
 # built (plan C2: the artifact carries it) -- so `make kernel DOOM=1` at $(hosta)
 # rides these and the cross odir rides the rows above.
@@ -585,7 +560,7 @@ $(moon_d)/kd_%.o: $(doom_d)/%.c $(moon0_dep)
 $(moon_d)/kd_wad.o: $R/dl/doom1.wad tools/mkblob.l out/host/.mksys-cat.l $(love0)
 	@echo 'MKBLOB	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(boot_love) -l out/host/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(k_be_$(hosta))
+	@LOVE_NO_IMAGE= $(love0) -l out/host/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(tgt_$(hosta))
 endif
 
 $(moon_d)/k_%.o: $R/src/%.c $(kart_h) $(kart_bake) $(moon0_dep)
@@ -600,16 +575,14 @@ $(moon_d)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
 $(moon_d)/kvec.o: $(ko)/$(hosta)/mkvec.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(boot_love) -l $< -q -e '(lay-vec "$@" "$(hosta)")' && test -s $@
+	@LOVE_NO_IMAGE= $(love0) -l $< -q -e '(lay-vec "$@" "$(hosta)")' && test -s $@
 $(ho)/love $(ho)/love.cand: $(kart_o)
 
 $(k_odir)/src/love.o: out/lib/love_version.h
 $(k_odir)/src/love.o: kcppflags += -DAiHaveVersionH
 
-k_be_x86_64 = amd64
-k_be_aarch64 = arm64
 klay_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
-  $R/crew/holo/$(k_be_$a).l $R/crew/holo/elf.l $R/crew/holo/obj.l
+  $R/crew/holo/$(tgt_$a).l $R/crew/holo/elf.l $R/crew/holo/obj.l
 $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/src/%.l $(klay_l)
 	@echo 'CAT	'$@
 	@mkdir -p "$(dir $@)"
@@ -633,7 +606,7 @@ $(xd)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
 # the twin's own cat, the shape above worn at $(xa): the kernel's is cut at $a
 # and this is the other machine. one target, so an ordinary rule serves.
 xklay_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
-  $R/crew/holo/$(k_be_$(xa)).l $R/crew/holo/elf.l $R/crew/holo/obj.l
+  $R/crew/holo/$(tgt_$(xa)).l $R/crew/holo/elf.l $R/crew/holo/obj.l
 $(xd)/mkvec.l: $R/src/mkvec.l $(xklay_l)
 	@echo 'CAT	'$@
 	@mkdir -p "$(dir $@)"
@@ -642,7 +615,7 @@ $(xd)/mkvec.l: $R/src/mkvec.l $(xklay_l)
 $(xd)/kvec.o: $(xd)/mkvec.l $(love0)
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(boot_love) -l $< -q -e '(lay-vec "$@" "$(xa)")' && test -s $@
+	@LOVE_NO_IMAGE= $(love0) -l $< -q -e '(lay-vec "$@" "$(xa)")' && test -s $@
 $(xd)/love: $(xkart_o)
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
@@ -654,23 +627,21 @@ $(k_lay_o) $(k_boot_o): $(k_odir)/$a/%.o: $(k_odir)/mk%.l $m
 
 # the machine tail rides the host's own cat (flavour-neutral, one cut for every
 # consumer); only the entry names the arch.
-k_mksys_x86_64 = mksys
-k_mksys_aarch64 = mksys-arm64
 $(k_tail_o): out/host/.mksys-cat.l $m
 	@echo 'HOLO	'$@
 	@mkdir -p "$(dir $@)"
-	@$m -l out/host/.mksys-cat.l -q -e "((from 'moon '$(k_mksys_$a)) \"$@\")" && test -s $@
+	@$m -l out/host/.mksys-cat.l -q -e "((from 'moon '$(mksys_$a)) \"$@\")" && test -s $@
 
 k_kvm = $(if $(and $(wildcard /dev/kvm),$(filter x86_64,$a),$(filter x86_64,$(shell uname -m))),-enable-kvm -cpu host,)
 k_qemu_x86_64 = -M q35 -serial stdio
-k_qemu_risc = -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
-k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihosting $(k_qemu_risc)
+k_qemu_aarch64 = -M virt,gic-version=2 -cpu cortex-a72 -serial stdio -semihosting \
+  -device ramfb -device qemu-xhci -device usb-kbd -device usb-mouse
 k_qemu = qemu-system-$a -m 256M $(k_qemu_$a) $(k_kvm)
-k_fw = -drive if=pflash,unit=0,format=raw,file=$(dl)/edk2-ovmf/ovmf-code-$a.fd,readonly=on
+k_fw = -drive if=pflash,unit=0,format=raw,file=dl/edk2-ovmf/ovmf-code-$a.fd,readonly=on
 
 ifeq ($a,x86_64)
 run: run-$a
-run-$a: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf $(dl)/edk2-ovmf/ovmf-code-$a.fd
+run-$a: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf dl/edk2-ovmf/ovmf-code-$a.fd
 	exec $(k_qemu) $(k_fw) -drive format=raw,file=fat:rw:$(ko)/esp-$a
 else
 run: run-$a
@@ -752,7 +723,7 @@ k_espd = $(ko)/esp-$a$(ksuf)
 $(k_uefid)/loader.o: $R/src/uefi_loader.c $(ho)/love.baked
 	@echo 'MOON	'$@
 	@mkdir -p $(dir $@)
-	@LOVE_NO_IMAGE= $(ho)/love mooncc -t $(k_be_$a) -c $< $@
+	@LOVE_NO_IMAGE= $(ho)/love mooncc -t $(tgt_$a) -c $< $@
 $(k_uefid)/$(k_efiname): $(k_uefid)/loader.o $(uefi_l) $m
 	@echo 'HOLO	'$@
 	@mkdir -p $(dir $@)
@@ -769,10 +740,10 @@ uefi: $(ko)/esp-$a/EFI/BOOT/$(k_efiname) $(ko)/esp-$a/love.elf
 	@echo "uefi: $(ko)/esp-$a is an ESP -- copy it to a FAT32 partition, or"
 	@echo "      qemu-system-$a -drive format=raw,file=fat:rw:$(ko)/esp-$a ..."
 
-OVMF_X64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-x86_64.fd)
+OVMF_X64 := $(wildcard dl/edk2-ovmf/ovmf-code-x86_64.fd)
 ifeq ($(and $(filter x86_64,$a),$(OVMF_X64)),)
 test_uefi:
-	@echo "test_uefi: skipped (x86_64 + $(dl)/edk2-ovmf/ovmf-code-x86_64.fd needed)"
+	@echo "test_uefi: skipped (x86_64 + dl/edk2-ovmf/ovmf-code-x86_64.fd needed)"
 else
 test_uefi: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 $(ko)/esp-x86_64-test/EFI/BOOT/BOOTX64.EFI $(ko)/esp-x86_64-test/love.elf
@@ -780,11 +751,11 @@ test_uefi: host $(R)/tools/ktest.l
 	@$m $(R)/tools/ktest.l $(ko)/esp-x86_64-test $(OVMF_X64) x86_64
 endif
 
-OVMF_A64 := $(wildcard $(dl)/edk2-ovmf/ovmf-code-aarch64.fd)
-QEMU_A64U ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
-ifeq ($(and $(OVMF_A64),$(QEMU_A64U)),)
+OVMF_A64 := $(wildcard dl/edk2-ovmf/ovmf-code-aarch64.fd)
+QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
+ifeq ($(and $(OVMF_A64),$(QEMU_A64)),)
 test_uefi_arm64:
-	@echo "test_uefi_arm64: skipped (qemu-system-aarch64 + $(dl)/edk2-ovmf/ovmf-code-aarch64.fd needed)"
+	@echo "test_uefi_arm64: skipped (qemu-system-aarch64 + dl/edk2-ovmf/ovmf-code-aarch64.fd needed)"
 else
 test_uefi_arm64: host $(R)/tools/ktest.l
 	@$(MAKE) -s K_TEST=1 a=aarch64 $(ko)/esp-aarch64-test/EFI/BOOT/BOOTAA64.EFI $(ko)/esp-aarch64-test/love.elf
@@ -801,7 +772,6 @@ test_inle:
 	@$(MAKE) -s test_uefi_arm64
 	@echo "test_inle: boot, disk, command line, firmware -- both arches"
 
-QEMU_A64 ?= $(shell command -v qemu-system-aarch64 2>/dev/null)
 ifeq ($(QEMU_A64),)
 test_kernel_arm64:
 	@echo "test_kernel_arm64: skipped (need qemu-system-aarch64)"
@@ -825,18 +795,16 @@ test_wasm:
 endif
 
 # --- downloads -------------------------------------------------------
-$(dl)/edk2-ovmf/ovmf-code-%.fd:
+dl/edk2-ovmf/ovmf-code-%.fd:
 	@echo 'MK	'ovmf
-	@mkdir -p $(dl)
-	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/edk2-ovmf.tar.gz | gunzip | tar -C $(dl) -xf -
+	@mkdir -p dl
+	@curl -L https://github.com/osdev0/edk2-ovmf-nightly/releases/latest/download/edk2-ovmf.tar.gz | gunzip | tar -C dl -xf -
 	@case "$a" in \
 		aarch64) dd if=/dev/zero of=$@ bs=1 count=0 seek=67108864 2>/dev/null;; \
 	esac
 include $(R)/test/test.mk
 include $(R)/mk/install.mk
 
-JOBS  ?= $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
-osync := $(if $(filter output-sync,$(.FEATURES)),--output-sync=target,)
 test_phases = test_host test_love0
 # fast gate
 test:

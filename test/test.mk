@@ -450,7 +450,7 @@ test_cts_riscv: host
 # the corpus itself -- 220 files, cloned once and kept in dl/ like OVMF, so `make clean`
 # leaves it and only `make distclean` asks the network again. NOTHING depends on this rule:
 # a gate that downloads is a gate that fails on a train.
-$(dl)/c-testsuite:
+dl/c-testsuite:
 	@echo 'MK	'c-testsuite
 	@git clone --depth=1 https://github.com/c-testsuite/c-testsuite.git $@ > /dev/null 2>&1
 # test_libc -- OUR C LIBRARY against the system's, function by function:
@@ -475,7 +475,7 @@ test_selfhost: host
 	      || { echo "FAIL mooncc -c $$f"; exit 1; }; done; \
 	  $(moonrun) -Icrew/moon/include -c crew/moon/lib/math/am.c $$d/am.o \
 	    || { echo "FAIL mooncc -c am.c"; exit 1; }; \
-	  $(host_cc) -static -o $(ho)/love-selfhost $$d/*.o $(host_ldflags) \
+	  $(CC) -static -o $(ho)/love-selfhost $$d/*.o $(host_ldflags) \
 	    || { echo "FAIL link all-mooncc binary"; exit 1; }; \
 	  cat $t > $(ho)/.selfhost-corpus.l; \
 	  LOVE_NO_IMAGE=1 $(ho)/love-selfhost $(ho)/.selfhost-corpus.l </dev/null > $(ho)/.test_selfhost.out 2>&1; s=$$?; \
@@ -550,7 +550,7 @@ test_xfixpoint: $(xobjs) $(xkart_o) $(love0) out/host/mooncc0.image
 # the foreign member answers under qemu-user. opt-in by name, like the x-lane.
 .PHONY: test_fat
 test_fat: dist-fat
-	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(boot_love)" $(ho) $(xd)
+	@sh test/gate/fat.sh $(fat) $a $(xa) $(xqemu) "$(love0)" $(ho) $(xd)
 # the multi-OS gate (doc/misc/plan/seed-universal.md, rung UV): ONE default-lane
 # binary answers every kernel with the same text. the box arrives by env --
 # FBSD_SSH / NBSD_SSH = "ssh -p 2222 -i KEY root@HOST" -- and without one the
