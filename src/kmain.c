@@ -982,7 +982,7 @@ ai_noinline int k_fs_open(char const *p, uintptr_t pn, char m) {
 // land in src/sys.c's arms, so the ramfs answers the same door -- and a
 // directory opens as a dents row there, where the old ramfs-only nif said ().
 
-// --- the file nifs: stat, readdir, lseek, openfd, fdclose -------------------
+// --- the file nifs: stat, readdir, lseek, openfd ---------------------------
 // doc/misc/posix.md's conventions exactly, because kore reads these shapes and a wrong
 // one is silent.
 #define k_mode_file 0100000            // (& mode 61440) = 32768: a regular file
@@ -1258,7 +1258,7 @@ lvm(k_lvm_getpid) {
 // (procseat pid f0 f1 f2) -> () | ENOMEM. the spawn shim's registration, called
 // in the PARENT right after twirl -- which does not switch tasks, so the seat is
 // in place before the child's first read. each fi: an fd >= 0 is DUPED into the
-// seat (fork's fd-copy made explicit, so the parent may fdclose its own end);
+// seat (fork's fd-copy made explicit, so the parent may close its own end);
 // -1 inherits the parent's effective fd (duped when the parent is itself seated);
 // -2 seats closed (an fdmap's () entry). quit is the door that takes it down.
 ai_noinline static ai_word k_procseat(struct ai *g, ai_word pw,

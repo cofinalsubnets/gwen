@@ -18,7 +18,7 @@ framebuffer console through quay, decodes PS/2 scancodes, and runs `((from 'bao 
 Interrupts, the timer, cooperative tasks (`twirl`/`catch`), and fd-parking all work.
 
 It also has a filesystem now — the ramfs over a `.rodata` initrd, with the read surface whole
-(`open` `close` `stat` `readdir` `lseek` `openfd` `fdclose`), `use` resolving `lib/<x>.l` off
+(`open` `close` `stat` `readdir` `lseek` `openfd`), `use` resolving `lib/<x>.l` off
 it, and since rung 2 a **writable tree**: create, `mkdir` `rmdir` `unlink` `rename` `chmod`
 `utime`, a cwd (`chdir`/`cwd`), and the environment (`getenv` `setenv` `environ`).
 `k_sources[]` grows a row per open file. And it has a wall clock: `ai_clock` is epoch
@@ -111,7 +111,7 @@ baked `ai_libs` table on this seat, only in the initrd.
 
 ### rung 1 — the file nifs, and the clock under them  ✅ landed
 
-`stat` `readdir` `lseek`, plus the raw-fd lane `lseek` needs (`openfd` `fdclose`) — `open`,
+`stat` `readdir` `lseek`, plus the raw-fd lane `lseek` needs (`openfd`) — `open`,
 `close` and the `ai_fd_close` routing came with rung 0, and with them `use` off the ramfs. Every
 name and every shape is the host's, because kore reads them and a divergence is silent where an
 absence is loud.
@@ -250,7 +250,7 @@ and `wait` is `catch`.
   pid-keyed fd 0/1/2 → real rows, read by every fd dispatcher (`k_fd_eff`). `procseat` registers
   it **in the parent right after `twirl`** — which does not switch tasks, so the seat is laid
   before the child's first read — and each seated fd is a **dup**, fork's fd-copy made explicit,
-  so the parent may `fdclose` its own pipe ends at once.
+  so the parent may `close` its own pipe ends at once.
 * ⚠ **`quit` is the process's exit door, seat-aware.** A seated task's `(quit n)` closes its
   seated fds (the write end's close IS the downstream EOF), retires the seat, and lands the task
   dormant with n as its retval — the love-machine `_exit`, and what `wait` reads. Every program

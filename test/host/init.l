@@ -29,7 +29,7 @@
        (= 3 (wait (spawn ["sh" "-c" "exit 3"])))
        ; the "()"-returns are the real zero point now (the ai_nil -> () flip), not charm 0:
        ; (id? x ()) holds and (charm? x) is false -- charm 0 would fail both.
-       (id? (fdclose -1) ()) !(charm? (fdclose -1))               ; fdclose nothing -> the real ()
+       (id? (close -1) ()) !(charm? (close -1))               ; close nothing -> the real ()
        (id? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY") ())             ; getenv absent -> the real ()
        !(charm? (getenv "LOVE_NO_SUCH_ENV_VAR_XYZZY"))))
 
@@ -55,7 +55,7 @@
     ; lseek rides the raw openfd lane: end is the size, set returns the offset
     (: fd (openfd f 0)
        (&& (= 5 (lseek fd 0 2)) (= 1 (lseek fd 1 0)) (= 3 (lseek fd 2 1))
-           (id? (fdclose fd) ())))
+           (id? (close fd) ())))
     (< (lseek -1 0 0) 0)                            ; a bad fd is a negative charm
     ; unlink: () ok, then the file really is gone, and a re-unlink says so (ENOENT, POSITIVE)
     (id? (unlink f) ())

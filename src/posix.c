@@ -469,11 +469,11 @@ static lvm(lvm_selfpath) {
 //                   0/1/2, close every fd in the list `closes` (the pipe ends the
 //                   child must not leak, so a downstream reader sees EOF), reset the
 //                   job signals, execvp. the parent keeps its fds and closes the
-//                   pipe ends itself with fdclose. -errno on a fork/marshal failure.
+//                   pipe ends itself with `close`, which takes a raw fd too.
+//                   -errno on a fork/marshal failure.
 // (ttyfg pg)     -> give the terminal (fd 0) to process group pg; pg <= 0 takes it
 //                   back to the caller's own group (the shell reclaiming the tty
 //                   after a foreground job ends or stops). () | positive errno.
-// (fdclose fd)    -> close a raw fd (the parent's pipe ends). () ok | -errno.
 ai_noinline static struct ai *host_pipe(struct ai *g) {
  int fds[2];
  if (pipe(fds)) return g->sp[0] = putcharm(-errno), g;
@@ -547,15 +547,10 @@ static lvm(lvm_posix_ttyfg) {
   Sp[0] = host_posix_ttyfg(Sp[0]);
   ai_musttail return Next(1); }
 
-static lvm(lvm_shutfd) {
- intptr_t fd = charmp(Sp[0]) ? getcharm(Sp[0]) : -1;
- Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : ZeroPoint;
- ai_musttail return Next(1); }
-
 // (fdopen fd) -> a port over a raw fd -- pipe/openfd's other half, so love reads
 // and writes its own plumbing (a command substitution drains a pipe with slurp, a
 // heredoc body pours in with say). () on a non-charm / negative fd or oom. the
-// port's GC finalizer owns the fd from here: hand it over, don't fdclose it too.
+// port's GC finalizer owns the fd from here: hand it over, don't close it too.
 static lvm(lvm_fdopen) {
  intptr_t fd = charmp(Sp[0]) ? getcharm(Sp[0]) : -1;
  if (fd < 0) ai_musttail return Answer(ZeroPoint);
@@ -849,7 +844,6 @@ static union u const
   nif_pipe[]    = {{lvm_pipe}, {lvm_ret0}},
   nif_openfd[]  = {{lvm_cur}, {.x = putcharm(2)}, {lvm_openfd}, {lvm_ret0}},
   nif_spawnio[] = {{lvm_cur}, {.x = putcharm(7)}, {lvm_spawnio}, {lvm_ret0}},
-  nif_shutfd[]  = {{lvm_shutfd}, {lvm_ret0}},
   nif_fdopen[]  = {{lvm_fdopen}, {lvm_ret0}},
   nif_spawnmap[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_spawnmap}, {lvm_ret0}},
   nif_getuid[]  = {{lvm_getuid}, {lvm_ret0}},
@@ -884,7 +878,6 @@ AiNif("selfpath", nif_selfpath);
 AiNif("pipe",  nif_pipe);
 AiNif("openfd", nif_openfd);
 AiNif("spawnio", nif_spawnio);
-AiNif("fdclose", nif_shutfd);
 AiNif("fdopen", nif_fdopen);
 AiNif("spawnmap", nif_spawnmap);
 AiNif("getuid", nif_getuid);
@@ -1383,12 +1376,18 @@ static lvm(lvm_open) {
   Ip += 1;
   ai_musttail return Continue(); }
 
-// (close p) -- flush, close, and HAND THE PORT THE CLOSED VT, so every later
-// read, write and flush finds the door that does nothing and the finalizer,
-// which asks the vt for an fd, skips. answers (). no-op on misuse.
+// (close x) -- a port, or a raw fd from openfd/pipe/dup. on a port: flush, close,
+// and HAND IT THE CLOSED VT, so every later read, write and flush finds the door
+// that does nothing and the finalizer, which asks the vt for an fd, skips; answers
+// (). on a charm: close(2), () ok | -errno. no-op on anything else.
 static lvm(lvm_close) {
+  if (charmp(Sp[0])) {
+    intptr_t fd = getcharm(Sp[0]);
+    Sp[0] = (fd >= 0 && close((int) fd)) ? putcharm(-errno) : ZeroPoint;
+    Ip += 1;
+    ai_musttail return Continue(); }
   // inline "is x a port": heap pointer whose discriminator is lvm_port_io.
-  if (!charmp(Sp[0]) && ((union u*) Sp[0])->ap == lvm_port_io) {
+  if (((union u*) Sp[0])->ap == lvm_port_io) {
     struct ai_io *io = (struct ai_io*) Sp[0];
     intptr_t fd = ai_io_fd(io);
     if (fd >= 0) {

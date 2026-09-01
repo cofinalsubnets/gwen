@@ -52,17 +52,17 @@ through kore0.l's pin, one door deeper. -41/+4 lines over three files.
 **Rung 1 -- the raw-fd lane, finished by subtraction.** `syswrite` and `syscall`
 exist because the raw-fd lane is half built. `openfd` and `pipe` mint an fd,
 `lseek` seeks it (`posix.c:725` names it "the openfd lane -- not ports"),
-`fdclose` closes it -- and nothing reads or writes one. Every port nif in io.c
+`close` closes it -- and nothing reads or writes one. Every port nif in io.c
 is `if (iop(Sp[0])) { .. }` falling through to a no-op, `(fputs port s)` even
 documented "no-op on misuse", so a charm handed to `say` or `see` is silently
 ignored. That hole is the whole reason for a second door. Close it under the
 names that already exist and both instruments have nowhere left to be special.
 
-- **`fdclose` folds into `close`.** They are complementary halves of one
-  operation: `lvm_close` (`posix.c:1389`) tests the port kind and falls through
-  to a bare `ZeroPoint` on a charm; `lvm_shutfd` (`posix.c:550`) closes a charm
-  and answers `()` for anything else. Moving shutfd's three lines into close's
-  charm arm retires a nif and 41 call sites become `close`.
+- **`fdclose` folds into `close`. LANDED.** They were complementary halves of
+  one operation: `lvm_close` tested the port kind and fell through to a bare
+  `ZeroPoint` on a charm; `lvm_shutfd` closed a charm and answered `()` for
+  anything else. Shutfd's three lines are close's charm arm now -- a nif retired
+  and 41 call sites spelled `close`.
 - **the io.c port surface takes a charm as an fd** -- `see` `say` `put` `slurp`
   `flush`. Five silent no-ops become operations, and `syswrite` is not needed
   under any name, its one law (an absent row swallows its bytes, so the count
@@ -81,7 +81,7 @@ names that already exist and both instruments have nowhere left to be special.
   seeks to 0 and reports success. Pass it through and the row answers EINVAL.
 
 Nothing is added. `syswrite`, `syscall` and `k_sys_nr` go (~90 lines over
-kmain.c and sys.c), `fdclose` goes, four nifs gain a kind, one loses a bug.
+kmain.c and sys.c), `fdclose` went, four nifs gain a kind, one loses a bug.
 
 test/kernel/sys.l is then ordinary corpus that runs on the host AND the kernel:
 counts and errnos, byte-exact reads off the ramfs, close and its EBADF on a
@@ -106,7 +106,7 @@ rather than leave them looking exercised. getpid's row is the one casualty that
 does not move: this seat has no getpid nif, so it goes untested.
 
 Two constraints on the rewrite. `fdopen`'s port finalizer owns the fd -- "hand
-it over, don't fdclose it too" -- and sys.l double-closes freely today because
+it over, don't close it too" -- and sys.l double-closes freely today because
 `syscall "close"` went around the port. And a port buffers, so a law that
 interleaves seeks and reads on one fd cannot use a port for both; that is what
 gave lseek a raw lane in the first place.

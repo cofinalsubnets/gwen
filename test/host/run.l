@@ -44,7 +44,7 @@
 (: pr (pipe 0)
    rfd (cap pr) wfd (cup pr)
    pid (spawnio ["sh" "-c" "sleep 1; cat >/dev/null"] rfd 1 2 [wfd] -1 0)
-   _ (fdclose rfd)
+   _ (close rfd)
    w (fdopen wfd)
    t0 (clock 0)
    _ (say w (* "x" 200000))          ; 200K against a 64K pipe: the tail cannot land

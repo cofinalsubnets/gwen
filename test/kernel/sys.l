@@ -59,7 +59,7 @@
 ; the love door could not make (its lvm_lseek answers a bare -1 for both)
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
    r (syscall "lseek" rfd 0 0 0)
-   _ (fdclose wfd) _ (fdclose rfd)
+   _ (close wfd) _ (close rfd)
  (assert (= -29 r)))
 
 ; lseek: EBADF beats espipe -- no row at all is a different answer from a row
@@ -73,7 +73,7 @@
    a (syscall "lseek" fd 0 0 0)                 ; set 0 -> 0
    b (syscall "lseek" fd 10 1 0)                ; cur +10 -> 10
    c (syscall "lseek" fd 5 1 0)                 ; cur +5  -> 15
-   _ (fdclose fd)
+   _ (close fd)
  (assert (< 0 z) (= 0 a) (= 10 b) (= 15 c)))
 
 ; lseek: a seek before the start is EINVAL and moves nothing; an unknown whence
@@ -83,7 +83,7 @@
    r (syscall "lseek" fd (- 0 99) 1 0)          ; 8 - 99 < 0
    w (syscall "lseek" fd 0 7 0)                 ; no such whence
    at (syscall "lseek" fd 0 1 0)                ; unmoved
-   _ (fdclose fd)
+   _ (close fd)
  (assert (= -22 r) (= -22 w) (= 8 at)))
 
 ; --- pointer arguments -------------------------------------------------------
@@ -106,7 +106,7 @@
    b (cask 16)
    n (syscall "read" rfd b 16 0)
    z (syscall "read" rfd b 16 0)                ; writer gone -> EOF, 0
-   _ (fdclose rfd)
+   _ (close rfd)
  (assert (= n 6) (= "abcdef" (snip b 0 n)) (= z 0)))
 
 ; a short buffer takes its count and no more; the rest waits in the row
@@ -116,14 +116,14 @@
    n (syscall "read" rfd b 4 0)
    s1 (snip b 0 4)                              ; read the corner before the next fill
    m (syscall "read" rfd b 4 0)
-   _ (fdclose wfd) _ (fdclose rfd)
+   _ (close wfd) _ (close rfd)
  (assert (= n 4) (= "abcd" s1) (= m 2) (= "ef" (snip b 0 2))))
 
 ; read off a ramfs file: the same bytes the love door reads
 (: fd (openfd "lib/fat.l" 0)
    b (cask 32)
    n (syscall "read" fd b 32 0)
-   _ (fdclose fd)
+   _ (close fd)
    p (open "lib/fat.l" "r") s (slurp p) _ (close p)
  (assert (= n 32) (= (snip s 0 32) (snip b 0 32))))
 
@@ -131,7 +131,7 @@
 ; the door is asked -- the row must not see a 0 it was never given
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
    r (syscall "write" wfd 'nope 4 0)
-   _ (fdclose wfd) _ (fdclose rfd)
+   _ (close wfd) _ (close rfd)
  (assert (= -1 r)))
 
 ; --- the *at path family -----------------------------------------------------
@@ -327,13 +327,13 @@
    st (stat "lib/fat.l")
    md (| (& 61440 (le4 v 16)) (& 61440 (le4 v 24)))
    sz ((le4 v 48) + ((le4 v 52) << 32))
-   _ (fdclose fd)
+   _ (close fd)
    pp (pipe 0) rfd (cap pp) wfd (cup pp)
    p2 (cask 144)
    pr (syscall "fstat" rfd p2 0 0)
    w2 (string p2)
    pm (| (& 61440 (le4 w2 16)) (& 61440 (le4 w2 24)))
-   _ (fdclose rfd) _ (fdclose wfd)
+   _ (close rfd) _ (close wfd)
    dfd (syscall "openat" at "lib" 0 0)
    d3 (cask 144)
    dr (syscall "fstat" dfd d3 0 0)

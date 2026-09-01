@@ -35,7 +35,7 @@
    ; the child and in the parent after spawn; writes ((wfd . body)..) are
    ; heredoc feeds -- the parent pours and closes them after the spawn.
    (dfd ion d) (? (two? ion) <ion d)
-   (rderr opens msg) (: _ (each opens fdclose) ('err . msg))
+   (rderr opens msg) (: _ (each opens close) ('err . msg))
    (sh-rdmap rs) (rdm rs () () ())
    (rdm rs fdmap opens writes)
      (? !rs [1 (sh-rev fdmap) opens writes]
@@ -447,7 +447,7 @@
                        (? (id? <rm 'err) (: _ (stclean acc) rm)
                           (sh-stagex >cmds
                                      ['x argv (sh-nth rm 1) (sh-nth rm 2) (sh-nth rm 3) . acc]))))))))
-   (stclean acc) (each acc (\ st (each (sh-nth st 3) fdclose)))
+   (stclean acc) (each acc (\ st (each (sh-nth st 3) close)))
    ; spawn one stage: external -> spawnmap; anything else -> fork, the child
    ; lays the pipe map on itself (dup2), closes the plumbing, evals, quits
    ; flush first, both lanes: a builtin says through `out` and buffers, a child
@@ -481,7 +481,7 @@
                                                _ (say err " ") _ (print err b)
                                                _ (put err 10) (quit 1)))))
                           _ (each (base + (sh-nth st 2)) (\ e (dup2 >e <e)))
-                          _ (each allclose (\ fd (? (2 < fd) (fdclose fd) 0)))
+                          _ (each allclose (\ fd (? (2 < fd) (close fd) 0)))
                           r ((sh-cliline ()) (sh-nth st 1) 0)   ; 0: a child has a shell already
                           (quit (? (charm? r) r 0)))
                        p))
@@ -495,7 +495,7 @@
                  (: _ (wear ())                   ; a child wears the console: its fds are the dup2 below, and a jug is not one
                     _ (sh-dropcaps ())            ; ...and it is inside no capture of ours
                     _ (each base (\ e (dup2 >e <e)))
-                    _ (each allclose (\ fd (? (2 < fd) (fdclose fd) 0)))
+                    _ (each allclose (\ fd (? (2 < fd) (close fd) 0)))
                     s (sh-eval (sh-nth st 1))
                     (quit (? (charm? s) s (? (id? <s 'ret) >s 0))))
                  p))))
@@ -526,7 +526,7 @@
               allclose (pfds + (ofds + (map cap wrs)))
               pids (sh-spawnst sts pipes allclose (0 - 1) 0 n
                                (sh-pgm 0) (? bg 0 (sh-fgm 0)) ())
-              _ (each (pfds + ofds) fdclose)
+              _ (each (pfds + ofds) close)
               _ (sh-hwrite wrs)
               (? bg
                  (: jn (sh-addjob pids 'running ((sh-curline ()) + " &"))
@@ -562,12 +562,12 @@
                  _ (sh-hwrite wrs)
                  saves (map (\ e (<e . dup <e)) fdmap)
                  _ (each fdmap (\ e (? (charm? >e) (dup2 >e <e)
-                                       (fdclose <e))))
-                 _ (each opens fdclose)
+                                       (close <e))))
+                 _ (each opens close)
                  s (th ())
                  _ (flush out) _ (flush err)
-                 _ (each saves (\ e (? (>e < 0) (fdclose <e)
-                                       (: _ (dup2 >e <e) (fdclose >e)))))
+                 _ (each saves (\ e (? (>e < 0) (close <e)
+                                       (: _ (dup2 >e <e) (close >e)))))
                  s))))
    (sh-simple2 argv rs)
      (: _ (? (sh-xflag ()) (say err ("+ " + ((sh-unwords argv) + "\n"))) 0)
@@ -595,7 +595,7 @@
                            (spawnmap argv (sh-nth rm 1) (opens + (map cap wrs))
                                      (sh-pgm 0) (sh-fgm 0))
                            ())
-                    _ (each opens fdclose)
+                    _ (each opens close)
                     _ (sh-hwrite wrs)
                     (? !(charm? pid) (sh-nofound <argv)
                        (pid < 0) (cmderr (<argv + ": cannot spawn"))
@@ -745,11 +745,11 @@
               _ (sh-hwrite wrs)                       ; a heredoc body fits the pipe
               saves (map (\ e (<e . dup <e)) fdmap)
               _ (each fdmap (\ e (? (charm? >e) (dup2 >e <e)
-                                    (fdclose <e))))
-              _ (each opens fdclose)
+                                    (close <e))))
+              _ (each opens close)
               s (b ())
-              _ (each saves (\ e (? (>e < 0) (fdclose <e)
-                                    (: _ (dup2 >e <e) (fdclose >e)))))
+              _ (each saves (\ e (? (>e < 0) (close <e)
+                                    (: _ (dup2 >e <e) (close >e)))))
               s)))
 
    ; --- command substitution (word.l's box) -------------------------------------
@@ -767,7 +767,7 @@
               wrs (catmap (\ st (sh-nth st 4)) sts)
               allclose (wfd . (pfds + (ofds + (map cap wrs))))
               pids (sh-spawnst sts pipes allclose wfd 0 n (0 - 1) 0 ())
-              _ (each (pfds + ofds) fdclose)
+              _ (each (pfds + ofds) close)
               _ (sh-hwrite wrs)
               pids)))
    (sh-capst sts)                              ; the last stage's status, a signal folded down
@@ -854,7 +854,7 @@
    ; reads the end at once. closing without joining leaves the fd number free for
    ; the body to reopen, and the drainer would wake onto whatever landed there.
    (sh-dropcaps _)
-     (: _ (each (sh-subfds ()) (\ e (: _ (fdclose <e) _ (catch >e) 0)))
+     (: _ (each (sh-subfds ()) (\ e (: _ (close <e) _ (catch >e) 0)))
         _ (pin sh-subfds () ())
         ; and no trap of its parent's: POSIX resets a caught condition in a
         ; subshell, and a `( exit )` that ran the exit action would take the
@@ -959,8 +959,8 @@
               _ (pin sh-subfds () ((rfd . d) . caps))
               snap (sh-subsave ())
               ; the whole seat is minded: nothing here is reclaimed by anything else.
-              ; sv and wfd are raw fds -- fdclose is the only door, and a port's
-              ; finalizer never sees them -- our stdout is dup2'd onto the pipe, and the
+              ; sv and wfd are raw fds -- no port owns them, so our own close is the
+              ; only reclaim -- our stdout is dup2'd onto the pipe, and the
               ; drain has no other reader. a scare under the body left the shell talking
               ; into a pipe nobody empties, which at the next prompt reads as a dead shell.
               ; the join lands in `got` because it belongs to the teardown: a second catch
@@ -973,8 +973,8 @@
                                 _ (pin sh-subfds () caps)
                                 ; fd 1 is a write end too (the dup2 above), so it has to be
                                 ; put back before the drain can ever read eof
-                                _ (dup2 sv 1) _ (fdclose sv)
-                                _ (fdclose wfd)      ; the last write end: now eof
+                                _ (dup2 sv 1) _ (close sv)
+                                _ (close wfd)      ; the last write end: now eof
                                 _ (pin got 0 (catch d))
                                 0)))
               _ (pin sh-substat () (sh-capstat st))
@@ -1003,7 +1003,7 @@
                                 ; very output the caller asked for.
                                 (sh-guarded
                                   (\ _ (: pids (sh-capsimple a wfd)
-                                          _ (fdclose wfd)
+                                          _ (close wfd)
                                           o (slurp (fdopen rfd))   ; drain, then reap
                                           _ (pin sh-substat ()
                                                (sh-capst (map (\ p (wait p)) pids)))

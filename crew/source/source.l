@@ -83,7 +83,7 @@
              nul (openfd "/dev/null" 1)
              p (spawnio [cc "-c" "-o" o c] -1 nul nul () -1 0)
              st (0 <= p ? (wait p) 1)
-             _ (0 <= nul ? (fdclose nul) 0)
+             _ (0 <= nul ? (close nul) 0)
              _ (unlink c) _ (unlink o)
              (0 = st))))
    (src-cc dir)

@@ -34,8 +34,8 @@
    (shout argv)
     (: pp (pipe 0) r <pp w >pp
        kid (spawnmap argv [(1 >< w) (2 >< ())] () 0 0)
-       _ (fdclose w)
-       (? (charm? kid && kid < 0) (: _ (fdclose r) "")
+       _ (close w)
+       (? (charm? kid && kid < 0) (: _ (close r) "")
           (: q (fdopen r) s (slurp q) _ (close q) _ (wait kid) ("" + s))))
 
    ; --- little string kit -----------------------------------------------------

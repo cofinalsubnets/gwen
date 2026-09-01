@@ -41,7 +41,7 @@
 (: pa (pipe 0) pb (pipe 0)
    e (dup2 (cup pa) (cup pb))                   ; b's write slot now feeds a
    wp (fdopen (cup pb)) _ (say wp "crossed") _ (close wp)
-   _ (fdclose (cup pa))                         ; a's own write end steps out too
+   _ (close (cup pa))                         ; a's own write end steps out too
    sb (slurp (fdopen (cap pb)))                 ; b lost its one writer at the dup2
    sa (slurp (fdopen (cap pa)))
  (assert (! e) (= sb "") (= sa "crossed")))
@@ -60,7 +60,7 @@
 ; the parent closes its end and still reads the child whole
 (: pp (pipe 0) rfd (cap pp) wfd (cup pp)
    p (spawnmap (list "kore" "echo" "seated") (list (link 1 wfd)) (list rfd wfd) (- 0 1) 0)
-   _ (fdclose wfd)
+   _ (close wfd)
    s (slurp (fdopen rfd))
  (assert (= 0 (wait p)) (= s "seated\n")))
 
@@ -70,7 +70,7 @@
    p1 (spawnmap (list "kore" "echo" "a b") (list (link 1 (cup pa))) () (- 0 1) 0)
    p2 (spawnmap (list "kore" "wc" "-l")
                 (list (link 0 (cap pa)) (link 1 (cup pb))) () (- 0 1) 0)
-   _ (fdclose (cup pa)) _ (fdclose (cap pa)) _ (fdclose (cup pb))
+   _ (close (cup pa)) _ (close (cap pa)) _ (close (cup pb))
    s (slurp (fdopen (cap pb)))
    r1 (wait p1) r2 (wait p2)
  (assert (= 0 r1) (= 0 r2) (= s "1\n")))

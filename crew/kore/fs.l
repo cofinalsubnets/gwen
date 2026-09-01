@@ -563,7 +563,7 @@
            (: nm (umtname base)
               fd (? d? -1 (openfd nm 3))
               got (? d? !(mkdir nm 448) (0 <= fd))
-              _ (? (0 <= fd) (fdclose fd) ())
+              _ (? (0 <= fd) (close fd) ())
               (? !got (try (n - 1))
                  (: _ (? u? (? d? (rmdir nm) (unlink nm)) ())
                     _ (say out nm) _ (put out 10) _ (flush out) 0))))
