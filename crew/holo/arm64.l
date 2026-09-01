@@ -110,14 +110,34 @@
              (catall [(alu-rri (base | 0x400000) d a (pos >> 12))                    ; (the S-forms stay single: a split
                        (? ((pos % 4096) = 0) () (alu-rri base d d (pos % 4096)))])    ;  would read the tail's flags)
             (scare 'imm12-range imm)))
-   ;; a logical (bitmask) immediate -> the N:immr:imms field packed at bits [22:10]. the full encoding
-   ;; admits any replicated rotated run of ones; we encode the case the glaze emits -- a bottom-aligned
-   ;; run (imm = 2^n - 1, the fixnum/gap low-bit masks): N=1, immr=0, imms=n-1. a rotated/replicated
-   ;; pattern raises (materialize it into a register instead).
+   ;; a logical (bitmask) immediate -> the N:immr:imms field packed at bits [22:10]: any rotated run
+   ;; of ones replicated over a 2/4/8/16/32/64-bit element. 0, -1 and a two-run pattern have no
+   ;; encoding at all and raise -- materialize those into a register instead.
+   ;; ⚠ bit tests, never a 64-bit mask: (1 << 63) - 1 leaves fixnum range and & on the big misreads.
+   (bmbit v k)  ((v >> k) & 1)
+   (bmones v i) ((: (go k) (? ((i + k) = 64 || 0 = (bmbit v (i + k))) k (go (k + 1)))) 0)
+   (bmctz v)    ((: (go k) (? (k = 64 || 1 = (bmbit v k)) k (go (k + 1)))) 0)
+   (bmclo v)    ((: (go k) (? (k = 64 || 0 = (bmbit v (63 - k))) k (go (k + 1)))) 0)
+   (bmrun? v)   (? (v = 0) 0 (: i (bmctz v) n (bmones v i) ((i + n) = 64 || 0 = (v >> (i + n)))))
+   (bmelem v)   ((: (go e) (? (e = 2) 2 (: h (e // 2) m ((1 << h) - 1)
+                                            (? ((v & m) = ((v >> h) & m)) (go h) e)))) 64)
    (bitmask-field imm)
-      (? (imm > 0 && (0 = (imm & (imm + 1))))                                   ; imm = 2^n - 1 (n ones at the bottom)
-         (0x400000 | ((((: (go k v) (? (v = 0) k (go (k + 1) (v >> 1)))) 0 imm) - 1) << 10))   ; N=1 (bit22), imms = n-1
-         (scare 'arm64-bitmask-imm imm))
+      (? (imm = 0 || imm = -1) (scare 'arm64-bitmask-imm imm)
+         (: e (bmelem imm)
+            m (? (e = 64) -1 ((1 << e) - 1))
+            v (imm & m)
+            r (? (bmrun? v) (: i (bmctz v) [i (bmones v i)])
+                 (: w (v | (m ^ -1))                         ; the run wraps the element: ask of its complement
+                    (? (bmrun? (w ^ -1))
+                       (: c (bmclo w) [(64 - c) (c + (bmones w 0) - (64 - e))])
+                       ())))
+            (? (= () r) (scare 'arm64-bitmask-imm imm)
+               (: i <r
+                  ct <>r
+                  immr ((e - i) & (e - 1))
+                  nimms ((((e - 1) ^ -1) << 1) | (ct - 1))    ; the size prefix, then imms = ones-1
+                  n (((nimms >> 6) & 1) ^ 1)
+                  ((n << 22) | ((immr << 16) | ((nimms & 0x3f) << 10)))))))
    (arm64-logimm-base op) (? (op = 'and) 0x92000000 (op = 'or) 0xB2000000 (op = 'xor) 0xD2000000 (scare 'badlog op))
    (arm64-logical-imm op d a b) (: dn (rn d) an (rn a) (le32 (arm64-logimm-base op | (bitmask-field b | ((an << 5) | dn)))))
    (arm64-aluop op d a b)
