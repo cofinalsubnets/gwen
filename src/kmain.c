@@ -98,9 +98,6 @@ uintptr_t const k_image_top = 1;
 // projection re-bases, so the wake needs no finding on this seat either
 int ai_baked_pick(void const **blob, uintptr_t *blen);
 uint64_t k_rtc(void);                  // the machine's own clock, unix seconds (0 = none)
-#ifdef K_TEST
-void k_qemu_exit(int);
-#endif
 
 #include "quay.h"
 #include <stdarg.h>
@@ -1640,9 +1637,6 @@ static lvm(lvm_fault) {
   ai_musttail return Continue(); }
 
 #ifdef K_TEST
-// (exit code) -- quit qemu; the test corpus calls it on completion / failure.
-static lvm(lvm_kexit) { k_qemu_exit(getcharm(Sp[0])); Ip += 1; ai_musttail return Continue(); }
-
 // (syswrite fd str) -> the count landed, or -1 on a non-string. THE SYSCALL
 // SEAM'S ONE GATE: it calls nolibc's write(), which is sc3(NR_write, ..) into
 // src/sys.c, which is the row -- so a green test/kernel/sys.l says that whole
@@ -1696,10 +1690,9 @@ static lvm(lvm_syscall) {
 // (catch) answers. every program exit funnels here: the shim's wrapper quits the
 // main's answer, its help quits a scare, and a folded (quit 0) inside a kore
 // main was always going to arrive on its own feet.
-// unseated, the exit is the MACHINE's, as rung 3 laid it: reset on the shipped
-// kernel. the TEST kernel answers the code instead (kore0.l's identity pin, one
-// door deeper) -- a reset would eat the corpus summary, and `exit` stays the
-// one way out of qemu.
+// unseated, the exit is the MACHINE's, as rung 3 laid it: reset. a corpus that
+// wants its own code answers it in love -- test/kernel/kore0.l pins (: (quit n) n)
+// before the cat loads, one door deeper, and every tool then reads as its status.
 static union u const k_exit_body[] = { {lvm_task_exit} };
 // the seated half: close the seat's fds (the write end's close is the reader's
 // EOF), retire the slot, clear the yield intentions. -> nonzero when a seat was
@@ -1724,12 +1717,7 @@ lvm(k_lvm_quit) {
     Sp[0] = code;
     Ip = (union u*) k_exit_body;
     ai_musttail return Ap(lvm_task_exit, g); }
-#ifdef K_TEST
-  ai_musttail return Next(1);                   // unseated on the test kernel: the identity
-#else
-  k_reset(); Ip += 1; ai_musttail return Continue();
-#endif
-}
+  k_reset(); Ip += 1; ai_musttail return Continue(); }
 
 
 
@@ -1749,7 +1737,6 @@ static union u
   nif_vmx_run[] = {{lvm_vmx_run}, {lvm_ret0}},
 #endif
 #ifdef K_TEST
-  nif_exit[] = {{lvm_kexit}, {lvm_ret0}},
   nif_syswrite[] = {{lvm_cur}, {.x = putcharm(2)}, {lvm_syswrite}, {lvm_ret0}},
   nif_syscall[] = {{lvm_cur}, {.x = putcharm(5)}, {lvm_syscall}, {lvm_ret0}},
 #endif
@@ -1827,7 +1814,6 @@ static struct ai_def const __attribute__((section("ai_knifs"), used)) defs[] = {
   {"vmx-run", (intptr_t) nif_vmx_run},
 #endif
 #ifdef K_TEST
-  {"exit", (intptr_t) nif_exit},
   {"syswrite", (intptr_t) nif_syswrite},
   {"syscall", (intptr_t) nif_syscall},
 #endif
@@ -2129,7 +2115,4 @@ void kmain(void) {
   // a terminal scare gets the honest face on the serial console before reset
   if (ai_code_of(r) == ai_status_scare) ai_scare_face_(r);
   ai_fin(r); }
-#ifdef K_TEST
- k_qemu_exit(0);   // corpus done with no failures -> quit qemu (exit 0)
-#endif
  k_reset(); }

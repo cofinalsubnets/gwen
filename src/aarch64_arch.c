@@ -269,20 +269,6 @@ void k_fault_trigger(intptr_t n) {
       k_udf0();
       break; } }
 
-#ifdef K_TEST
-// Test build (K_TEST=1): the corpus is baked into the kernel and run at
-// boot; (exit code) calls this to quit qemu. the x86_64 twin writes the
-// isa-debug-exit port, which 'virt' has no equivalent of -- so go through ARM
-// semihosting's SYS_EXIT, the one channel here that carries an exit CODE (PSCI
-// SYSTEM_OFF would stop the machine but always report success, turning a red
-// corpus green). x1 points at {reason, code}; qemu exits with code. Requires
-// -semihosting on the qemu line (k_qemu_aarch64, kernel.mk).
-void k_qemu_exit(int code) {
-  volatile uint64_t block[2] = { 0x20026, (uint64_t) (unsigned) code };  // ADP_Stopped_ApplicationExit
-  k_semihost_exit(block);                                                // SYS_EXIT
-  for (;;) k_wait(); }
-#endif
-
 // PSCI SYSTEM_RESET. QEMU's 'virt' machine exposes PSCI over HVC.
 void k_reset(void) {
   k_psci_system_reset();
