@@ -1,7 +1,8 @@
-; arm64 call-out execution -- run only under qemu-aarch64 (tools/arm64check.sh), never in the x86
+; arm64 call-out execution -- run only under qemu-aarch64 (test_raw_arm64), never in the x86
 ; corpus: it builds nifs with `jitcalloutx ... 'arm64`, whose code is aarch64 bytes -- calling one on
 ; x86 jumps into arm64 machine code (a fault). It lives in test/arm64/ (a subfolder), so the
-; non-recursive test/*.l corpus glob (make test / love0 bake) never sees it. arm64check cats it in.
+; non-recursive test/*.l corpus glob (make test / love0 bake) never sees it. test_raw_arm64 names it past the
+; corpus, and gate_sentinel there is what proves it was read and not stopped short.
 ;
 ; Proves the stackless call-out bridge (emit.l calloutir/calloutframeir) executes correctly on aarch64:
 ; the near pc-relative resume address (`lar` -> ADR, translation-invariant in the word-aligned mmap blob,

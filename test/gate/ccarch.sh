@@ -37,8 +37,8 @@
 # 101-vla left arm64's (the lane was one `and` mask and three sp moves away from
 # neutral, and the C99 VLA has ridden both backends since).
 #
-# Skips whole (exit 0, a note) without the target's qemu -- like test_arm64 /
-# test_kernel. make owns the dependency graph; this owns the procedure.
+# Skips whole (exit 0, a note) without the target's qemu -- like test_raw_arm64 /
+# test_riscv. make owns the dependency graph; this owns the procedure.
 # NOT set -e: the checks report their own failures with context.
 #
 # usage: ccarch.sh ARCH OUTDIR LOVE     (ARCH: arm64 | riscv64)
