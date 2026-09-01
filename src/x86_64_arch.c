@@ -86,7 +86,7 @@ void serial_init(void) {
   k_outb(COM1 + 1, 0x01); }  // IER: interrupt when receive data arrives
 
 #ifdef K_TEST
-// Test build (make test_kernel): the corpus is baked into the kernel and run at
+// Test build (K_TEST=1): the corpus is baked into the kernel and run at
 // boot; (exit code) calls this to quit qemu via the isa-debug-exit device.
 void k_qemu_exit(int code) { k_outl(0xf4, (uint32_t) code); }
 #endif

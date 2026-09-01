@@ -12,11 +12,6 @@
 // and let the LED say how it went -- slow blink all green, fast blink a miss.
 // The console is UART0 on GPIO0(TX)/GPIO1(RX) at 115200 8N1, reachable over any
 // USB-serial adapter.
-//
-// ⚠ what this port does NOT yet have is a LINK: the boot2 stage wants its CRC
-// stamped and the .uf2 packed (tools/, still in the pre-rename .g dialect), and
-// thumb relocations are not in holo's linker. `make test_embed` compiles it;
-// nothing links it. See port/rp2040/Makefile.
 #include <stdint.h>
 #include "rp2040.h"
 

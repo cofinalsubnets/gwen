@@ -42,7 +42,4 @@
     (7 = (: (x f y) (+ f y)  f 2  (x 3 4)))
     (3 = (: f 2  (x f) f  (x 3)))
     (3 = (: x (\ f f)  f 2  (x 3)))
-    (11 = (: f 2  (g f) (+ f 1)  (g 10)))
-   )
-(: _ (puts "letrec: ok -- a shadowing binder never captures a sibling's name
-") 0)
+    (11 = (: f 2  (g f) (+ f 1)  (g 10))))

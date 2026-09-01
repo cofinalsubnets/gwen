@@ -2,7 +2,7 @@
 # test/gate/vec.sh -- the INTERRUPT gate.
 #
 # src/mkvec.l lays the exception and IRQ entry points that used to be
-# x86_64/x86_64.S and aarch64/aarch64.S. a green `make test_kernel` already
+# x86_64/x86_64.S and aarch64/aarch64.S. a green `make test_disk` already
 # proves most of that lay by running it: nothing boots without archinit's IDT,
 # and the corpus is FED over the serial line and CLOCKED by the timer, so
 # uart_isr and timer_isr run thousands of times per gate. what a green boot

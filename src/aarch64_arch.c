@@ -270,7 +270,7 @@ void k_fault_trigger(intptr_t n) {
       break; } }
 
 #ifdef K_TEST
-// Test build (make test_kernel): the corpus is baked into the kernel and run at
+// Test build (K_TEST=1): the corpus is baked into the kernel and run at
 // boot; (exit code) calls this to quit qemu. the x86_64 twin writes the
 // isa-debug-exit port, which 'virt' has no equivalent of -- so go through ARM
 // semihosting's SYS_EXIT, the one channel here that carries an exit CODE (PSCI

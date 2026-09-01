@@ -1,4 +1,4 @@
-; Driver for `make test_kernel`: boot the headless serial test kernel under qemu,
+; Driver for the kernel boot gates: boot the headless serial test kernel under qemu,
 ; capture its serial console (the baked corpus runs at boot and prints the usual
 ; "N tests pass" summary, then (exit) quits qemu via isa-debug-exit), and report.
 ; Run on the host love, which has the `hark` subprocess nif.
@@ -99,5 +99,5 @@
             (&& (! (sub-at line 0 "0 tests pass" 0))
                 (? (tally need) (has? out need) 1))))
    (? ok (: _ (puts line) (putc 10))
-         (: _ (say err "test_kernel: FAILED") _ (put err 10)
+         (: _ (say err "ktest: FAILED") _ (put err 10)
             _ (say err out) _ (put err 10) (quit 1))))

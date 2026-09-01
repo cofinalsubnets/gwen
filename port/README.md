@@ -9,7 +9,7 @@ test/test.mk and ride `make test_slow`.
 The freestanding kernel -- the bare-metal build of love, a tty and a repl on
 raw hardware: `kmain.c` + `k.h` with per-arch backends `x86_64/` and
 `aarch64/` (arch.c + boot `.S` + `.lds`), built by the root Makefile's
-`kernel` target. Gates: test_kernel (qemu + OVMF), test_kernel_arm64.
+`kernel` target. Gates: test_disk, test_uefi (OVMF), test_kernel_arm64, test_uefi_arm64.
 
 ## mps2/
 

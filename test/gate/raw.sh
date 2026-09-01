@@ -20,6 +20,7 @@
 #
 # usage: gate_love_c=.. gate_host_c=.. raw.sh TARGET OUTDIR LOVE CORPUS.l ..
 set -u
+gate_sentinel=${gate_sentinel-}
 
 target=$1
 ho=$2
@@ -101,6 +102,10 @@ LOVE_NO_IMAGE=1 timeout 420 $run "$ho/$bin" "$ho/.corpus.l" </dev/null > "$ho/$o
 s=$?
 tail -1 "$ho/$out"
 [ $s -eq 0 ] && grep -q "tests pass" "$ho/$out" || fail "corpus (exit $s)"
+# a file named past the corpus answers with its own line: the summary alone cannot say it
+# ran, and a reader stop exits 0 without it.
+[ -z "$gate_sentinel" ] || grep -q "$gate_sentinel" "$ho/$out" \
+  || fail "no sentinel /$gate_sentinel/ -- a file was skipped or read past"
 
 case $target in
   x64) echo "test_raw: the src/*.c lanes + nolibc + am math + sys.o, our linker, no gcc/glibc/ld -- corpus passes" ;;

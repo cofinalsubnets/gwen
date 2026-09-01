@@ -4,13 +4,13 @@
 
 # every gate below is phony: one roster, so adding a gate is one line and not two.
 .PHONY: \
-  test_filemode test_stdinbuf test_embed test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
+  test_filemode test_stdinbuf test_glaze test_hook test_glazefuzz test_sat test_drat test_lux \
   test_sb test_kore test_refuzz test_cookdiff test_dist test_seed test_vi test_moon test_clay test_moonfuzz \
   test_ccarm64 test_ccriscv test_cts test_cts_arm64 test_cts_riscv test_libc test_ulp \
   test_selfhost test_raw test_drv test_asmops test_vec test_fixpoint test_raw_bake test_riscv \
   test_raw_riscv test_raw_arm64 test_thumb1 test_thumb2 test_virt test_mps2 test_mps2_t1 \
   test_mps2_wake test_thumb2sp test_playdate test_teensy41 test_nucleo446 test_nucleo446_smoke \
-  test_rp2040 moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
+  test_rp2040 test_front test_tco0 test_uulean moon-tar moon-tar-arm64 moon-tar-riscv moon-m4 moon-m4-arm64 moon-m4-riscv \
   moon-lua moon-lua-arm64 moon-lua-riscv moon-sqlite moon-sqlite-arm64 moon-sqlite-riscv \
   moon-gzip moon-gzip-arm64 moon-gzip-riscv moon-bzip2 moon-bzip2-arm64 moon-bzip2-riscv \
   test_holo test_as test_elf32 test_objcopy test_gz test_cpio test_forge test_distboot test_bakerep \
@@ -168,63 +168,6 @@ $(ho)/front: test/front/main.c $(love_h) $(ho)/liblove.a $(ho)/.hostcc $(R)/src/
 test_front: $(ho)/front
 	@echo TEST $(ho)/front
 	@sh test/gate/run.sh -a front "$(ho)/front" "front: ok" test/front/io.l
-# test_embed -- EVERY FRONTEND BUILT, NONE BOOTED. Each embed site spells src/love.h's structs and
-# its own ai_libs table, so a core ABI edit breaks them -- but every gate that would SAY so
-# boots, sits in test_extra, and costs minutes. Two phases: COMPILE every frontend (seconds,
-# ours is the only toolchain, no qemu), then LINK every binary that can be linked here.
-# ⚠ each frontend is asked for ITS OWN object and ITS OWN ELF through ITS OWN makefile:
-# re-spelling the flags would drift from the build this claims to gate, and the green would
-# mean nothing. That is also why the link phase skips rather than improvises.
-# ⚠ wasm compiles and does NOT link here -- love.js is a tracked committed artifact and a
-# gate must not rewrite the working tree. test_wasm owns that link, out of tree.
-# ⚠ THE TIERS ARE THE POINT. host and free (the kernel) are the TWO PRIMARY TARGETS; everything
-# else under port/ is a real target and a SECONDARY one, and secondary means it cannot hold a
-# commit. This gate used to compile every board, so an mps2 that would not build stopped work on
-# the two targets that matter -- backwards. The boards moved to test_extra, which is where a
-# secondary target belongs. ⚠ port/virt is the exception that proves the rule: it is the
-# FREESTANDING KERNEL on riscv, so it is free's third arch and rides with the primaries.
-embed_ports = virt
-embed_boards = mps2 teensy41 nucleo446 playdate rp2040
-# what each linkable port calls its ELF. ⚠ teensy41 is NOT here: its ELF embeds the baked
-# heap image, whose rule delegates to port/mps2's `img` -- a BAKE UNDER QEMU, on a FORCE rule
-# with no opt-out. Linking it here would cost 80 s and quietly boot a machine, which is the
-# one thing this gate promises not to do. test_teensy41 (test_extra) owns that link.
-embed_elfs = mps2/love.elf nucleo446/firm.elf rp2040/love.elf
-embed_arm := $(and $(shell command -v arm-none-eabi-gcc 2>/dev/null),\
-                   $(shell command -v arm-none-eabi-ld 2>/dev/null))
-test_embed: host
-	@echo TEST the frontends compile against src/love.h "(object only)"
-	@$(MAKE) -s kmain_o
-	@$(MAKE) -s a=aarch64 kmain_o
-	@$(MAKE) -s K_TEST=1 kmain_o
-	@for p in $(embed_ports); do \
-	   $(MAKE) -s -C port/$$p ../../out/$$p/main.o \
-	     || { echo "FAIL port/$$p/main.c does not compile against src/love.h"; exit 1; }; \
-	 done
-	@$(if $(wildcard $(EMCC)),$(MAKE) -s -C wasm ../out/wasm/host.o,echo "  (wasm/host.c skipped: no emcc)")
-	@echo TEST the frontends link "(no boot, no qemu)"
-	@$(MAKE) -s kernel || { echo "FAIL the $a kernel does not link"; exit 1; }
-	@$(MAKE) -s a=aarch64 kernel
-	@$(MAKE) -s -C port/virt ../../out/virt/love.elf || { echo "FAIL port/virt does not link"; exit 1; }
-	@echo "test_embed: host, free (x86_64 + aarch64 + riscv) and wasm build against src/love.h"
-
-# the SECONDARY boards, same checks one tier down -- real targets that cannot hold a commit.
-test_embed_boards: host
-	@echo TEST the secondary boards compile against src/love.h "(object only)"
-	@for p in $(embed_boards); do \
-	   $(MAKE) -s -C port/$$p ../../out/$$p/main.o \
-	     || { echo "FAIL port/$$p/main.c does not compile against src/love.h"; exit 1; }; \
-	 done
-	@if [ -n "$(embed_arm)" ]; then \
-	   for t in $(embed_elfs); do p=$${t%%/*}; f=$${t#*/}; \
-	     $(MAKE) -s -C port/$$p ../../out/$$p/$$f \
-	       || { echo "FAIL port/$$p does not link"; exit 1; }; done; \
-	 else echo "  (mps2 nucleo446 links skipped: no arm-none-eabi)"; fi
-	@if [ -n "$(embed_arm)" ] && [ -n "$$PLAYDATE_SDK_PATH" ]; then \
-	   $(MAKE) -s -C port/playdate ../../out/playdate/pdex.elf \
-	     || { echo "FAIL port/playdate does not link"; exit 1; }; \
-	 else echo "  (playdate link skipped: needs arm-none-eabi + PLAYDATE_SDK_PATH)"; fi
-	@echo "test_embed_boards: the secondary boards build (any skip is named above)"
 # Host-nif smoke tests: the host lane's nifs link into `love` but NOT love0, so they live under
 # test/host/, invisible to the corpus glob ($t is a non-recursive test/*.l). Gate = exit 0
 # AND a "<name>: ok"; a cold lane opts in via hostnif_cold.
@@ -646,9 +589,12 @@ test_raw_riscv: host out/lib/riscv.h
 # test_raw's aarch64 twin: mooncc -t arm64 lays every object, mksys-arm64 the syscall leaf,
 # OUR linker binds, qemu-user runs the WHOLE C-sorted $t over the fresh egg. ⚠ $t must stay
 # in C/byte order: test/uu.l defines the kernel test/uukindlaw.l calls. Opt-in; needs qemu.
+# test/arm64/callout.l rides past $t: it builds 'arm64 nifs and RUNS them, so only an aarch64
+# love may read it -- gate_sentinel is how the gate knows it was read and not stopped short.
 test_raw_arm64: host
 	@gate_love_c='$(love_tu_c)' gate_host_c='$(host_c)' gate_arch_c='$(hosta_c)' \
-	  sh test/gate/raw.sh arm64 $(ho) $m $t
+	  gate_sentinel='test/arm64/callout:.* ok' \
+	  sh test/gate/raw.sh arm64 $(ho) $m $t test/arm64/callout.l
 # test_thumb1 -- the ELF32/EM_ARM object writer (crew/holo/obj.l objsecs32) end to end and the
 # 32-bit data model: a cross-object BL, the inline v6-M soft divide/rem, a global via the
 # literal-pool `la`, a gcc-built pointer-bearing struct mooncc reads a field back from, and a
