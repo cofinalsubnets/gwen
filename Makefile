@@ -519,17 +519,46 @@ $(k_odir)/%.o: $(R)/%.c $(k_h) $(kcc_dep) $(baked_h) $(cats_z) $(if $(K_TEST),ou
 # caller's `a=` / `K_TEST=` say; the odir is spelled here so a caller never re-derives it.
 kmain_o: $(k_free_o)
 
+# THE CARRIED SEAT: the metal objects the one binary links, so `love kernel` projects a
+# bootable elf out of the running artifact instead of building a second one. one shape,
+# worn once per machine -- $(call kart,ROSTER,DIRVAR,CCVAR,ARCHVAR), every argument but
+# the first a variable NAME so the body stays deferred. an arch with no src/<arch>_*.c
+# carries no seat and its roster is empty.
 kart_inc = -I$(ho) -I. -Isrc -Iout/lib -I$R \
   -I$R/crew/quay -I$R/crew/moon/include
-kart_h = $(love_h) $(R)/src/k.h $(R)/src/ustar.h $(wildcard $(R)/src/$(hosta)_*.h)
 # kmain.c's own bake is the kore ROSTER now; the egg and the module set are src/cats.c's,
 # and that object rides the host lane above.
 kart_bake = out/lib/korelist.h
-kart_arch_o = $(patsubst $R/src/%.c,$(moon_d)/k_%.o,$(wildcard $R/src/$(hosta)_*.c))
+define kart
+$(1)_h = $$(love_h) $$R/src/k.h $$R/src/ustar.h $$(wildcard $$R/src/$$($(4))_*.h)
+$(1)_arch_o = $$(patsubst $$R/src/%.c,$$($(2))/k_%.o,$$(wildcard $$R/src/$$($(4))_*.c))
 # the console's painter and its fonts: kernel-only draws the host link never had
-kart_quay_o = $(patsubst %,$(moon_d)/k_q_%.o,paint cga_8x8 moderndos_8x16)
-# the twin link takes the same set at $(xa) -- $(xkart_o), below the lays
-kart_o = $(moon_d)/k_kmain.o $(moon_d)/k_blk.o $(moon_d)/k_sys.o $(kart_arch_o) $(kart_quay_o) $(moon_d)/kvec.o
+$(1)_quay_o = $$(patsubst %,$$($(2))/k_q_%.o,paint cga_8x8 moderndos_8x16)
+$(1)_o = $$(if $$($(1)_arch_o),$$($(2))/k_kmain.o $$($(2))/k_blk.o $$($(2))/k_sys.o \
+  $$($(1)_arch_o) $$($(1)_quay_o) $$($(2))/kvec.o,)
+$(1)_lay_l = $$R/crew/kore/text.l $$R/crew/kore/u.l $$R/crew/kore/asbook.l \
+  $$R/crew/holo/$$(tgt_$$($(4))).l $$R/crew/holo/elf.l $$R/crew/holo/obj.l
+$$($(2))/k_%.o: $$R/src/%.c $$($(1)_h) $$(kart_bake) $$(moon0_dep)
+	@echo 'MOON	'$$@
+	@mkdir -p "$$(dir $$@)"
+	@$$($(3)) $$(kart_inc) -c $$< $$@
+$$($(2))/k_q_%.o: $$R/crew/quay/%.c $$(moon0_dep)
+	@echo 'MOON	'$$@
+	@mkdir -p "$$(dir $$@)"
+	@$$($(3)) $$(kart_inc) -c $$< $$@
+$$($(2))/mkvec.l: $$R/src/mkvec.l $$($(1)_lay_l)
+	@echo 'CAT	'$$@
+	@mkdir -p "$$(dir $$@)"
+	@{ echo "(use 'holo)"; cat $$R/crew/kore/text.l $$R/crew/kore/u.l; \
+	   echo "(use 'kore)"; cat $$(filter-out $$R/crew/kore/text.l $$R/crew/kore/u.l,$$($(1)_lay_l)) $$<; } > $$@
+# the vector lay, under whatever love a fresh tree has (mksys's own idiom)
+$$($(2))/kvec.o: $$($(2))/mkvec.l $$(love0)
+	@echo 'HOLO	'$$@
+	@mkdir -p "$$(dir $$@)"
+	@LOVE_NO_IMAGE= $$(love0) -l $$< -q -e '(lay-vec "$$@" "$$($(4))")' && test -s $$@
+endef
+$(eval $(call kart,kart,moon_d,moon0,hosta))
+$(eval $(call kart,xkart,xd,moonx,xa))
 
 ifdef DOOM
 doom_d = $R/dl/doomgeneric/doomgeneric
@@ -563,19 +592,6 @@ $(moon_d)/kd_wad.o: $R/dl/doom1.wad tools/mkblob.l out/host/.mksys-cat.l $(love0
 	@LOVE_NO_IMAGE= $(love0) -l out/host/.mksys-cat.l tools/mkblob.l $< $@ doom_wad $(tgt_$(hosta))
 endif
 
-$(moon_d)/k_%.o: $R/src/%.c $(kart_h) $(kart_bake) $(moon0_dep)
-	@echo 'MOON	'$@
-	@mkdir -p "$(dir $@)"
-	@$(moon0) $(kart_inc) -c $< $@
-$(moon_d)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
-	@echo 'MOON	'$@
-	@mkdir -p "$(dir $@)"
-	@$(moon0) $(kart_inc) -c $< $@
-# the vector lay, under whatever love a fresh tree has (mksys's own idiom)
-$(moon_d)/kvec.o: $(ko)/$(hosta)/mkvec.l $(love0)
-	@echo 'HOLO	'$@
-	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(love0) -l $< -q -e '(lay-vec "$@" "$(hosta)")' && test -s $@
 $(ho)/love $(ho)/love.cand: $(kart_o)
 
 $(k_odir)/src/love.o: out/lib/love_version.h
@@ -589,33 +605,6 @@ $(k_odir)/mkvec.l $(k_odir)/mkboot.l: $(k_odir)/%.l: $R/src/%.l $(klay_l)
 	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
 	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(klay_l)) $<; } > $@
 
-xkart_inc = -I$(ho) -I. -Isrc -Iout/lib -I$R \
-  -I$R/crew/quay -I$R/crew/moon/include
-xkart_h = $(love_h) $(R)/src/k.h $(wildcard $(R)/src/$(xa)_*.h)
-xkart_arch_o = $(patsubst $R/src/%.c,$(xd)/k_%.o,$(wildcard $R/src/$(xa)_*.c))
-xkart_quay_o = $(patsubst %,$(xd)/k_q_%.o,paint cga_8x8 moderndos_8x16)
-xkart_o = $(if $(xkart_arch_o),$(xd)/k_kmain.o $(xd)/k_blk.o $(xd)/k_sys.o $(xkart_arch_o) $(xkart_quay_o) $(xd)/kvec.o,)
-$(xd)/k_%.o: $R/src/%.c $(xkart_h) $(kart_bake) $(moon0_dep)
-	@echo 'MOON	'$@
-	@mkdir -p "$(dir $@)"
-	@$(moonx) $(xkart_inc) -c $< $@
-$(xd)/k_q_%.o: $R/crew/quay/%.c $(moon0_dep)
-	@echo 'MOON	'$@
-	@mkdir -p "$(dir $@)"
-	@$(moonx) $(xkart_inc) -c $< $@
-# the twin's own cat, the shape above worn at $(xa): the kernel's is cut at $a
-# and this is the other machine. one target, so an ordinary rule serves.
-xklay_l = $R/crew/kore/text.l $R/crew/kore/u.l $R/crew/kore/asbook.l \
-  $R/crew/holo/$(tgt_$(xa)).l $R/crew/holo/elf.l $R/crew/holo/obj.l
-$(xd)/mkvec.l: $R/src/mkvec.l $(xklay_l)
-	@echo 'CAT	'$@
-	@mkdir -p "$(dir $@)"
-	@{ echo "(use 'holo)"; cat $R/crew/kore/text.l $R/crew/kore/u.l; \
-	   echo "(use 'kore)"; cat $(filter-out $R/crew/kore/text.l $R/crew/kore/u.l,$(xklay_l)) $<; } > $@
-$(xd)/kvec.o: $(xd)/mkvec.l $(love0)
-	@echo 'HOLO	'$@
-	@mkdir -p "$(dir $@)"
-	@LOVE_NO_IMAGE= $(love0) -l $< -q -e '(lay-vec "$@" "$(xa)")' && test -s $@
 $(xd)/love: $(xkart_o)
 
 # `test -s`: an empty object is the failure this build cannot see -- it links, and the
