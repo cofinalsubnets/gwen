@@ -230,7 +230,8 @@ and 3.1 MB the source blob.
 trees in PLAIN TEXT beside their compressed twins in ai_srcgz -- so the
 shipped kernel inflates the blob it already carries and walks the tar into
 the ramfs (symlinks resolved; the K_TEST kernel keeps the lcatfs bake for its
-real-mtime stat laws), korecat is catted off the ramfs from a baked roster,
+real-mtime stat laws -- doc/misc/plan/one-kernel.md retires that second face),
+korecat is catted off the ramfs from a baked roster,
 and the baked fused artifact is 13.46 MB -- THE PRE-FUSION SIZE. the whole
 tree lands on metal, which is the metal seed's doorstep. and `love kernel
 OUT.elf` (crew/source/source.l) emits the boot image ANYWHERE from nothing but what
