@@ -216,7 +216,7 @@ lvm(lvm_quot) {
 
 // bitwise and/or/xor: the both-fixnum tag trick (two odds stay odd under & and |;
 // ^ clears the tag, re-set it). integer-only: any other operand yields zero.
-bit_slow(band, &) bit_slow(bor, |) bit_slow(bxor, ^)
+bit_slow(band, &, vop_band) bit_slow(bor, |, vop_bor) bit_slow(bxor, ^, vop_bxor)
 
 lvm(lvm_band) { word a = Sp[0], b = Sp[1];
  if (charmp(a) && charmp(b)) ai_musttail return Push((a & b) | 1);
@@ -237,28 +237,32 @@ lvm(lvm_bxor) { word a = Sp[0], b = Sp[1];
  ai_musttail return Ap(lvm_bxor_slow, g); }
 // (bitwise complement is `(^ x -1)`; logical not is the `!` reader sigil / `zerop`.)
 
-// >> : arithmetic right shift; a fixnum only shrinks, so the fast path never allocates
-static lvm(lvm_bsr_slow) { word a = Sp[0], b = Sp[1], _res;
- if (!(charmp(a) || sunp(a)) || !charmp(b)) ai_musttail return Push(ZeroPoint);
- Have(box_req);
- emit_int(_res, toint(a) >> shmask(getcharm(b)));
- ai_musttail return Push(_res); }
+// >> : a floor shift. the fast path is two fixnums and a count the word can take;
+// everything else -- a big either side, a negative count, a count past the width --
+// goes to the lane that has the whole domain.
 lvm(lvm_bsr) { word a = Sp[0], b = Sp[1];
- if (charmp(a) && charmp(b))
-  ai_musttail return Push(putcharm(getcharm(a) >> shmask(getcharm(b))));
+ if (charmp(a) && charmp(b)) { intptr_t k = getcharm(b);
+  if (k >= 0 && k < Bits) ai_musttail return Push(putcharm(getcharm(a) >> k)); }
  avm_unit(a, b);
  if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_bsr); ai_musttail return Ap(lvm_vbin, g); }
- ai_musttail return Ap(lvm_bsr_slow, g); }
+ if (!intp(a) || !intp(b)) ai_musttail return Push(ZeroPoint);
+ Pack(g); g = ai_big_shift(g, vop_bsr);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ ai_musttail return Resume(); }
 
-// << : can overflow the tag, so it always runs the box/demote path; the shift is
-// done in uintptr_t for well-defined overflow
+// << : x * 2^k, so it promotes rather than dropping the bits off the top. the word
+// lane is taken only where shifting back gives x again -- that is the whole test for
+// "nothing was lost", and it lets 0 and every small shift stay cheap.
 lvm(lvm_bsl) { word a = Sp[0], b = Sp[1], _res;
  avm_unit(a, b);
  if (trayp(a) || trayp(b)) { g->b = (ai_word) (vop_bsl); ai_musttail return Ap(lvm_vbin, g); }
- if (!(charmp(a) || sunp(a)) || !charmp(b)) ai_musttail return Push(ZeroPoint);
- Have(box_req);
- emit_int(_res, (intptr_t)((uintptr_t) toint(a) << shmask(getcharm(b))));
- ai_musttail return Push(_res); }
+ if (!intp(a) || !intp(b)) ai_musttail return Push(ZeroPoint);
+ if (charmp(a) && charmp(b)) { intptr_t x = getcharm(a), k = getcharm(b);
+  if (k >= 0 && k < Bits) { intptr_t r = (intptr_t) ((uintptr_t) x << k);
+   if ((r >> k) == x) { Have(box_req); emit_int(_res, r); ai_musttail return Push(_res); } } }
+ Pack(g); g = ai_big_shift(g, vop_bsl);
+ if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);
+ ai_musttail return Resume(); }
 
 op(lvm_charmp, 1, oddp(Sp[0]) ? putcharm(1) : zero)   // (charm? x): a fixnum -- a charm, the tagged odd word
 // (nil? x): the falsy predicate, ($ x <= 0) -- every negative is nil, not just

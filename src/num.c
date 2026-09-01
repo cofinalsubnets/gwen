@@ -340,6 +340,89 @@ struct ai *ai_big_binop(struct ai *g, int vop) {
      rn = mag_copy(rmag, rem, rr), rneg = nega; } } } }
  return *++g->sp = ai_big_canon(&g->hp, rmag, rn, rneg), ++g->ip, g; }
 
+// bitwise over the whole integer tower. sign-magnitude goes in as its infinite
+// two's-complement extension, so a negative operand contributes ones above its
+// magnitude; w = max + 1 limb of sign headroom carries that exactly.
+static void twos_neg(ai_limb *r, int w) {
+ ai_limb carry = 1;
+ for (int i = 0; i < w; i++) { ai_limb v = (ai_limb) (~r[i] + carry); carry = carry && !v; r[i] = v; } }
+static void mag_twos(ai_limb *r, ai_limb const *m, int n, bool neg, int w) {
+ for (int i = 0; i < w; i++) r[i] = i < n ? m[i] : 0;
+ if (neg) twos_neg(r, w); }
+struct ai *ai_big_bitop(struct ai *g, int vop) {
+ word a = g->sp[0], b = g->sp[1];
+ int na = bigp(a) ? big_nlimbs(a) : wlimbs, nb = bigp(b) ? big_nlimbs(b) : wlimbs,
+     w = (na > nb ? na : nb) + 1;
+ uintptr_t res_area = Width(struct ai_big) + b2w((size_t) w * sizeof(ai_limb)),
+           ws_words = b2w((size_t) (2 * w) * sizeof(ai_limb));
+ if (!ai_ok(g = ai_have(g, res_area + ws_words))) return g;
+ a = g->sp[0], b = g->sp[1];                     // re-fetch (ai_have may have GC'd)
+ ai_limb sa[wlimbs], sb[wlimbs]; ai_limb const *la, *lb; bool nega, negb;
+ int nla = load_int_mag(a, sa, &la, &nega), nlb = load_int_mag(b, sb, &lb, &negb);
+ ai_limb *ra = (ai_limb*) (g->hp + res_area), *rb = ra + w;
+ mag_twos(ra, la, nla, nega, w);
+ mag_twos(rb, lb, nlb, negb, w);
+ for (int i = 0; i < w; i++)
+  ra[i] = vop == vop_band ? (ai_limb) (ra[i] & rb[i])
+        : vop == vop_bor  ? (ai_limb) (ra[i] | rb[i])
+        :                   (ai_limb) (ra[i] ^ rb[i]);
+ bool rneg = vop == vop_band ? (nega && negb) : vop == vop_bor ? (nega || negb) : (nega != negb);
+ if (rneg) twos_neg(ra, w);                      // ..and back out of two's complement
+ int rn = w; while (rn > 0 && ra[rn-1] == 0) rn--;
+ return *++g->sp = ai_big_canon(&g->hp, ra, rn, rneg), ++g->ip, g; }
+
+// << and >> over the whole tower. a left shift is x * 2^k and promotes rather than
+// dropping the bits off the word; a right shift FLOORS, so -5 >> 1 is -3 where //
+// truncates to -2. a negative count shifts the other way, the only total reading of
+// one, and a count past the value's width answers 0 or -1 by the sign.
+struct ai *ai_big_shift(struct ai *g, int vop) {
+ word a = g->sp[0], b = g->sp[1];
+ ai_limb sb[wlimbs]; ai_limb const *lb; bool negk;
+ int nlb = load_int_mag(b, sb, &lb, &negk);
+ // the count, saturated: anything past an int is "further than any value is wide"
+ uintptr_t kk = 0; bool khuge = nlb > (int) (sizeof(uintptr_t) / sizeof(ai_limb));
+ for (int i = 0; i < nlb && !khuge; i++) {
+  if ((uintptr_t) (limb_bits * i) >= 8 * sizeof(uintptr_t)) { khuge = lb[i] != 0; break; }
+  kk |= (uintptr_t) lb[i] << (limb_bits * i); }
+ if (kk > (uintptr_t) INT32_MAX) khuge = true;
+ bool left = (vop == vop_bsl) != negk;            // a negative count turns the shift round
+ int k = khuge ? 0 : (int) kk;
+ int na = bigp(a) ? big_nlimbs(a) : wlimbs;
+ int ls = khuge ? 0 : k / limb_bits, bs = khuge ? 0 : k % limb_bits;
+ int w = left ? na + ls + 2 : na + 2;
+ if (left && khuge) return ai_have(g, (uintptr_t) -1);   // 2^huge: ask honestly, fail honestly
+ uintptr_t res_area = Width(struct ai_big) + b2w((size_t) w * sizeof(ai_limb)),
+           ws_words = b2w((size_t) w * sizeof(ai_limb));
+ if (!ai_ok(g = ai_have(g, res_area + ws_words))) return g;
+ a = g->sp[0];                                    // re-fetch (ai_have may have GC'd)
+ ai_limb sa[wlimbs]; ai_limb const *la; bool neg;
+ int nla = load_int_mag(a, sa, &la, &neg);
+ ai_limb *r = (ai_limb*) (g->hp + res_area);
+ int rn = 0;
+ if (left) {
+  for (int i = 0; i < ls; i++) r[i] = 0;
+  if (!bs) { for (int i = 0; i < nla; i++) r[ls + i] = la[i]; rn = ls + nla; }
+  else { ai_limb carry = 0;
+   for (int i = 0; i < nla; i++) {
+    r[ls + i] = (ai_limb) ((la[i] << bs) | carry);
+    carry = (ai_limb) (la[i] >> (limb_bits - bs)); }
+   r[ls + nla] = carry, rn = ls + nla + 1; } }
+ else if (khuge || ls >= nla) rn = 0, r[0] = 0;   // shifted past the top: 0, or -1 once floored
+ else {
+  rn = nla - ls;
+  if (!bs) for (int i = 0; i < rn; i++) r[i] = la[ls + i];
+  else for (int i = 0; i < rn; i++)
+   r[i] = (ai_limb) ((la[ls + i] >> bs) | (i + 1 < rn ? (la[ls + i + 1] << (limb_bits - bs)) : 0)); }
+ if (!left && neg) {                              // floor: a shifted-out bit rounds away from zero
+  bool lost = khuge || ls >= nla;
+  for (int i = 0; i < ls && !lost && i < nla; i++) lost = la[i] != 0;
+  if (!lost && bs) lost = (la[ls] & (ai_limb) ((((ai_limb) 1) << bs) - 1)) != 0;
+  if (lost) { ai_limb carry = 1;                  // magnitude + 1
+   for (int i = 0; i < rn && carry; i++) { r[i] = (ai_limb) (r[i] + 1); carry = !r[i]; }
+   if (carry) r[rn++] = 1; } }
+ while (rn > 0 && r[rn-1] == 0) rn--;
+ return *++g->sp = ai_big_canon(&g->hp, r, rn, neg && rn > 0), ++g->ip, g; }
+
 // the integer rungs' exact lane (int / ceil / saturate) for a ratio coin: above
 // 2^53 the float net rounds, so a rung riding it lands on the wrong integer.
 // domain: a net-mode-2 coin over (n d), both exact integers, d nonzero (a zero
@@ -1113,8 +1196,11 @@ static intptr_t vop_int(int op, intptr_t a, intptr_t b) {
   case vop_band: return a & b;
   case vop_bor:  return a | b;
   case vop_bxor: return a ^ b;
-  case vop_bsl:  return (intptr_t)((uintptr_t) a << shmask(b));
-  case vop_bsr:  return a >> shmask(b);
+  case vop_bsl: case vop_bsr: {   // a tray element is a machine word, so the width law
+   int lf = op == vop_bsl;        // holds here -- but past the width it empties, never wraps
+   intptr_t k = b < 0 ? (lf = !lf, b == INTPTR_MIN ? INTPTR_MAX : -b) : b;
+   return k >= Bits ? (lf ? 0 : a < 0 ? -1 : 0)
+                    : lf ? (intptr_t)((uintptr_t) a << k) : a >> k; }
   default: return (intptr_t)((uintptr_t) a + (uintptr_t) b); } } // vop_add
 intptr_t vcmp_flo(int op, ai_flo_t a, ai_flo_t b) {
  switch (op) {

@@ -124,11 +124,12 @@
 (hear test-strict)
 
 ; --- arithmetic --- + - * / // % infix; charm fast path, overflow grows charm->sun->big;
-; `/` is true division (inexact int quotient -> float); 0/0 = 0; bitwise << >> & | ^ ride the
-; word lane (the width law, arrays): fixed-width two's complement even on a star -- (<< 1 63) is
-; the sun -9223372036854775808, wrapped into the sign bit; the shift count masks to the word, so
-; (<< 3 200) is 3 << 8; >> is arithmetic, sign-extending; and a big sits above the lane, refusing
-; with the zero point. monadics
+; `/` is true division (inexact int quotient -> float); 0/0 = 0; bitwise << >> & | ^ are exact
+; over the whole integer tower: two's complement with the sign extended forever, so a negative
+; operand carries ones above its magnitude. << is x * 2^k and promotes rather than dropping the
+; bits off the word, the count is exact too ((<< 3 200) is 3 * 2^200), and a negative count turns
+; the shift round; >> is arithmetic and floors, where // truncates. a tray keeps the width law,
+; its elements being machine words. a non-integer operand still answers the zero point. monadics
 ; ride the valence law (-(f x) negate, /4 reciprocal, ...) while sections ((- 0), (/ 1)) stay words.
 (assert
  (3 = 1 + 2) (2.5 = 5 / 2) (2 = (// 5 2)) (0.5 = 1 / 2) (1 = 5 % 2) (3.5 = 1 + 2.5)
@@ -164,10 +165,13 @@
  (1267650591354675262013 = (// (100 2) 1000000007)) (976371285 = (100 2) % 1000000007)
  ((100 2) = (// (200 2) (100 2))) ("1267650600228229401496703205376" = (show (100 2)))
  (-2 = (^ 1 -1)) (15 = (8 | 4 | 2 | 1)) (16 = (>> 64 2)) (16 = (<< 2 3))
- (768 = (<< 3 200))                              ; the count masks to the word (200 = 8 mod 32 AND mod 64)
+ ((3 * (200 2)) = (<< 3 200)) (0 = (<< 0 500))   ; the count is exact -- never masked to the word
+ ((63 2) = (<< 1 63)) ((64 2) = (<< 1 64))       ; ..and << promotes where it used to wrap the sign
  (-1 = (>> -1 1)) (-4 = (>> -8 1))               ; >> is arithmetic: it sign-extends
- (() = (& (200 2) 255))                          ; a big is above the word lane -- it refuses
- (? word (sun? (<< 1 63)) 1))                    ; ...and (<< 1 63) wrapped into the sign bit: a sun
+ (0 = (>> 5 64)) (-1 = (>> -5 64))               ; ..past the width it lands on the sign, not the value
+ (2 = (<< 8 -2))                                 ; a negative count turns the shift round
+ (255 = (& ((200 2) + 255) 255))                 ; a big rides the lane now, either sign
+ ((0 - 1) = ((0 - (200 2)) | (0 - 1))))
 
 ; --- order & equality --- < <= > >= total over all values, the true-blue bands: points at the
 ; floor (() < bare mints < named noms -- mints by serial, names by name-lex then serial), then

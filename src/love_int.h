@@ -142,8 +142,6 @@ enum vop { vop_add, vop_sub, vop_mul, vop_quot, vop_rem, vop_fquot,
 // the bitwise codes ride the word lane (spec.l's width law): defined only where
 // the cells are machine words; other operands take the whole op to the zero point
 #define vop_bitp(op) ((op) >= vop_band && (op) <= vop_bsr)
-// mask the shift count: C leaves count >= width undefined, and an accident is not a law
-#define shmask(n) ((uintptr_t)(n) & (8 * sizeof(intptr_t) - 1))
 word intern_checked(struct ai*, struct ai_str*);
 uintptr_t intern_reserve(struct ai*),
           hash(struct ai*, intptr_t);
@@ -284,6 +282,8 @@ bool ai_ratio_exact(struct ai*, word);  // int/ceil/saturate's exact-ratio domai
 struct ai
  *ai_ratio_rung(struct ai*, int),     // ..and the lane: long-divide the parts (0 int, 1 ceil, 2 saturate), packed
  *ai_big_binop(struct ai*, int vop),  // vop_add..vop_rem, packed; pops one operand
+ *ai_big_bitop(struct ai*, int vop),  // vop_band..vop_bxor, two's complement; pops one operand
+ *ai_big_shift(struct ai*, int vop),  // vop_bsl / vop_bsr, promoting and flooring; pops one operand
  *ai_big_quot_true(struct ai*),       // `/` bignum lane: exact quotient when b | a, else a float box
  *ai_big_read_dec(struct ai*),        // sp[0] [+-]?digits token -> canonical value
  *ai_big_read_hex(struct ai*),        // ..and its [+-]?0x<hexdigits> twin
@@ -368,6 +368,7 @@ static ai_inline ai_flo_t ai_fmod(ai_flo_t a, ai_flo_t b) {
 
 // --- numeric tower helpers ---
 #define isnum(x) (charmp(x) || gemp(x) || sunp(x) || bigp(x))
+#define intp(x) (charmp(x) || sunp(x) || bigp(x))   // the integer tier, all three tiers of it
 // integer value of a fixnum-or-box operand (callers exclude floats and bignums)
 #define toint(x) (charmp(x) ? (intptr_t) getcharm(x) : sun_get(x))
 // double value of any numeric operand (a bignum widens via ai_big_to_flo)
@@ -647,10 +648,12 @@ static ai_inline struct ai*ai_pop(struct ai*g, uintptr_t n) {
     ai_musttail return Push(putcharm(t)); } } \
  avm_unit(a, b); \
  ai_musttail return Ap(lvm_##op##n, g); }
-#define bit_slow(n, c_op) lvm(lvm_##n##_slow) {               \
+#define bit_slow(n, c_op, vop) lvm(lvm_##n##_slow) {          \
  word a = Sp[0], b = Sp[1], _res;                                     \
- if (!(charmp(a) || sunp(a)) || !(charmp(b) || sunp(b)))                  \
-  ai_musttail return Push(ZeroPoint);                               \
+ if (!intp(a) || !intp(b)) ai_musttail return Push(ZeroPoint);        \
+ if (bigp(a) || bigp(b)) { Pack(g); g = ai_big_bitop(g, vop);         \
+  if (!ai_ok(g)) ai_musttail return Ap(_lvm_ghelp, g);                \
+  ai_musttail return Resume(); }                                      \
  Have(box_req);                                                       \
  emit_int(_res, toint(a) c_op toint(b));                                    \
  ai_musttail return Push(_res); }

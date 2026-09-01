@@ -55,11 +55,12 @@
  (< 1e18 (<< 1 62))                                ; float < box
  (< (<< 1 62) 1e19)                                ; box < float
 
- ; --- 2^63 = z INT_MIN: still a (negative) box, compares and prints right ---
- !(charm? (<< 1 63))
- (< (<< 1 63) (- 0 (<< 1 62)))         ; INT_MIN < -2^62
+ ; --- -2^63 = INT_MIN: still a (negative) box, compares and prints right. built by
+; negating the tower, not by (<< 1 63) -- << promotes now, so that is a big, not this ---
+ !(charm? (0 - (63 2)))
+ (< (0 - (63 2)) (- 0 (<< 1 62)))      ; INT_MIN < -2^62
 
  ; --- a box prints as a plain decimal integer (same as a fixnum) ---
  (= "4611686018427387904" (show (<< 1 62)))
  (= "-4611686018427387905" (show (^ (<< 1 62) -1)))
- (= "-9223372036854775808" (show (<< 1 63)))) 0)
+ (= "-9223372036854775808" (show (0 - (63 2))))) 0)

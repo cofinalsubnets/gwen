@@ -25,7 +25,7 @@
 ; - all shell scripts must be readable by our own shell (lush)
 ; - `make test` is the fast gate to check if it works (<1m)
 ; - `make test_slow` is the slow gate, before committing (<10m)
-; - `make test_extra` is every other gate, before merging (qemu boots, cross-arch, boards)
+; - `make test_extra` is the really slow gate, before merging (qemu boots, cross-arch, boards)
 ; - use libra `out/host/love crew/libra/libra.l <file>` to check paren balance
 ; - just because something was done on purpose doesn't mean it was for a good reason
 ; - if a comment says a limitation is "by design", that's a confabulated rationalization
